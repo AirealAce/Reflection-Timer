@@ -7,7 +7,7 @@
 @media(forced-colors:active){:root{--background:Canvas;--field:Canvas;--raised:ButtonFace;--border:CanvasText;--text:CanvasText;--muted:CanvasText;--accent:Highlight;--accent-text:HighlightText;--error:CanvasText}button[aria-disabled=true]{opacity:1;color:GrayText}:focus-visible{outline-color:Highlight}}
 .timer-notice{color:#f9c978}.duration{max-width:414px}:root[data-theme="1"] .timer-notice{color:#794600}:root[data-theme="3"] .timer-notice{color:#714014}
 body[data-view=reflection] #reflection-help,body[data-view=reflection] #reflection-delivery,body[data-view=reflection] label[for=reflection-text]{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
-body[data-view=reflection] #reflection{height:100%;display:flex;flex-direction:column;margin:0}body[data-view=reflection] #reflection-form{display:flex;flex-direction:column;flex:1;min-height:0}body[data-view=reflection] #reflection-text{flex:1;min-height:140px;margin:0}body[data-view=reflection] #reflection-context{margin-top:0}body[data-view=reflection] .messages{min-height:0;padding:0 20px}body[data-view=reflection] .actions{margin:8px 0}body[data-view=reflection] #draft-status{font-size:14px;margin:8px 0}
+body[data-view=reflection] #reflection{height:100%;display:flex;flex-direction:column;margin:0}body[data-view=reflection] #reflection-form{display:flex;flex-direction:column;flex:1;min-height:0}body[data-view=reflection] #reflection-text{flex:1;min-height:140px;margin:0}body[data-view=reflection] #reflection-context{margin-top:0}body[data-view=reflection] .messages{min-height:0;padding:0 20px}body[data-view=reflection] .actions{margin:8px 0}
 footer.main-only{display:flex;order:3;justify-content:flex-end;padding:0 24px 12px}.messages{min-height:32px}body[data-view=reflection] .eyebrow{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
 #cutoff-help{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}.option-row>.check{flex:0 1 auto;margin-top:13px}.low-time-options>.option-row>input{width:140px}.low-time-options>p{font-size:14px;color:var(--muted)}
 /* Match the original App rows and selection/action layout at its default size. */
@@ -53,14 +53,17 @@ body[data-view=reflection] .reflection-actions{justify-content:space-between;gap
 body[data-view=reflection] .reflection-actions button{padding-left:10px;padding-right:10px}
 body[data-view=reflection] #reflection-text{flex:1 1 0;min-height:64px;height:0}
 body[data-view=reflection] #early-reason{height:52px;min-height:52px;padding:5px 8px;line-height:1.25}
-body[data-view=reflection] #reason-group,body[data-view=reflection] #draft-status,body[data-view=reflection] .actions{flex-shrink:0}
+body[data-view=reflection] #reason-group,body[data-view=reflection] .reflection-status-row,body[data-view=reflection] .actions{flex-shrink:0}
+.reflection-status-row{display:flex;align-items:baseline;gap:12px;margin:8px 0;font-size:14px}
+.reflection-status-row>p{min-width:0;max-width:none;margin:0;overflow-wrap:anywhere}
+#reflection-timestamp{margin-left:auto;text-align:right;color:var(--accent)}
 @media(max-height:400px){
   body[data-view=reflection] header{padding-top:12px}
   body[data-view=reflection] h1{font-size:22px;margin-bottom:8px}
   body[data-view=reflection] #reflection-context{font-size:14px;line-height:1.4;margin-bottom:8px}
   body[data-view=reflection] #reason-group label{font-size:14px;line-height:1.4;margin:4px 0}
   body[data-view=reflection] #early-reason{margin-top:0}
-  body[data-view=reflection] #draft-status{margin:4px 0}
+  body[data-view=reflection] .reflection-status-row{margin:4px 0}
   body[data-view=reflection] .actions{margin:4px 0 6px}
   body[data-view=reflection] .actions button{min-height:36px;padding:6px 12px}
 }

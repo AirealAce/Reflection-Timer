@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.17</p>
+    <p class="eyebrow">Reflection Timer 4.1.18</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -145,13 +145,18 @@
       <p id="reflection-help">What went well? What would you change next time? Write up to 5,000 characters. Save keeps your draft and closes this window.</p>
       <form id="reflection-form" novalidate><label for="reflection-text">Your reflection</label><textarea id="reflection-text" rows="7" maxlength="5000" aria-describedby="reflection-help"></textarea>
         <div id="reason-group" hidden><label for="early-reason">Reason for ending early (optional)</label><textarea id="early-reason" rows="2" maxlength="1000" placeholder="Reason for ending early" aria-describedby="reason-help"></textarea><p id="reason-help" class="sr-only">Retained with this draft and included in a submission only if the session ends early.</p></div>
-        <p id="reflection-delivery">Save &amp; send adds this entry to the Outbox for delivery.</p><p id="draft-status">Draft not yet changed.</p><div class="actions reflection-actions"><div class="reflection-navigation" role="group" aria-label="Pending reflections"><button id="reflection-prev" type="button" aria-disabled="true" aria-describedby="reflection-position">Prev</button><button id="reflection-next" type="button" aria-disabled="true" aria-describedby="reflection-position">Next</button><span id="reflection-position" class="sr-only"></span></div><div class="reflection-save-actions"><button id="skip-reflection" type="button">Skip</button><button id="later" type="button">Save</button><button type="submit" class="primary" aria-keyshortcuts="Control+Enter">Save &amp; send</button></div></div>
+        <p id="reflection-delivery">Save &amp; send adds this entry to the Outbox for delivery.</p>
+        <div class="reflection-status-row">
+          <p id="draft-status">Draft not yet changed.</p>
+          <p id="reflection-timestamp"></p>
+        </div>
+        <div class="actions reflection-actions"><div class="reflection-navigation" role="group" aria-label="Pending reflections"><button id="reflection-prev" type="button" aria-disabled="true" aria-describedby="reflection-position">Prev</button><button id="reflection-next" type="button" aria-disabled="true" aria-describedby="reflection-position">Next</button><span id="reflection-position" class="sr-only"></span></div><div class="reflection-save-actions"><button id="skip-reflection" type="button">Skip</button><button id="later" type="button">Save</button><button type="submit" class="primary" aria-keyshortcuts="Control+Enter">Save &amp; send</button></div></div>
       </form>
     </section>
   </main>
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.17</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.18</span></footer>
 </body>
 </html>

@@ -1,8 +1,10 @@
-# Reflection Timer 4.1.17
+# Reflection Timer 4.1.18
 
 The accessible interface is now the primary desktop app. It uses the existing encrypted ReflectionTimerDesktop profile and retains the original Sheets connection, settings, drafts, schedules and Outbox. No personal connection settings belong in the application package.
 
 The four views, themes, audio controls, window positions and Ctrl+Alt shortcuts are retained. App and reflection prompts can coexist with either Compact or Time-only. Semantic HTML supports screen-reader web navigation; quiet countdown updates do not interrupt reading.
+
+Reflection prompts show the session date and time right-aligned beside the local draft status, below the writing area. The timestamp follows the selected reflection when using Prev/Next and updates when a check-in becomes a completed session.
 
 Settings → Reflection prompts includes “Continue saved reflections with”: None, Comma, Bullet (newline and `- `), or Newline (default). Save, including the reflection shortcut, prepares the separator for the next visit and places the caret after it. Empty responses remain empty; reopening without typing does not accumulate separators. Unused separators are omitted from submitted responses. The setting also applies to check-ins.
 

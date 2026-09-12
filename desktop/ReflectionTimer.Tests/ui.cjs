@@ -444,7 +444,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
         await promptLayout.setViewportSize({width,height});
         await promptLayout.goto('https://reflection-timer.invalid/index.html?view=reflection');
         await promptLayout.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
-        const promptState={...initial,prompts:[{id:'layout',isCheckIn,endedEarly,showEarlyEndReason:isCheckIn||endedEarly,draft:'',earlyEndReason:'',actual:'12 minutes 34 seconds',allotted:'15 minutes',completed:'9/10/2026 3:45 PM'}]};
+        const promptState={...initial,prompts:[{id:'layout',isCheckIn,endedEarly,showEarlyEndReason:isCheckIn||endedEarly,draft:'',earlyEndReason:'',actual:'12 minutes 34 seconds',allotted:'15 minutes',completed:'12/31/2026 11:59 PM'}]};
         await promptLayout.evaluate(state=>window.previewDispatch({type:'init',state,promptId:'layout'}),promptState);
         for(const theme of [0,1,2,3]){
           await promptLayout.evaluate(state=>window.previewDispatch({type:'state',state}),{...promptState,theme});
@@ -453,7 +453,17 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
             const controls=[...document.querySelectorAll('#reflection textarea,#reflection button')].filter(e=>e.getClientRects().length);
             return root.scrollHeight<=innerHeight+1&&root.scrollWidth<=innerWidth&&main.scrollHeight<=main.clientHeight+1&&main.scrollWidth<=main.clientWidth&&controls.every(e=>{const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&(!e.matches('textarea')||e.scrollHeight<=e.clientHeight);});
           }),`${kind} prompt fits without page or empty-field scrollbars at ${scale}% display scale, theme ${theme}`);
-          if(scale===125&&(theme===0||theme===3))await capture(`Prompt-${kind}-${scale}-theme-${theme}`,promptLayout);
+          for(const status of ['Draft not yet changed.','Saving draft…','Draft saved locally.']){
+            check(await promptLayout.evaluate(status=>{
+              const draft=document.querySelector('#draft-status'),timestamp=document.querySelector('#reflection-timestamp');
+              draft.textContent=status;
+              const left=draft.getBoundingClientRect(),right=timestamp.getBoundingClientRect(),row=draft.parentElement.getBoundingClientRect();
+              return timestamp.parentElement===draft.parentElement&&Math.abs(left.top-right.top)<1&&Math.abs(right.right-row.right)<1
+                &&left.right+11<=right.left&&row.left>=0&&row.right<=innerWidth&&row.bottom<=innerHeight
+                &&[draft,timestamp].every(e=>e.scrollWidth<=e.clientWidth&&e.clientHeight<=parseFloat(getComputedStyle(e).lineHeight)+1);
+            },status),`${kind} timestamp shares one line with "${status}" and aligns right at ${scale}%, theme ${theme}`);
+          }
+          if(theme===0||theme===3)await capture(`Prompt-${kind}-${scale}-theme-${theme}`,promptLayout);
         }
         await promptLayout.locator('#reflection-text').fill(('A long reflection stays inside the writing area.\n').repeat(50));
         check(await promptLayout.locator('#reflection-text').evaluate(e=>e.scrollHeight>e.clientHeight)&&await promptLayout.locator('main').evaluate(e=>e.scrollHeight<=e.clientHeight+1)&&await promptLayout.getByRole('button',{name:'Save & send',exact:true}).evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight),`${kind} long text scrolls within its field and leaves the actions visible at ${scale}%`);

@@ -1,6 +1,6 @@
 module.exports=async function reflectionNavigation(context,initial,check){
   const page=await context.newPage();
-  const prompts=['first','middle','last'].map((id,i)=>({id,isCheckIn:false,endedEarly:i===1,showEarlyEndReason:i===1,draft:id+' saved response',earlyEndReason:i===1?'An interruption':'',actual:'5 seconds',allotted:'1 minute',completed:'Today'}));
+  const prompts=['first','middle','last'].map((id,i)=>({id,isCheckIn:false,endedEarly:i===1,showEarlyEndReason:i===1,draft:id+' saved response',earlyEndReason:i===1?'An interruption':'',actual:'5 seconds',allotted:'1 minute',completed:`9/12/2026 ${i+1}:30 PM`}));
   async function open(index){
     await page.goto('https://reflection-timer.invalid/index.html?view=reflection');
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
@@ -10,6 +10,7 @@ module.exports=async function reflectionNavigation(context,initial,check){
     await open(index);
     check(await page.locator('#reflection-prev').getAttribute('aria-disabled')===String(index===0)&&await page.locator('#reflection-next').getAttribute('aria-disabled')===String(index===2),'Prev/Next bounds match pending reflection '+(index+1));
     check((await page.locator('#reflection-position').textContent()).startsWith(`Reflection ${index+1} of 3.`),'Navigation exposes its position to screen readers: '+(index+1));
+    check(await page.locator('#reflection-timestamp').textContent()===prompts[index].completed&&!(await page.locator('#reflection-context').textContent()).includes(prompts[index].completed),'Reflection '+(index+1)+' shows its timestamp in the status row, not the top context');
   }
   await open(1);
   check(await page.locator('#reason-group').isVisible()&&await page.locator('#early-reason').inputValue()==='An interruption','An early-ended saved response shows its reason before navigation');
@@ -25,6 +26,7 @@ module.exports=async function reflectionNavigation(context,initial,check){
   await page.locator('#reflection-prev').click();
   await page.waitForFunction(()=>window.navigationRequest);
   const messages=await page.evaluate(()=>window.previewMessages);
+  check(await page.locator('#draft-status').textContent()==='Draft saved locally.'&&await page.locator('#reflection-timestamp').textContent()===prompts[1].completed,'Saving a draft preserves its separate session timestamp');
   check(messages.findIndex(m=>m.action==='draft'&&m.data.text==='Newest response before Prev'&&m.data.reason==='Newest reason before Prev')<messages.findIndex(m=>m.action==='navigateReflection'&&m.data.direction===-1),'Prev durably saves both latest inputs before requesting another reflection');
   check(await page.locator('#reflection-text').evaluate(e=>e.readOnly)&&await page.locator('#reflection-next').getAttribute('aria-disabled')==='true'&&await page.locator('#later').getAttribute('aria-disabled')==='true','Navigation freezes editing and conflicting actions until the handoff finishes');
   await page.locator('#reflection-next').dispatchEvent('click');await page.evaluate(()=>window.previewDispatch({type:'reflectionShortcut'}));
@@ -41,6 +43,7 @@ module.exports=async function reflectionNavigation(context,initial,check){
   },{state:{...initial,prompts},promptId:prompts[0].id});
   await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='reflectionReady'&&m.data.id==='first'));
   check(await page.locator('#reflection-text').inputValue()==='first saved response'&&await page.locator('#reason-group').isHidden(),'In-place Prev loads the requested saved response and correct reason visibility');
+  check(await page.locator('#reflection-timestamp').textContent()===prompts[0].completed,'In-place Prev loads the previous reflection timestamp');
   check(await page.evaluate(()=>document.querySelector('#reflection-text')===window.keptResponse&&document.querySelector('#early-reason')===window.keptReason),'Reflection browsing keeps both existing text input elements attached');
   check(await page.locator('#reflection-text').evaluate(e=>e===document.activeElement),'In-place browsing places keyboard focus in the response field');
   await page.locator('#reflection-text').fill('Edited first reflection');
@@ -53,6 +56,7 @@ module.exports=async function reflectionNavigation(context,initial,check){
   },{state:{...initial,prompts},promptId:prompts[1].id});
   await page.waitForFunction(()=>document.querySelector('#reflection-text').readOnly===false);
   check(await page.locator('#reflection-text').inputValue()==='Newest response before Prev'&&await page.locator('#early-reason').inputValue()==='Newest reason before Prev'&&await page.locator('#reason-group').isVisible(),'In-place Next restores both saved fields and enables editing after acknowledgement');
+  check(await page.locator('#reflection-timestamp').textContent()===prompts[1].completed,'In-place Next restores the selected reflection timestamp');
   await page.evaluate(state=>window.previewDispatch({type:'showReflection',state,promptId:'missing'}),{...initial,prompts});
   await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='reflectionLoadFailed'&&m.data.id==='missing'));
   check(await page.locator('#reflection-text').inputValue()==='Newest response before Prev'&&await page.locator('#early-reason').inputValue()==='Newest reason before Prev','A missing target reports failure without replacing the current editor or either field');

@@ -75,7 +75,8 @@ function renderReflection() {
   const prompt = state.prompts.find(p => p.id === promptId);
   if (!prompt) return;
   setText($('reflection-heading'), prompt.isCheckIn ? 'Session check-in' : 'Session reflection');
-  setText($('reflection-context'), `${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted. ${prompt.completed}.`);
+  setText($('reflection-context'), `${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted.`);
+  setText($('reflection-timestamp'), prompt.completed);
   $('reason-group').hidden = !(prompt.showEarlyEndReason??prompt.endedEarly);
   if($('reason-group').hidden&&document.activeElement===$('early-reason')&&document.hasFocus())$('reflection-text').focus();
   if(loadedPrompt===prompt.id)return;

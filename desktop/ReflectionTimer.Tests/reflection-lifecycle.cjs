@@ -21,10 +21,11 @@ module.exports=async function reflectionLifecycle(context,initial,check){
     check(ready.text==='Saved before closing'&&ready.theme===String(theme)&&ready.reason,'Native readiness is acknowledged only after the saved draft, reason, and theme are populated: theme '+theme);
     await page.locator('#reflection-text').fill('Final unsaved keystroke');
     await page.locator('#early-reason').fill('A reason typed before zero');
-    const completed={...prompt,isCheckIn:false,showEarlyEndReason:false,draft:'Older saved snapshot',actual:'1 minute'};
+    const completed={...prompt,isCheckIn:false,showEarlyEndReason:false,draft:'Older saved snapshot',actual:'1 minute',completed:'9/12/2026 3:45 PM'};
     await page.evaluate(state=>window.previewDispatch({type:'state',state}),{...state,prompts:[completed]});
     check(await page.locator('#reflection-text').inputValue()==='Final unsaved keystroke'&&await page.locator('#reason-group').isHidden(),'Natural completion hides the reason without overwriting in-flight reflection text: theme '+theme);
     check(await page.locator('#reflection-heading').textContent()==='Session reflection'&&(await page.locator('#reflection-context').textContent()).includes('1 minute spent'),'Promoted prompt updates its heading and actual time without recreating the editor: theme '+theme);
+    check(await page.locator('#reflection-timestamp').textContent()===completed.completed,'Promoted prompt updates its timestamp under the same reflection ID: theme '+theme);
     check(await page.locator('#reflection-text').evaluate(e=>e===document.activeElement),'Hiding the focused reason moves focus safely to the reflection box: theme '+theme);
     await page.evaluate(()=>window.previewDispatch({type:'reflectionShortcut'}));
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveForLater'));
