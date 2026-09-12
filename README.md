@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.1.18**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.1.19**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 ## Project folders
 

@@ -4,7 +4,8 @@
 <title>Reflection Timer · compact</title><link rel="stylesheet" href="compact.css"><link rel="stylesheet" href="themes.css"><script type="module" src="compact.js"></script></head>
 <body data-view="compact">
 <header id="caption"><h1>Reflection Timer</h1><div class="window-actions"><button id="shrink" type="button" aria-keyshortcuts="Escape" aria-label="Shrink to time-only view" title="Shrink to time-only view">−</button><button id="expand" type="button" aria-label="Open main timer page" title="Open main timer page">+</button><button id="close" type="button" aria-label="Close compact view" title="Close compact view">×</button></div></header>
-<main aria-label="Compact timer">
+<main aria-label="Compact timer" aria-describedby="compact-shortcut-help">
+  <p id="compact-shortcut-help" class="sr-only">Ctrl+Enter starts, resumes, or pauses the timer from anywhere in Compact or Time-only view.</p>
   <button id="read-time" type="button" class="clock" aria-label="Read remaining time" title="Read remaining time"><span id="visual-clock" aria-hidden="true">15:00</span></button>
   <p id="time-snapshot" class="sr-only">Time checked: 15 minutes remaining. Ready.</p>
   <form id="timer-editor" novalidate><div class="duration">
@@ -13,7 +14,7 @@
     <label>Seconds<input id="seconds" type="number" min="0" step="1" inputmode="numeric" maxlength="10" value="0"></label>
   </div><div class="footer"><button id="repeat" type="button" aria-label="Auto-start next session" aria-pressed="false" title="Auto-start next session"><span aria-hidden="true"><span>Auto</span><span>Start</span></span></button><button id="app" type="button" data-app-visible="false" aria-describedby="app-view-status" title="Show App view">App</button>
     <button id="reset" class="transport" type="button" aria-label="Reset timer" title="Reset timer"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M11 4 5 10l6 6M5 10h10"/></svg></button>
-    <button id="toggle" class="transport" type="submit" aria-label="Start timer" title="Start timer"><span aria-hidden="true">▶</span></button>
+    <button id="toggle" class="transport" type="submit" aria-label="Start timer" title="Start timer" aria-keyshortcuts="Control+Enter"><span aria-hidden="true">▶</span></button>
     <button id="end" class="transport" type="button" aria-label="End timer early" title="End timer early" aria-disabled="true"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m9 4 6 6-6 6M5 10h10"/></svg></button>
   </div></form>
   <span id="app-view-status" class="sr-only">Show App view.</span>

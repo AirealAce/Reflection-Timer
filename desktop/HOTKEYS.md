@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.18. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.19. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -24,6 +24,8 @@ Duration focus chooses the first value above zero from the left, or Hours if all
 
 In the Hours, Minutes, or Seconds field of App or Compact view, Enter pauses a running timer, resumes a paused timer, or starts an idle timer. Changing the duration while paused starts a new timer with that duration. Holding Enter does not repeatedly toggle the timer.
 
+Ctrl+Enter performs that same timer action from anywhere in the focused Compact or Time-only viewer, including its clock, page background, and buttons. It does not activate the focused button's other action. Held-key repeats and repeated requests while saving are ignored; an open dialog keeps its own keys. App Settings and reflection prompts retain their existing Ctrl+Enter save actions.
+
 In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either control switches to Time-only and focuses the clock. From Time-only, either hides the floating viewer. This works while ready, running, paused, or finished and does not change the timer or other windows. Holding Escape performs only one step.
 
 Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+comma still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
@@ -33,9 +35,9 @@ Ctrl+Enter runs Save & send from anywhere in a session reflection or check-in wi
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.1.18 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.1.19 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.18. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.19. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

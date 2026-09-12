@@ -56,6 +56,23 @@ static class NativeClockSmoke
                         await Both("0:10","Auto-start continues the next countdown instead of freezing on a duration preview");
                         session.Engine.SetPreferences(false,0);session.Engine.SaveSchedule(null,now.AddSeconds(10),25,false,0);now=now.AddSeconds(10);session.Tick();
                         await Both("0:25","A scheduled handoff shows the newly started session");
+                        var promptCount=session.Engine.Snapshot.Prompts.Count;
+                        var sessionId=session.Engine.Snapshot.Timer.SessionId;
+                        async Task ControlEnter(string target,bool repeat=false)=>await Script(compact,
+                            "document.querySelector("+JsonSerializer.Serialize(target)+").dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true,repeat:"+(repeat?"true":"false")+"}))");
+                        await Until(()=>Task.FromResult(compact.IsTimeOnly));now=now.AddSeconds(3);
+                        await ControlEnter("#read-time");
+                        await Until(()=>Task.FromResult(!session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer is {RemainingSeconds:22,PausedRemainingMilliseconds:not null}&&session.Engine.Snapshot.Timer.SessionId==sessionId,"Time-only Ctrl+Enter pauses the real engine without resetting elapsed time");
+                        await Until(()=>Task.FromResult(!compact.IsTimeOnly));await ControlEnter("#app");
+                        await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer.SessionId==sessionId,"Compact Ctrl+Enter resumes the same real session instead of activating App");
+                        await Until(()=>Task.FromResult(compact.IsTimeOnly));await ControlEnter("#read-time",repeat:true);
+                        await Task.Delay(75);
+                        Check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Prompts.Count==promptCount,"Held Ctrl+Enter does not pause again or create a reflection through the native bridge");
+                        session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=30}));await Both("0:30","Reset prepares an isolated idle timer for the compact shortcut check");
+                        await ControlEnter("#repeat");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer is {DurationSeconds:30,AutoRestart:false}&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Ctrl+Enter starts the real input duration without changing Auto-start or reflections");
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}

@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.18</p>
+    <p class="eyebrow">Reflection Timer 4.1.19</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -84,7 +84,9 @@
         <label class="check"><input id="autoSendIncompleteReflections" type="checkbox" checked>Auto-send incomplete reflections when a session ends</label>
         <p>On by default. When another session ends, older unfinished session reflections (including blank or closed drafts) are queued and marked “auto-sent”. The new reflection and active check-ins remain available for writing. Turn this off to keep older drafts for Prev/Next review. Practice prompts never auto-send real reflections. Offline entries remain in Outbox.</p>
         <label>Compact timer position<select id="placement"><option value="0">Remember dragged position</option><option value="1">Center</option><option value="2">Top left</option><option value="3">Top right</option><option value="4" selected>Bottom left</option><option value="5">Bottom right</option><option value="6">Top center</option><option value="7">Bottom center</option></select></label>
-        <p>Dragging saves a custom position, including across app and PC restarts. Presets use that screen; if it is disconnected, the timer stays on an available screen. Duration fields are shared with the main timer and editable while stopped or paused.</p><h3>Keyboard shortcuts</h3><div id="shortcut-notices"></div><p><kbd>Ctrl+Tab</kbd> switches to the next App tab. <kbd>Ctrl+Shift+Tab</kbd> switches to the previous tab. Both wrap around and work from inputs; an open dialog keeps focus.</p><label>Reflection popup position<select id="popup"><option value="0">Center</option><option value="1">Top left</option><option value="2">Top right</option><option value="3">Bottom left</option><option value="4" selected>Bottom right</option></select></label><p>Saves immediately for regular, scheduled, and test reflections. Uses the screen containing your mouse pointer when the popup opens, leaving space for the taskbar. An already-open reflection stays where it is.</p>
+        <p>Dragging saves a custom position, including across app and PC restarts. Presets use that screen; if it is disconnected, the timer stays on an available screen. Duration fields are shared with the main timer and editable while stopped or paused.</p><h3>Keyboard shortcuts</h3><div id="shortcut-notices"></div><p><kbd>Ctrl+Tab</kbd> switches to the next App tab. <kbd>Ctrl+Shift+Tab</kbd> switches to the previous tab. Both wrap around and work from inputs; an open dialog keeps focus.</p>
+        <p><kbd>Ctrl+Enter</kbd> starts, resumes, or pauses the timer anywhere in Compact or Time-only view, like <kbd>Enter</kbd> in a duration field. In Settings, it saves settings; in a reflection prompt, it runs Save &amp; send.</p>
+        <label>Reflection popup position<select id="popup"><option value="0">Center</option><option value="1">Top left</option><option value="2">Top right</option><option value="3">Bottom left</option><option value="4" selected>Bottom right</option></select></label><p>Saves immediately for regular, scheduled, and test reflections. Uses the screen containing your mouse pointer when the popup opens, leaving space for the taskbar. An already-open reflection stays where it is.</p>
 
 
         <button type="submit" hidden>Save display and behavior</button>
@@ -157,6 +159,6 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.18</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.19</span></footer>
 </body>
 </html>
