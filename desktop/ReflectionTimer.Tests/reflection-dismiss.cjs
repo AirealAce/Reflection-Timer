@@ -16,7 +16,7 @@ module.exports=async function reflectionDismiss(context,initial,check){
     else await page.locator(target).focus();
   }
   const targets=['#reflection-text','#early-reason','#reflection-heading','#later','#skip-reflection','#reflection-prev','#reflection-next','#reflection-form button[type=submit]','background'];
-  for(const kind of ['early','natural','check-in'])for(const key of ['Control+Enter','Escape']){
+  for(const kind of ['early','natural','check-in'])for(const key of ['Control+Enter','Alt+Enter','Escape']){
     for(const target of kind==='early'?targets:['background']){
       const page=await open({kind});await focus(page,target);await page.keyboard.press(key);
       await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='skip'));

@@ -116,6 +116,11 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch {Announce("The reflection could not be opened. Existing drafts are retained; any current editor stays open. Try Pending reflections again.");}
     }
     internal Task NavigateReflectionAsync(Guid from,int direction)=>promptCoordinator.NavigateAsync(from,direction,()=>closing);
+    internal async Task CompleteSubmittedSessionAsync(Guid id)
+    {
+        try {await promptCoordinator.CompleteSubmittedAsync(id,()=>closing);}
+        catch {Announce("Your session ended and its reflection is saved in Outbox. Older drafts could not be auto-sent and remain saved locally.");}
+    }
     private async Task ShowReflection(Guid id,bool activate)
     {
         var window=windows.FirstOrDefault(w=>w.View=="reflection"&&w.PromptId==id);

@@ -9,7 +9,7 @@ using ReflectionTimer.Core;
 // disposable WebView profile are used; no production windows or input injection.
 static class NativeReflectionSmoke
 {
-    internal static void Run()
+    internal static void Run(bool sendModeOnly=false)
     {
         Exception? failure=null;var passed=0;
         void Check(bool condition,string name){if(!condition)throw new Exception(name);passed++;Console.WriteLine("PASS "+name);}
@@ -34,6 +34,7 @@ static class NativeReflectionSmoke
                         var first=await Read(window);
                         Check(first.GetProperty("draft").GetString()=="Saved native-window draft"&&first.GetProperty("theme").GetString()=="3","First native display has the saved response and Glamour theme already loaded");
                         Check(first.GetProperty("reasonVisible").GetBoolean()&&first.GetProperty("reason").GetString()=="Native reason draft","Pre-completion native prompt shows its saved reason");
+                        if(sendModeOnly){await ExerciseSendModes(app,window,seconds=>now=now.AddSeconds(seconds),Check);return;}
                         await Script(window,"document.querySelector('#later').focus()");
                         ((IReflectionShortcutTarget)window).FocusOrSaveDraft();
                         await UntilAsync(async()=>(await Read(window)).GetProperty("focused").GetString()=="reflection-text");
@@ -126,6 +127,25 @@ static class NativeReflectionSmoke
         Console.WriteLine($"{passed} native smoke checks passed.");
     }
     private static List<PreviewWindow> Windows(PreviewApplication app)=>(List<PreviewWindow>)typeof(PreviewApplication).GetField("windows",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
+    private static async Task ExerciseSendModes(PreviewApplication app,PreviewWindow window,Action<int> advance,Action<bool,string> check)
+    {
+        var session=app.Session;var first=window.PromptId!.Value;var timer=session.Engine.Snapshot.Timer;
+        advance(13);
+        await Script(window,"document.querySelector('#later').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',altKey:true,bubbles:true,cancelable:true}))");
+        await Until(()=>!window.ReflectionOpen&&!window.Visible);
+        check(session.Engine.Snapshot.Timer==timer&&session.Engine.Snapshot.Outbox.Single(o=>o.Id==first) is {IsCheckIn:true,EndedEarly:false,ActualDurationSeconds:13,Message:"Saved native-window draft"},"Native Alt+Enter bridge submits a check-in and hides the editor without changing the session");
+        var second=session.Engine.CheckIn();session.Engine.SaveDraft(second,"Current response","Reason for stopping");
+        session.Engine.SetPreferences(true,0);advance(7);
+        app.Open("reflection",second);await UntilAsync(async()=>window.PromptId==second&&window.Visible&&(await Read(window)).GetProperty("draft").GetString()=="Current response");
+        var browser=Browser(window);
+        await Script(window,"document.querySelector('#early-reason').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Until(()=>!window.ReflectionOpen&&!window.Visible);
+        check(session.Engine.Snapshot.Outbox.Single(o=>o.Id==second) is {IsCheckIn:false,EndedEarly:true,ActualDurationSeconds:20,DurationSeconds:60,EarlyEndReason:"Reason for stopping",Message:"Current response"},"Native Ctrl+Enter bridge logs an early ending with actual time and reason");
+        check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId!=timer.SessionId,"Native end-and-send honors auto-start without ending the new session");
+        await Task.Delay(1100);
+        check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==0&&ReferenceEquals(browser,Browser(window)),"A timer tick after end-and-send cannot reopen a blank or duplicate reflection window");
+        check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
+    }
     private static async Task ExerciseRecovery(PreviewApplication app,PreviewWindow reflection,Action<bool,string> check)
     {
         var session=app.Session;var id=reflection.PromptId!.Value;

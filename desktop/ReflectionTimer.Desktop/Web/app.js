@@ -294,15 +294,16 @@ bind('schedule-cancel',()=>{clearScheduleEdit();$('schedule-start').focus();});
 ['reflection-text','early-reason'].forEach(id=>$(id).addEventListener('input',()=>{
   setText($('draft-status'),'Saving draft…'); clearTimeout(saveDelay); saveDelay=setTimeout(()=>saveDraft().catch(e=>error(e.message)),300);
 }));
-$('reflection-form').addEventListener('submit',event=>{event.preventDefault();run(async()=>{
+async function submitReflection(endSession=false){
   if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   if(!$('reflection-text').value.trim()) { $('reflection-text').setAttribute('aria-invalid','true'); $('reflection-text').focus(); throw new Error('Write a reflection before saving.'); }
   $('reflection-text').removeAttribute('aria-invalid');
   // Lock before the draft flush so another shortcut cannot submit it twice.
   savingAndClosing=true;setReflectionBusy(reflectionBusy);
-  try { await saveDraft(); queued=true; await send('queue',draft()); }
+  try { await saveDraft(); queued=true; await send('queue',{...draft(),endSession}); }
   catch(e) { queued=false;savingAndClosing=false;setReflectionBusy(reflectionBusy);throw e; }
-});});
+}
+$('reflection-form').addEventListener('submit',event=>{event.preventDefault();run(()=>submitReflection());});
 bind('later',async()=>{
   if(!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   savingAndClosing=true;setReflectionBusy(reflectionBusy);
@@ -322,7 +323,9 @@ bind('skip-reflection',async()=>{
   catch(e){queued=false;savingAndClosing=false;setReflectionBusy(reflectionBusy);throw e;}
 });
 document.addEventListener('keydown',event=>{
-  const submit=event.ctrlKey&&event.key==='Enter',dismiss=event.key==='Escape';
+  const endSession=event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.shiftKey&&event.key==='Enter';
+  const checkIn=event.altKey&&!event.ctrlKey&&!event.metaKey&&!event.shiftKey&&event.key==='Enter';
+  const submit=endSession||checkIn,dismiss=event.key==='Escape';
   if(document.querySelector('dialog[open]'))return;
   if(view==='main'&&dismiss){
     event.preventDefault();
@@ -330,15 +333,16 @@ document.addEventListener('keydown',event=>{
     if(!event.repeat&&state)run(()=>send('close'));
     return;
   }
+  if(view==='reflection'&&event.key==='Enter'&&(event.ctrlKey||event.altKey||event.metaKey)&&!submit){event.preventDefault();return;}
   if(view!=='reflection'||(!submit&&!dismiss))return;
   // Cancel Enter's focused-button action as well (Save, Skip, Prev, or Next).
   event.preventDefault();
-  if(event.repeat||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
+  if(event.repeat||event.isComposing||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   // Inspect both fields, including a reason retained after natural completion.
   const empty=['reflection-text','early-reason'].every(id=>$(id).value.length===0);
   if(empty)$('skip-reflection').click();
   else if(dismiss)$('later').click();
-  else $('reflection-form').requestSubmit();
+  else run(()=>submitReflection(endSession));
 });
 if(view==='main')$('schedule-start').value=localDateTime(Date.now()+3600000);
 run(()=>send('ready'));

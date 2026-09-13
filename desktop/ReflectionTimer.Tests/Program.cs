@@ -4,6 +4,7 @@ using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
 
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
+if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 
 var passed = 0;
@@ -102,6 +103,7 @@ await ServiceTests.Run(Check);
 await SuccessAudioTests.Run(Check);
 await AudioBehaviorTests.Run(Check);
 await MessageSentFadeTests.Run(Check);
+await ReflectionSendModeTests.Run(Check);
 Console.WriteLine($"{passed} tests passed.");
 
 sealed class MemoryStore : IStateStore

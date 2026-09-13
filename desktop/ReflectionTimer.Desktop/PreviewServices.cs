@@ -30,6 +30,9 @@ public sealed class PreviewServices : IDisposable
         Log.Record(activity);
         // Activity is raised only after the skipped prompt is saved to disk.
         if(activity.Event=="prompt.skipped") _ = Play(SoundEvent.Success);
+        // This completion queued its own reflection in the same commit, so no
+        // newly pending prompt remains for Changed() to discover.
+        if(activity.Event=="reflection.endedAndQueued") _ = Play(SoundEvent.SessionEnd);
         // Session transitions must let the incoming sound's playback behavior
         // decide whether existing audio is mixed, ducked, or interrupted.
         var state=engine.Snapshot;

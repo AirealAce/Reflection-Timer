@@ -22,7 +22,7 @@ static class MessageSentFadeTests
         Envelope(check);
         await Scope(check);
         await NonDelivery(check);
-        foreach(var ending in new[]{"check-in","natural","early","scheduled"})await Delivery(check,ending);
+        foreach(var ending in new[]{"check-in","natural","early","scheduled","end-and-send"})await Delivery(check,ending);
     }
     private static void Envelope(Action<bool,string> check)
     {
@@ -79,7 +79,7 @@ static class MessageSentFadeTests
             check(engine.Snapshot.Prompts.Single(p=>p.Id==prompt).SessionId==sessionId,"Reflection retains its audio session identity through "+ending);
             engine.SaveReflectionForLater(prompt,"Ready to send");
             check(low.Level.RequestedFadeSeconds==0,"Saving a "+ending+" draft does not fade low-time audio");
-            engine.QueueReflection(prompt,"A synthetic reflection",autoSent:ending=="natural");
+            engine.QueueReflection(prompt,"A synthetic reflection",autoSent:ending=="natural",endSession:ending=="end-and-send");
             check(engine.Snapshot.Outbox.Single().SessionId==sessionId&&low.Level.RequestedFadeSeconds==0,"Queuing a "+ending+" reflection retains session identity but does not fade audio");
             Playback? newer=null;
             if(ending is "natural" or "scheduled"){

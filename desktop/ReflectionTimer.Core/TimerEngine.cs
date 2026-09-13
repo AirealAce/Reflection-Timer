@@ -350,29 +350,44 @@ public sealed class TimerEngine
             return true;
         }
     }
-    public void QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false)
+    public bool QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false, bool endSession = false)
     {
-        if (Snapshot.Prompts.SingleOrDefault(p => p.Id == promptId) is {} saved) text = ReflectionDrafts.Content(saved, text);
-        text = text.Trim();
-        if ((!autoSent && text.Length < 1) || text.Length > 5000) throw new ArgumentException("Write a reflection between 1 and 5,000 characters.");
-        if (earlyEndReason?.Trim().Length > 1000) throw new ArgumentException("Keep the reason for ending early under 1,001 characters.");
-        Change(autoSent ? "reflection.autoSent" : "reflection.queued", s => {
-            var prompt = s.Prompts.SingleOrDefault(x => x.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
-            var submittedAt = clock();
-            var actual = prompt.IsCheckIn && prompt.CheckInSessionId is not null && prompt.CheckInSessionId == s.Timer.SessionId
-                ? ActualSeconds(s.Timer, submittedAt.ToUnixTimeMilliseconds()) : prompt.ActualDurationSeconds;
-            s.Outbox.Add(new() {
-                Id = promptId, SessionId = prompt.SessionId ?? prompt.CheckInSessionId, Message = text, SubmittedAt = submittedAt, DurationSeconds = prompt.DurationSeconds, LocalOnly = localOnly,
-                ActualDurationSeconds = actual, EndedEarly = prompt.EndedEarly, IsCheckIn = prompt.IsCheckIn, AutoSent = autoSent,
-                EarlyEndReason = prompt.EndedEarly ? (earlyEndReason ?? prompt.EarlyEndReason).Trim() : "",
-                ReceiverUrl = s.Connection.WebAppUrl,
-                IsTest = prompt.IsTest, SheetUrl = s.Connection.SheetUrl, SheetMode = s.Connection.SheetMode, SheetName = s.Connection.SheetName
-            });
-            s.Prompts.RemoveAll(x => x.Id == promptId);
-            // Keep at most 200 sent entries. Never automatically prune unsent work.
-            var oldSent = s.Outbox.Where(x => x.Status == DeliveryStatus.Sent).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
-            s.Outbox.RemoveAll(x => oldSent.Contains(x.Id));
-        }, promptId);
+        lock (gate) {
+            var saved = state.Prompts.SingleOrDefault(p => p.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
+            text = ReflectionDrafts.Content(saved, text);
+            text = text.Trim();
+            if ((!autoSent && text.Length < 1) || text.Length > 5000) throw new ArgumentException("Write a reflection between 1 and 5,000 characters.");
+            if (earlyEndReason?.Trim().Length > 1000) throw new ArgumentException("Keep the reason for ending early under 1,001 characters.");
+            // Bind ending to this draft's own unfinished session. A delayed send of
+            // an older reflection must never stop a newer running or paused timer.
+            var complete = endSession && !autoSent && saved.IsCheckIn && saved.CheckInSessionId is {} sessionId
+                && sessionId == state.Timer.SessionId && HasUnfinishedSession(state.Timer);
+            Change(complete ? "reflection.endedAndQueued" : autoSent ? "reflection.autoSent" : "reflection.queued", s => {
+                var prompt = s.Prompts.SingleOrDefault(x => x.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
+                var submittedAt = clock();
+                if (complete) {
+                    var now = submittedAt.ToUnixTimeMilliseconds();
+                    ExpireAutoRestart(s, now);
+                    CompletePrompt(s, now);
+                    prompt = s.Prompts.Single(p => p.Id == promptId);
+                    ApplyScheduleHandoff(s, now, completed: true);
+                }
+                var actual = prompt.IsCheckIn && prompt.CheckInSessionId is not null && prompt.CheckInSessionId == s.Timer.SessionId
+                    ? ActualSeconds(s.Timer, submittedAt.ToUnixTimeMilliseconds()) : prompt.ActualDurationSeconds;
+                s.Outbox.Add(new() {
+                    Id = promptId, SessionId = prompt.SessionId ?? prompt.CheckInSessionId, Message = text, SubmittedAt = submittedAt, DurationSeconds = prompt.DurationSeconds, LocalOnly = localOnly,
+                    ActualDurationSeconds = actual, EndedEarly = prompt.EndedEarly, IsCheckIn = prompt.IsCheckIn, AutoSent = autoSent,
+                    EarlyEndReason = prompt.EndedEarly ? (earlyEndReason ?? prompt.EarlyEndReason).Trim() : "",
+                    ReceiverUrl = s.Connection.WebAppUrl,
+                    IsTest = prompt.IsTest, SheetUrl = s.Connection.SheetUrl, SheetMode = s.Connection.SheetMode, SheetName = s.Connection.SheetName
+                });
+                s.Prompts.RemoveAll(x => x.Id == promptId);
+                // Keep at most 200 sent entries. Never automatically prune unsent work.
+                var oldSent = s.Outbox.Where(x => x.Status == DeliveryStatus.Sent).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
+                s.Outbox.RemoveAll(x => oldSent.Contains(x.Id));
+            }, promptId);
+            return complete;
+        }
     }
     public OutboxItem? BeginUpload(bool supportsSafeRetry = false)
     {

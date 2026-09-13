@@ -171,8 +171,8 @@ public sealed class PreviewSession
                 var skipped=Id(data);RequiredPrompt(skipped);Engine.SkipPrompt(skipped);return new("Reflection skipped.",Close:true);
             case "queue":
                 var localOnly = isolatedProfile && SheetsClient.Validate(state.Connection) is not null;
-                Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly);
-                return new(localOnly ? "Reflection saved locally in the Outbox." : "Reflection saved in Outbox for Sheets delivery when enabled.", Close: true);
+                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"));
+                return new((ended ? "Session ended. " : "") + (localOnly ? "Reflection saved locally in the Outbox." : "Reflection saved in Outbox for Sheets delivery when enabled."), Close: true, SessionCompleted: ended);
             case "schedule":
                 var date = Text(data, "start", 40);
                 if (!DateTime.TryParseExact(date, "yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var start))

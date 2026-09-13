@@ -1,3 +1,5 @@
+using ReflectionTimer.Core;
+
 namespace ReflectionTimer.Accessible;
 
 internal interface IReflectionPromptWindow
@@ -32,6 +34,30 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
             await OpenCoreAsync(prompts[index+direction].Id,true,stopping,false);
         } finally {gate.Release();}
     }
+    // Ending and sending from a check-in leaves no new popup to open. Apply the
+    // usual completion policy to older drafts without reopening the sent one.
+    internal async Task CompleteSubmittedAsync(Guid id, Func<bool>? stopping = null)
+    {
+        await gate.WaitAsync();
+        try {
+            var state=session.Engine.Snapshot;
+            var sent=state.Outbox.SingleOrDefault(o=>o.Id==id);
+            if(stopping?.Invoke()==true||!state.AutoSendIncompleteReflections||sent is null||sent.IsCheckIn)return;
+            await AutoSendPriorAsync(state.Prompts.Where(p=>!p.IsCheckIn&&p.IsTest==sent.IsTest&&p.CompletedAt<=sent.SubmittedAt.ToUnixTimeMilliseconds()),stopping);
+        } finally {gate.Release();}
+    }
+    private async Task AutoSendPriorAsync(IEnumerable<ReflectionPrompt> prompts, Func<bool>? stopping)
+    {
+        foreach(var prior in prompts) {
+            if(stopping?.Invoke()==true)return;
+            var window=openWindows().FirstOrDefault(w=>w.ReflectionId==prior.Id);
+            try {
+                if(window is not null)await window.PrepareHandoffAsync();
+                if(session.AutoSendReflection(prior.Id))queued();
+                window?.CloseAfterSave();
+            } catch {window?.ResumeEditing();throw;}
+        }
+    }
     private async Task OpenCoreAsync(Guid id,bool activate,Func<bool>? stopping,bool sessionCompleted)
     {
         if(stopping?.Invoke()==true)return;
@@ -41,15 +67,7 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
         if(sessionCompleted&&!target.IsCheckIn&&state.AutoSendIncompleteReflections) {
             // Only earlier completed sessions, not the new prompt, future queued
             // arrivals, active check-ins, or reflections from a different test mode.
-            foreach(var prior in state.Prompts.TakeWhile(p=>p.Id!=id).Where(p=>!p.IsCheckIn&&p.IsTest==target.IsTest)) {
-                if(stopping?.Invoke()==true)return;
-                var window=openWindows().FirstOrDefault(w=>w.ReflectionId==prior.Id);
-                try {
-                    if(window is not null)await window.PrepareHandoffAsync();
-                    if(session.AutoSendReflection(prior.Id))queued();
-                    window?.CloseAfterSave();
-                } catch {window?.ResumeEditing();throw;}
-            }
+            await AutoSendPriorAsync(state.Prompts.TakeWhile(p=>p.Id!=id).Where(p=>!p.IsCheckIn&&p.IsTest==target.IsTest),stopping);
         }
         var prepared=new List<IReflectionPromptWindow>();
         try {
