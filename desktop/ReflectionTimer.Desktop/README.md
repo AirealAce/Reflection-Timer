@@ -1,4 +1,4 @@
-# Reflection Timer 4.1.22
+# Reflection Timer 4.1.23
 
 The accessible interface is now the primary desktop app. It uses the existing encrypted ReflectionTimerDesktop profile and retains the original Sheets connection, settings, drafts, schedules and Outbox. No personal connection settings belong in the application package.
 
@@ -8,7 +8,7 @@ Reflection prompts show the session date and time right-aligned beside the local
 
 Space or Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves validation and pause/resume behavior without activating other focused buttons, inserting spaces in duration inputs, or scrolling the page. Holding a key does not repeatedly toggle the timer. Open dialogs retain their own keys; Space in App or a reflection keeps its normal behavior.
 
-In a reflection window, Ctrl+Enter sends and ends that draft's unfinished session; Alt+Enter sends a check-in without ending it. Completed reflections retain their existing status, and old drafts cannot end a newer timer. Ending and queuing commit together, retaining actual/allotted time and any early-ending reason while honoring auto-start, its cutoff, and scheduled handoffs. Both empty fields still mean Skip without ending. The Save & send button keeps its existing check-in behavior; Save and Ctrl+Alt+comma continue to save drafts locally.
+In a reflection window, Ctrl+Enter sends and ends that draft's unfinished session; Alt+Enter sends a check-in without ending it. End-and-send closes the submitted prompt without another completion popup or Session end sound; normal delivery success/failure feedback remains enabled. Completed reflections retain their existing status, and old drafts cannot end a newer timer. Ending and queuing commit together, retaining actual/allotted time and any early-ending reason while honoring auto-start, its cutoff, and scheduled handoffs. Both empty fields still mean Skip without ending. The Save & send button keeps its existing check-in behavior; Save and Ctrl+Alt+comma continue to save drafts locally.
 
 Settings → Audio → Low on time audio includes “Fade out after message sent” and an editable duration in whole seconds (three seconds initially, checkbox off by default). Confirmed Sheets delivery fades only that session's currently playing low-time audio; saving a draft, queuing, failures, practice/simulated sends, and manually marking an entry sent do not trigger it. Delayed delivery cannot fade a newer session's warning. The existing playback-duration fade and natural track ending may finish sooner. Disruptive audio still stops other sounds immediately; use Polite or Assertive for overlapping audio when you want to hear the fade. Changes autosave silently and are included in Save settings / Ctrl+Enter.
 

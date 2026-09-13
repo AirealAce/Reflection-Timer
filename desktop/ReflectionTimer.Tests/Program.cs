@@ -104,6 +104,7 @@ await SuccessAudioTests.Run(Check);
 await AudioBehaviorTests.Run(Check);
 await MessageSentFadeTests.Run(Check);
 await ReflectionSendModeTests.Run(Check);
+await QuietCompletionTests.Run(Check);
 Console.WriteLine($"{passed} tests passed.");
 
 sealed class MemoryStore : IStateStore

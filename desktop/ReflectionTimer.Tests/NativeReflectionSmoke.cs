@@ -144,6 +144,14 @@ static class NativeReflectionSmoke
         check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId!=timer.SessionId,"Native end-and-send honors auto-start without ending the new session");
         await Task.Delay(1100);
         check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==0&&ReferenceEquals(browser,Browser(window)),"A timer tick after end-and-send cannot reopen a blank or duplicate reflection window");
+        app.Open("reflection",second,sessionCompleted:true); // A delayed request for the already submitted prompt.
+        advance(40);await Task.Delay(1100);
+        check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==0,
+            "Neither a stale open request nor the original deadline reopens the submitted reflection");
+        var nextSession=session.Engine.Snapshot.Timer.SessionId;
+        advance(20);await Until(()=>window.Visible&&window.ReflectionOpen);
+        check(window.PromptId!=second&&session.Engine.Snapshot.Prompts.Single().SessionId==nextSession&&ReferenceEquals(browser,Browser(window)),
+            "The next session's own natural completion still opens its distinct reflection in the retained native editor");
         check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
     }
     private static async Task ExerciseRecovery(PreviewApplication app,PreviewWindow reflection,Action<bool,string> check)

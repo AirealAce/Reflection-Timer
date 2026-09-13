@@ -61,7 +61,7 @@ public sealed class DiagnosticLog
         "app.started", "app.exiting", "app.activated", "app.deactivated", "app.hidden", "system.resume", "system.session",
         "timer.started", "timer.paused", "timer.resumed", "timer.reset", "timer.preferences", "timer.deadline", "timer.autoRestartDisabled",
         "schedule.saved", "schedule.removed", "prompt.test", "prompt.shown", "prompt.later", "prompt.draftSaved", "prompt.skipped",
-        "reflection.queued", "reflection.autoSent", "upload.started", "upload.sent", "upload.needsReview", "upload.recovered", "upload.retryRequested",
+        "reflection.queued", "reflection.endedAndQueued", "reflection.autoSent", "upload.started", "upload.sent", "upload.needsReview", "upload.recovered", "upload.retryRequested",
         "upload.confirmedByUser", "settings.saved", "connection.checked", "issue.marked", "error.storage", "error.unexpected",
         "sound.changed", "sound.preview", "sound.played", "sound.fallback", "sound.muted", "sound.stopped", "sound.failed", "display.changed", "theme.changed",
         "shortcut.registered", "shortcut.unavailable", "shortcut.used", "timer.endedEarly", "timer.lowTime", "timer.lowTimeOptions", "sound.thresholdChanged", "sound.requested",
