@@ -383,7 +383,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     check(await autoStart.getAttribute('aria-pressed')==='false'&&await page.locator('#minutes').inputValue()==='12'&&await page.evaluate(()=>window.previewMessages.filter(m=>m.action==='toggle').length)===compactStarts,'Failed Auto-start save restores its previous state and keeps the timer draft');
     await page.evaluate(()=>window.chrome.webview.postMessage=window.compactNormalPost);
     await page.locator('#minutes').fill('15');
-    await autoStart.focus();await page.keyboard.press('Space');
+    await autoStart.focus();await page.keyboard.press('Enter');
     await page.waitForFunction(()=>document.querySelector('#repeat').getAttribute('aria-pressed')==='true'&&!document.querySelector('#repeat').hasAttribute('aria-disabled'));
     await emptyDurationFields(page,'Compact');
     check(await page.evaluate(()=>window.previewMessages.findLast(m=>m.action==='toggle').data.repeat===true),'Starting from Compact uses the Auto-start toggle state');
