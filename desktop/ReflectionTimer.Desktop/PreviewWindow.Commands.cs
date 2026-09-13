@@ -131,7 +131,9 @@ internal sealed partial class PreviewWindow
                 var kind = (SoundEvent)ReadInt(data,"kind",0,3); var previous = AudioSettings.From(state).For(kind);
                 engine.SetSound(kind,new() { Track = (LibrarySound)ReadInt(data,"track",0,9),
                     Mp3Path = ReadFlag(data,"keepCustom") ? previous.Mp3Path : "", Behavior = (SoundBehavior)ReadInt(data,"behavior",0,2),
-                    Volume = ReadInt(data,"volume",0,100), FadeOutEnabled = ReadFlag(data,"fade"), FadeOutAfterSeconds = ReadInt(data,"fadeSeconds",1,TimerEngine.MaxDuration) });
+                    Volume = ReadInt(data,"volume",0,100), FadeOutEnabled = ReadFlag(data,"fade"), FadeOutAfterSeconds = ReadInt(data,"fadeSeconds",1,TimerEngine.MaxDuration),
+                    FadeOutAfterMessageSent = kind==SoundEvent.LowTime && ReadFlag(data,"fadeAfterMessageSent"),
+                    MessageSentFadeSeconds = kind==SoundEvent.LowTime && ReadFlag(data,"fadeAfterMessageSent") ? ReadInt(data,"messageSentFadeSeconds",1,TimerEngine.MaxDuration) : previous.MessageSentFadeSeconds });
                 message="Audio settings saved."; break;
             case "browseSound":
                 using (var picker = new OpenFileDialog { Title="Choose a custom MP3", Filter="MP3 audio (*.mp3)|*.mp3", CheckFileExists=true }) {

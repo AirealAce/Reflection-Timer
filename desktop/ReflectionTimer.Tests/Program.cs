@@ -101,6 +101,7 @@ await PromptPolicyTests.Run(Check);
 await ServiceTests.Run(Check);
 await SuccessAudioTests.Run(Check);
 await AudioBehaviorTests.Run(Check);
+await MessageSentFadeTests.Run(Check);
 Console.WriteLine($"{passed} tests passed.");
 
 sealed class MemoryStore : IStateStore

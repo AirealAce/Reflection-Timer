@@ -52,7 +52,7 @@ public sealed class TimerEngine
         // an already-open editor keep even keystrokes still awaiting autosave.
         var completed=new ReflectionPrompt(draft?.Id??Guid.NewGuid(),Math.Min(timer.EndTime??now,now),timer.DurationSeconds,timer.Volume,false,draft?.Draft??"") {
             ActualDurationSeconds=ActualSeconds(timer,now),EndedEarly=RemainingMilliseconds(timer,now)>0,
-            EarlyEndReason=draft?.EarlyEndReason??"",ContinuationSeparator=draft?.ContinuationSeparator
+            EarlyEndReason=draft?.EarlyEndReason??"",ContinuationSeparator=draft?.ContinuationSeparator,SessionId=timer.SessionId
         };
         if(draft is not null)state.Prompts.RemoveAll(p=>p.Id==draft.Id);
         state.Prompts.Add(completed);
@@ -305,7 +305,7 @@ public sealed class TimerEngine
                 // Upgrade an already-running legacy timer without restarting it.
                 s.Timer = s.Timer with { SessionId = s.Timer.SessionId ?? Guid.NewGuid() };
                 s.Prompts.Add(new(id, Now, s.Timer.DurationSeconds, s.Timer.Volume, false) {
-                    IsCheckIn = true, CheckInSessionId = s.Timer.SessionId,
+                    IsCheckIn = true, CheckInSessionId = s.Timer.SessionId, SessionId = s.Timer.SessionId,
                     ActualDurationSeconds = ActualSeconds(s.Timer, Now)
                 });
             }, id);
@@ -362,7 +362,7 @@ public sealed class TimerEngine
             var actual = prompt.IsCheckIn && prompt.CheckInSessionId is not null && prompt.CheckInSessionId == s.Timer.SessionId
                 ? ActualSeconds(s.Timer, submittedAt.ToUnixTimeMilliseconds()) : prompt.ActualDurationSeconds;
             s.Outbox.Add(new() {
-                Id = promptId, Message = text, SubmittedAt = submittedAt, DurationSeconds = prompt.DurationSeconds, LocalOnly = localOnly,
+                Id = promptId, SessionId = prompt.SessionId ?? prompt.CheckInSessionId, Message = text, SubmittedAt = submittedAt, DurationSeconds = prompt.DurationSeconds, LocalOnly = localOnly,
                 ActualDurationSeconds = actual, EndedEarly = prompt.EndedEarly, IsCheckIn = prompt.IsCheckIn, AutoSent = autoSent,
                 EarlyEndReason = prompt.EndedEarly ? (earlyEndReason ?? prompt.EarlyEndReason).Trim() : "",
                 ReceiverUrl = s.Connection.WebAppUrl,

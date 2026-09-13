@@ -17,6 +17,9 @@ public sealed class AudioLevel(int volume, int? fadeOutAfterSeconds = null, int 
     public int SoundVolume => Volatile.Read(ref eventVolume);
     public int? FadeOutAfterSeconds { get; } = fadeOutAfterSeconds;
     private float multiplier = 1;
+    private int requestedFadeSeconds;
+    internal int RequestedFadeSeconds => Volatile.Read(ref requestedFadeSeconds);
+    internal void RequestFadeOut(int seconds) => Interlocked.CompareExchange(ref requestedFadeSeconds, seconds, 0);
     public float Gain => Volume / 100f * (SoundVolume / 100f) * Volatile.Read(ref multiplier);
     internal void SetVolumes(int app, int sound) { Volatile.Write(ref appVolume, Math.Clamp(app, 0, 100)); Volatile.Write(ref eventVolume, Math.Clamp(sound, 0, 100)); }
     internal void Duck(bool ducked) => Volatile.Write(ref multiplier, ducked ? .25f : 1f);
@@ -27,15 +30,22 @@ public sealed class AudioLevel(int volume, int? fadeOutAfterSeconds = null, int 
 internal sealed class LiveGainProvider(ISampleProvider source, AudioLevel level) : ISampleProvider
 {
     private long samplesPlayed;
+    private long? requestedFadeStartFrame;
     public WaveFormat WaveFormat => source.WaveFormat;
     public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
     public int Read(Span<float> buffer)
     {
         var fadeStartFrame = level.FadeOutAfterSeconds is { } seconds ? (long)seconds * WaveFormat.SampleRate : (long?)null;
-        if (fadeStartFrame is { } start) {
+        var requestedSeconds = level.RequestedFadeSeconds;
+        if (requestedSeconds > 0) requestedFadeStartFrame ??= samplesPlayed / WaveFormat.Channels;
+        var requestedFrames = (long)requestedSeconds * WaveFormat.SampleRate;
+        long? endFrame = fadeStartFrame + WaveFormat.SampleRate;
+        if (requestedFadeStartFrame is { } requestedStart)
+            endFrame = Math.Min(endFrame ?? long.MaxValue, requestedStart + requestedFrames);
+        if (endFrame is { } end) {
             // Count audio frames, not wall time: decoding/device setup cannot
-            // consume the delay, and every channel gets the same one-second fade.
-            var remaining = (start + WaveFormat.SampleRate) * WaveFormat.Channels - samplesPlayed;
+            // consume a delay or fade. Every channel shares the same envelope.
+            var remaining = end * WaveFormat.Channels - samplesPlayed;
             if (remaining <= 0) return 0;
             buffer = buffer[..(int)Math.Min(buffer.Length, remaining)];
         }
@@ -44,6 +54,8 @@ internal sealed class LiveGainProvider(ISampleProvider source, AudioLevel level)
             var fade = fadeStartFrame is { } fadeStart
                 ? Math.Clamp(1f - ((samplesPlayed + i) / WaveFormat.Channels - fadeStart) / (float)WaveFormat.SampleRate, 0f, 1f)
                 : 1f;
+            if (requestedFadeStartFrame is { } start)
+                fade = Math.Min(fade, Math.Clamp(1f - ((samplesPlayed + i) / WaveFormat.Channels - start) / (float)requestedFrames, 0f, 1f));
             buffer[i] *= gain * fade;
         }
         samplesPlayed += read;
@@ -106,7 +118,7 @@ public sealed class AlertSoundPlayer : IDisposable
     private Task stopping = Task.CompletedTask;
     private bool disposed;
 
-    private sealed class Voice(int volume, SoundBehavior behavior, SoundEvent kind, bool preview, int? fadeOutAfterSeconds, int soundVolume)
+    private sealed class Voice(int volume, SoundBehavior behavior, SoundEvent kind, bool preview, int? fadeOutAfterSeconds, int soundVolume, Guid? sessionId)
     {
         public readonly CancellationTokenSource Cancellation = new();
         public readonly TaskCompletionSource Done = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -114,6 +126,7 @@ public sealed class AlertSoundPlayer : IDisposable
         public readonly SoundBehavior Behavior = behavior;
         public readonly SoundEvent Kind = kind;
         public readonly bool Preview = preview;
+        public readonly Guid? SessionId = sessionId;
         public bool Running;
     }
 
@@ -127,7 +140,7 @@ public sealed class AlertSoundPlayer : IDisposable
     public Task<AlertSoundResult> PlayAsync(string customPath, int volume) =>
         PlayAsync(customPath, volume, SoundBehavior.Disruptive, SoundEvent.SessionEnd);
 
-    public Task<AlertSoundResult> PlayAsync(string? path, int volume, SoundBehavior behavior, SoundEvent kind, string? fallback = null, bool preview = false, int? fadeOutAfterSeconds = null, int soundVolume = 100)
+    public Task<AlertSoundResult> PlayAsync(string? path, int volume, SoundBehavior behavior, SoundEvent kind, string? fallback = null, bool preview = false, int? fadeOutAfterSeconds = null, int soundVolume = 100, Guid? sessionId = null)
     {
         if (fadeOutAfterSeconds is < 1 or > TimerEngine.MaxDuration) throw new ArgumentOutOfRangeException(nameof(fadeOutAfterSeconds));
         lock (gate) {
@@ -140,7 +153,7 @@ public sealed class AlertSoundPlayer : IDisposable
             if (!Enum.IsDefined(behavior)) behavior = SoundBehavior.Disruptive;
             if (behavior == SoundBehavior.Disruptive) CancelVoices(voices.ToArray());
             if (voices.Count >= 32) return Task.FromResult(AlertSoundResult.Cancelled);
-            var request = new Voice(volume, behavior, kind, preview, fadeOutAfterSeconds, soundVolume); voices.Add(request);
+            var request = new Voice(volume, behavior, kind, preview, fadeOutAfterSeconds, soundVolume, sessionId); voices.Add(request);
             var waitForStops = stopping;
             return Task.Run(() => RunAsync(path, fallback ?? defaultPath, request, waitForStops));
         }
@@ -200,5 +213,13 @@ public sealed class AlertSoundPlayer : IDisposable
         UpdateGains();
     }
     public void Stop(SoundEvent? kind = null) { lock (gate) CancelVoices(voices.Where(x => kind is null || x.Kind == kind).ToArray()); }
+    public void FadeOut(SoundEvent kind, Guid sessionId, int seconds)
+    {
+        TimerEngine.ValidateDuration(seconds);
+        lock (gate) {
+            foreach (var voice in voices.Where(x => x.Kind == kind && x.SessionId == sessionId && !x.Preview && !x.Cancellation.IsCancellationRequested))
+                voice.Level.RequestFadeOut(seconds);
+        }
+    }
     public void Dispose() { lock (gate) { disposed = true; CancelVoices(voices.ToArray()); } }
 }

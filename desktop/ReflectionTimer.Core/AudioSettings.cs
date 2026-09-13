@@ -13,6 +13,8 @@ public record SoundSetting
     public int Volume { get; init; } = 100; // Relative to App sound; legacy settings keep their existing loudness.
     public bool FadeOutEnabled { get; init; }
     public int FadeOutAfterSeconds { get; init; } = 10;
+    public bool FadeOutAfterMessageSent { get; init; }
+    public int MessageSentFadeSeconds { get; init; } = 3;
 }
 
 public record LowTimeOptions
@@ -59,6 +61,8 @@ public record AudioSettings
         if (setting.Volume is < 0 or > 100) throw new ArgumentException("Audio volume must be between 0 and 100 percent.");
         if (setting.FadeOutAfterSeconds is < 1 or > TimerEngine.MaxDuration)
             throw new ArgumentException($"Fade out after must be between 1 and {TimerEngine.MaxDuration} seconds.");
+        if (setting.MessageSentFadeSeconds is < 1 or > TimerEngine.MaxDuration)
+            throw new ArgumentException($"Message-sent fade duration must be between 1 and {TimerEngine.MaxDuration} seconds.");
     }
     public static void Validate(LowTimeOptions options)
     {

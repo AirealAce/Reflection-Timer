@@ -33,11 +33,15 @@ public sealed class PreviewServices : IDisposable
         // Session transitions must let the incoming sound's playback behavior
         // decide whether existing audio is mixed, ducked, or interrupted.
         var state=engine.Snapshot;
+        if(activity.Event=="upload.sent"&&state.Outbox.SingleOrDefault(o=>o.Id==activity.ItemId) is {Status:DeliveryStatus.Sent,LocalOnly:false,IsTest:false,SessionId:{} sessionId}) {
+            var low=AudioSettings.From(state).LowTime;
+            if(low.FadeOutAfterMessageSent)sounds.FadeOut(SoundEvent.LowTime,sessionId,low.MessageSentFadeSeconds);
+        }
         var completed=state.Prompts.Any(p=>!p.IsCheckIn&&!sounded.Contains(p.Id));
         if (!completed&&(activity.Event is "timer.paused" or "timer.reset" or "timer.started" ||
             activity.Event=="timer.lowTimeOptions"&&!state.Timer.LowTime.Enabled)) sounds.Stop(SoundEvent.LowTime);
     }
-    private void LowTime(TimerState timer) => _ = Play(SoundEvent.LowTime, false, AudioSettings.From(engine.Snapshot).ForLowTime(timer.LowTime));
+    private void LowTime(TimerState timer) => _ = Play(SoundEvent.LowTime, false, AudioSettings.From(engine.Snapshot).ForLowTime(timer.LowTime),sessionId:timer.SessionId);
     private void Changed()
     {
         var state = engine.Snapshot; Log.Enabled = state.LoggingEnabled;
@@ -59,6 +63,7 @@ public sealed class PreviewServices : IDisposable
             tracks = new[] { LibrarySound.Default, LibrarySound.None }.Concat(SoundLibrary.Tracks).Select(t => new { id = (int)t, name = SoundLibrary.Name(t) }),
             sounds = Enum.GetValues<SoundEvent>().Select(kind => new { kind = (int)kind, name = kind.ToString(), track = (int)audio.For(kind).Track,
                 behavior = (int)audio.For(kind).Behavior, audio.For(kind).Volume, audio.For(kind).FadeOutEnabled, audio.For(kind).FadeOutAfterSeconds,
+                audio.For(kind).FadeOutAfterMessageSent, audio.For(kind).MessageSentFadeSeconds,
                 custom = audio.For(kind).Mp3Path.Length > 0, customName=Path.GetFileName(audio.For(kind).Mp3Path), defaultName = SoundLibrary.DefaultName(kind) }) };
     }
     public void SaveConnection(ConnectionSettings connection, bool enabled)
@@ -117,13 +122,13 @@ public sealed class PreviewServices : IDisposable
         catch { if (!stop.IsCancellationRequested) Announcement?.Invoke("Delivery could not be finalized. Check Outbox before retrying."); }
         finally { syncing = false; }
     }
-    public async Task Play(SoundEvent kind, bool preview = false, SoundSetting? selected = null,bool announcePreview=true)
+    public async Task Play(SoundEvent kind, bool preview = false, SoundSetting? selected = null,bool announcePreview=true,Guid? sessionId=null)
     {
         if (stop.IsCancellationRequested) return;
         try {
             var state = engine.Snapshot; selected ??= AudioSettings.From(state).For(kind);
             var result = await sounds.PlayAsync(SoundLibrary.Resolve(kind, selected), state.Timer.Volume, selected.Behavior, kind, SoundLibrary.Fallback(kind), preview,
-                selected.FadeOutEnabled ? selected.FadeOutAfterSeconds : null, selected.Volume);
+                selected.FadeOutEnabled ? selected.FadeOutAfterSeconds : null, selected.Volume, sessionId);
             if (stop.IsCancellationRequested) return;
             if (result == AlertSoundResult.Failed) Announcement?.Invoke("Audio could not play. The timer and saved reflection are unaffected.");
             else if (preview&&announcePreview) Announcement?.Invoke(result == AlertSoundResult.Muted ? "This audio is muted." : "Audio preview finished.");

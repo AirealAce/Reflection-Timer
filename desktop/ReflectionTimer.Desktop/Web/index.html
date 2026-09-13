@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.19</p>
+    <p class="eyebrow">Reflection Timer 4.1.20</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -105,6 +105,8 @@
         <label>Playback behavior<select id="sound-behavior"><option value="0">Disruptive</option><option value="1">Assertive</option><option value="2">Polite</option></select></label>
         <label class="volume-control"><span id="sound-volume-caption">Volume (100%)</span><input id="sound-volume" aria-label="Audio volume" type="range" min="0" max="100" value="100" required></label>
         <div class="option-row"><label class="check"><input id="sound-fade" type="checkbox">Fade out after</label><input id="sound-fade-seconds" aria-label="Fade out after seconds" type="number" min="1" max="31536000" value="10" required disabled><span>seconds, then fade out over 1 second</span></div>
+        <div id="sound-message-fade-row" class="option-row"><label class="check"><input id="sound-message-fade" type="checkbox" aria-describedby="sound-message-fade-help">Fade out after message sent</label><div class="message-fade-duration"><input id="sound-message-fade-seconds" aria-label="Low-time message-sent fade duration in seconds" aria-describedby="sound-message-fade-help" type="number" min="1" max="31536000" step="1" value="3" required disabled><span>seconds to fade out</span></div></div>
+        <p id="sound-message-fade-help" class="hint">Starts after confirmed delivery to Sheets, for that session's playing low-time audio only. Save, failed sends, and practice entries do not trigger it. Disruptive sounds can still stop it immediately; Polite or Assertive allows the fade.</p>
         <div class="actions"><button type="submit">Save sound</button><button id="browse-sound" type="button">Choose MP3…</button><button id="preview-sound" type="button">Preview audio</button><button id="stop-sound" type="button">Stop audio</button></div>
       </form>
       <button id="stop-all-audio" type="button">Stop all app audio</button><p>Sound selections, volume levels, playback modes, and fade-out settings autosave silently. Volume changes apply to playing audio too. Fade out after applies to each new playback; unchecked sounds play to their normal end. Selecting a sound previews it for up to 5 seconds, including any fade; None is silent. Each new preview replaces the previous one. All audio uses App sound × its audio volume. A scheduled session adopts its saved App sound level when it starts. Custom files stay at their selected location; audio paths are never uploaded.</p>
@@ -159,6 +161,6 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.19</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.20</span></footer>
 </body>
 </html>

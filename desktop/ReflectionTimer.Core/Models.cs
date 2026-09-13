@@ -35,6 +35,8 @@ public enum ScheduleDecision { StartNow = 0, Wait = 1, Skip = 2 }
 public record ReflectionPrompt(Guid Id, long CompletedAt, int DurationSeconds, int Volume, bool IsTest, string Draft = "")
 {
     public ReflectionSeparator? ContinuationSeparator { get; init; }
+    // Retained independently of the active check-in link, for session-scoped audio.
+    public Guid? SessionId { get; init; }
     // Null means an older prompt did not capture actual elapsed time.
     public int? ActualDurationSeconds { get; init; }
     public bool EndedEarly { get; init; }
@@ -58,6 +60,7 @@ public enum AppColorTheme { Dark = 0, Light = 1, HighContrast = 2, Glamour = 3 }
 public enum FloatingTimerPlacement { Custom = 0, Center = 1, TopLeft = 2, TopRight = 3, BottomLeft = 4, BottomRight = 5, TopCenter = 6, BottomCenter = 7 }
 public record OutboxItem
 {
+    public Guid? SessionId { get; init; }
     public bool AutoSent { get; init; }
     // Explicitly local records must never be bound to a receiver or uploaded.
     public bool LocalOnly { get; init; }

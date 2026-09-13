@@ -1,4 +1,4 @@
-# Reflection Timer 4.1.19
+# Reflection Timer 4.1.20
 
 The accessible interface is now the primary desktop app. It uses the existing encrypted ReflectionTimerDesktop profile and retains the original Sheets connection, settings, drafts, schedules and Outbox. No personal connection settings belong in the application package.
 
@@ -7,6 +7,8 @@ The four views, themes, audio controls, window positions and Ctrl+Alt shortcuts 
 Reflection prompts show the session date and time right-aligned beside the local draft status, below the writing area. The timestamp follows the selected reflection when using Prev/Next and updates when a check-in becomes a completed session.
 
 Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves the same validation and pause/resume behavior without activating other focused buttons. Holding the shortcut does not repeatedly toggle the timer.
+
+Settings → Audio → Low on time audio includes “Fade out after message sent” and an editable duration in whole seconds (three seconds initially, checkbox off by default). Confirmed Sheets delivery fades only that session's currently playing low-time audio; saving a draft, queuing, failures, practice/simulated sends, and manually marking an entry sent do not trigger it. Delayed delivery cannot fade a newer session's warning. The existing playback-duration fade and natural track ending may finish sooner. Disruptive audio still stops other sounds immediately; use Polite or Assertive for overlapping audio when you want to hear the fade. Changes autosave silently and are included in Save settings / Ctrl+Enter.
 
 Settings → Reflection prompts includes “Continue saved reflections with”: None, Comma, Bullet (newline and `- `), or Newline (default). Save, including the reflection shortcut, prepares the separator for the next visit and places the caret after it. Empty responses remain empty; reopening without typing does not accumulate separators. Unused separators are omitted from submitted responses. The setting also applies to check-ins.
 
