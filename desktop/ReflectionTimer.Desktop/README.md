@@ -1,4 +1,4 @@
-# Reflection Timer 4.1.21
+# Reflection Timer 4.1.22
 
 The accessible interface is now the primary desktop app. It uses the existing encrypted ReflectionTimerDesktop profile and retains the original Sheets connection, settings, drafts, schedules and Outbox. No personal connection settings belong in the application package.
 
@@ -6,7 +6,7 @@ The four views, themes, audio controls, window positions and Ctrl+Alt shortcuts 
 
 Reflection prompts show the session date and time right-aligned beside the local draft status, below the writing area. The timestamp follows the selected reflection when using Prev/Next and updates when a check-in becomes a completed session.
 
-Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves the same validation and pause/resume behavior without activating other focused buttons. Holding the shortcut does not repeatedly toggle the timer.
+Space or Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves validation and pause/resume behavior without activating other focused buttons, inserting spaces in duration inputs, or scrolling the page. Holding a key does not repeatedly toggle the timer. Open dialogs retain their own keys; Space in App or a reflection keeps its normal behavior.
 
 In a reflection window, Ctrl+Enter sends and ends that draft's unfinished session; Alt+Enter sends a check-in without ending it. Completed reflections retain their existing status, and old drafts cannot end a newer timer. Ending and queuing commit together, retaining actual/allotted time and any early-ending reason while honoring auto-start, its cutoff, and scheduled handoffs. Both empty fields still mean Skip without ending. The Save & send button keeps its existing check-in behavior; Save and Ctrl+Alt+comma continue to save drafts locally.
 

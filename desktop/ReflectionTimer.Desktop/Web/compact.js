@@ -72,8 +72,9 @@ bind('read-time',()=>send('readTime'));bind('app',()=>send('main'));bind('end',(
 bind('reset',async()=>{await send('reset',{seconds:duration()});dirty=false;fill(state.timer.durationSeconds);});
 bind('close',()=>send('close'));bind('shrink',()=>tiny?send('close'):shrink());bind('expand',()=>tiny?expand():send('main'));
 document.addEventListener('keydown',event=>{
-  if(event.key!=='Enter'||!event.ctrlKey||event.altKey||event.metaKey||event.shiftKey||event.isComposing||document.querySelector('dialog[open]'))return;
-  // Capture before the duration fields or a focused button can handle Enter.
+  const timerKey=(event.key==='Enter'&&event.ctrlKey)||(event.key===' '&&!event.ctrlKey);
+  if(!timerKey||event.altKey||event.metaKey||event.shiftKey||event.isComposing||document.querySelector('dialog[open]'))return;
+  // Capture before duration fields or focused controls handle Enter or Space.
   // Reuse the form's validation and in-flight guard in both floating layouts.
   event.preventDefault();event.stopPropagation();
   if(state&&!event.repeat)$('timer-editor').requestSubmit();

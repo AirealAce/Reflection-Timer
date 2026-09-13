@@ -73,6 +73,19 @@ static class NativeClockSmoke
                         session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=30}));await Both("0:30","Reset prepares an isolated idle timer for the compact shortcut check");
                         await ControlEnter("#repeat");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
                         Check(session.Engine.Snapshot.Timer is {DurationSeconds:30,AutoRestart:false}&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Ctrl+Enter starts the real input duration without changing Auto-start or reflections");
+                        async Task Space(string target,bool repeat=false)=>await Script(compact,
+                            "document.querySelector("+JsonSerializer.Serialize(target)+").dispatchEvent(new KeyboardEvent('keydown',{key:' ',bubbles:true,cancelable:true,repeat:"+(repeat?"true":"false")+"}))");
+                        await Until(()=>Task.FromResult(compact.IsTimeOnly));now=now.AddSeconds(4);
+                        var spaceSession=session.Engine.Snapshot.Timer.SessionId;
+                        await Space("#read-time");await Until(()=>Task.FromResult(!session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer is {RemainingSeconds:26,PausedRemainingMilliseconds:not null}&&session.Engine.Snapshot.Timer.SessionId==spaceSession,"Time-only Space pauses the real session without losing elapsed time");
+                        await Space("#read-time",repeat:true);await Task.Delay(75);
+                        Check(!session.Engine.Snapshot.Timer.IsRunning,"A repeated Space event does not resume the real timer");
+                        await Until(()=>Task.FromResult(!compact.IsTimeOnly));await Space("#app");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer.SessionId==spaceSession&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Space resumes the same session without opening or submitting a reflection");
+                        session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=45}));await Both("0:45","Reset prepares the compact Space start check");
+                        await Space("#repeat");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Timer is {DurationSeconds:45,AutoRestart:false}&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Space starts the specified duration without toggling Auto-start");
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}

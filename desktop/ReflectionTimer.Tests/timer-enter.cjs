@@ -100,18 +100,22 @@ module.exports=async function timerEnter(context,initial,check){
     await reset('Ready');
     await page.locator('#hours').dispatchEvent('keydown',{key:'Enter',isComposing:true});
     check((await toggles()).length===0,view+' does not start while Enter is committing composed text');
+    if(view==='App'){
+      await reset('Ready');await page.locator('#repeat').press('Space');
+      check((await toggles()).length===0&&await page.evaluate(()=>window.previewMessages.some(m=>m.action==='repeat')),'Space in App retains the focused Auto-start control behavior instead of the floating timer shortcut');
+    }
     if(view==='Compact'){
       for(const tiny of [false,true]){
         const targets=tiny?['#read-time','#shrink','#expand','#close','background']:['#hours','#minutes','#seconds','#repeat','#app','#reset','#toggle','#end','#shrink','#expand','#close','#read-time','background'];
-        for(const target of targets)for(const status of ['Ready','Running','Paused','Finished']){
+        for(const shortcut of ['Control+Enter','Space'])for(const target of targets)for(const status of ['Ready','Running','Paused','Finished']){
           await reset(status);
           if(tiny)await page.evaluate(()=>window.previewDispatch({type:'shrinkCompact'}));
           if(target==='background')await page.evaluate(()=>document.activeElement.blur());else await page.locator(target).focus();
-          await page.keyboard.press('Control+Enter');
+          await page.keyboard.press(shortcut);
           await page.waitForFunction(expected=>window.enterState.clock.status===expected,status==='Running'?'Paused':'Running');
           const commands=await toggles();
-          check(commands.length===1&&await page.evaluate(()=>window.enterState.clock.seconds)===(status==='Running'||status==='Paused'?117:900),`${tiny?'Time-only':'Compact'} Ctrl+Enter from ${target} toggles ${status} exactly once and preserves the correct progress`);
-          check(await page.evaluate(()=>!window.previewMessages.some(m=>['repeat','main','end','reset','close','readTime','checkIn','queue','startOrEnd'].includes(m.action))),`${tiny?'Time-only':'Compact'} Ctrl+Enter from ${target} overrides the focused control without side effects: ${status}`);
+          check(commands.length===1&&await page.evaluate(()=>window.enterState.clock.seconds)===(status==='Running'||status==='Paused'?117:900),`${tiny?'Time-only':'Compact'} ${shortcut} from ${target} toggles ${status} exactly once and preserves the correct progress`);
+          check(await page.evaluate(()=>!window.previewMessages.some(m=>['repeat','main','end','reset','close','readTime','checkIn','queue','startOrEnd'].includes(m.action))),`${tiny?'Time-only':'Compact'} ${shortcut} from ${target} overrides the focused control without side effects on keydown or keyup: ${status}`);
         }
       }
       await reset('Running');await page.locator('#close').focus();
@@ -152,11 +156,49 @@ module.exports=async function timerEnter(context,initial,check){
       await page.evaluate(()=>{const dialog=document.createElement('dialog');dialog.innerHTML='<input aria-label="Modal input">';document.body.append(dialog);dialog.showModal();});
       await page.keyboard.press('Control+Enter');
       check((await toggles()).length===0,'A modal dialog keeps Ctrl+Enter instead of toggling the Compact timer behind it');
+      await page.keyboard.press('Space');
+      check((await toggles()).length===0&&await page.getByRole('textbox',{name:'Modal input'}).inputValue()===' ','An open dialog receives Space as text without toggling the timer');
+      await page.evaluate(()=>document.querySelector('dialog[open]').remove());
+      await reset('Running');await page.locator('#close').focus();
+      await page.keyboard.down('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Paused');
+      await page.keyboard.down('Space');await page.keyboard.down('Space');await page.keyboard.up('Space');
+      check((await toggles()).length===1&&await page.evaluate(()=>!window.previewMessages.some(m=>m.action==='close')),'Held Space pauses once without repeatedly toggling or activating Close on release');
+      await page.keyboard.press('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Running');
+      check((await toggles()).length===2,'The next separate Space resumes the same timer');
+      await reset('Running');await page.evaluate(()=>window.holdToggle=true);
+      await page.locator('#repeat').press('Space');await page.locator('#hours').press('Enter');await page.locator('#toggle').click();await page.locator('#close').press('Control+Enter');await page.locator('#repeat').press('Space');
+      check((await toggles()).length===1&&await page.evaluate(()=>!window.previewMessages.some(m=>m.action==='repeat')),'Space shares the Enter, Ctrl+Enter, and Start-button pending-request guard without toggling Auto-start');
+      await page.evaluate(()=>window.finishToggle());await page.waitForFunction(()=>window.enterState.clock.status==='Paused');
+      await page.evaluate(()=>{window.holdToggle=false;window.failToggle=true;});
+      await page.locator('#read-time').press('Space');await page.waitForFunction(()=>document.querySelector('#error').textContent==='Test toggle failed.');
+      check(await page.locator('#read-time').evaluate(e=>e===document.activeElement),'Failed Space toggle retains focus and displays the error');
+      await page.evaluate(()=>window.failToggle=false);await page.keyboard.press('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Running');
+      check((await toggles()).length===3,'Space can retry after a failed native save');
+      await reset('Ready');for(const field of ['hours','minutes','seconds'])await page.locator('#'+field).fill('0');
+      await page.locator('#close').press('Space');await page.waitForFunction(()=>document.querySelector('#error').textContent.includes('one second'));
+      check((await toggles()).length===0&&await page.evaluate(()=>!window.previewMessages.some(m=>m.action==='close')),'Space rejects a zero duration without closing the viewer');
+      await page.locator('#seconds').fill('100');await page.locator('#seconds').press('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Running');
+      check((await toggles())[0].data.seconds===100&&await page.locator('#minutes').inputValue()==='1'&&await page.locator('#seconds').inputValue()==='40','Space starts and normalizes the entered duration without inserting a space');
+      await reset('Paused');await page.locator('#minutes').fill('2');await page.locator('#reset').press('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Running');
+      check((await toggles())[0].data.seconds===120,'Space starts an edited paused duration exactly like Enter');
+      await reset('Running');await page.evaluate(()=>window.previewDispatch({type:'durationDraft',parts:['0','0','0']}));
+      await page.locator('#end').press('Space');await page.waitForFunction(()=>window.enterState.clock.status==='Paused');
+      check((await toggles()).length===1&&await page.locator('#error').textContent()==='','Space can pause even with an invalid duration draft');
+      await reset('Ready');await page.locator('#hours').dispatchEvent('keydown',{key:' ',isComposing:true,bubbles:true,cancelable:true});
+      await page.locator('#hours').press('Control+Space');await page.locator('#hours').press('Shift+Space');
+      check((await toggles()).length===0,'Space ignores composition and modified Space combinations');
       await page.goto('https://reflection-timer.invalid/compact.html');
       await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
-      for(const target of ['#hours','#toggle','#close'])await page.locator(target).press('Control+Enter');
-      check((await toggles()).length===0&&await page.locator('#error').textContent()==='','Compact Ctrl+Enter waits for initialization without activating its focused control');
+      for(const shortcut of ['Control+Enter','Space'])for(const target of ['#hours','#toggle','#close'])await page.locator(target).press(shortcut);
+      check((await toggles()).length===0&&await page.locator('#error').textContent()==='','Compact Space and Ctrl+Enter wait for initialization without activating their focused control');
     }
     await page.close();
   }
+  const reflection=await context.newPage();await reflection.goto('https://reflection-timer.invalid/index.html?view=reflection');
+  await reflection.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
+  await reflection.evaluate(state=>window.previewDispatch({type:'init',promptId:'space-test',state}),{...initial,prompts:[{id:'space-test',draft:'',earlyEndReason:'',endedEarly:true,actual:'5 seconds',allotted:'15 minutes',completed:'Today'}]});
+  await reflection.locator('#reflection-text').fill('A');await reflection.keyboard.press('Space');
+  await reflection.locator('#early-reason').fill('B');await reflection.keyboard.press('Space');
+  check(await reflection.locator('#reflection-text').inputValue()==='A '&&await reflection.locator('#early-reason').inputValue()==='B '&&await reflection.evaluate(()=>!window.previewMessages.some(m=>['toggle','queue','end'].includes(m.action))),'Space stays ordinary text in both reflection fields and never changes the timer');
+  await reflection.close();
 };
