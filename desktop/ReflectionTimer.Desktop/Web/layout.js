@@ -32,9 +32,15 @@ export function arrangeApp(view) {
   document.querySelector('.eyebrow').classList.add('sr-only');
   const timer=$('timer');$('timer-heading').classList.add('sr-only');$('timer-state').after($('time-snapshot'));
   const notice=document.createElement('p');notice.className='timer-notice';notice.textContent='Desktop timer active · Use only one timer app per session';timer.prepend(notice);
-  $('visual-clock').after($('timer-state'));$('time-snapshot').classList.add('sr-only');
+  notice.after($('timer-state'));$('time-snapshot').classList.add('sr-only');
   timer.querySelector('.hint').classList.add('sr-only');$('read-time').classList.add('sr-only');
   const editor=$('timer-editor'),actions=editor.querySelector('.actions'),options=editor.querySelector('.options');editor.querySelector('legend').classList.add('sr-only');$('duration-help').classList.add('sr-only');
+  const playback=document.createElement('div');playback.className='app-playback';playback.setAttribute('role','group');playback.setAttribute('aria-label','Timer controls');
+  playback.innerHTML='<button id="playback-reset" class="timer-transport" type="button" aria-label="Reset timer" title="Reset timer"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M11 4 5 10l6 6M5 10h10"/></svg></button><button id="playback-toggle" class="timer-transport" type="submit" form="timer-editor" aria-label="Start timer" title="Start timer"><span aria-hidden="true">▶</span></button><button id="playback-end" class="timer-transport" type="button" aria-label="End timer early" title="End timer early" aria-disabled="true"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m9 4 6 6-6 6M5 10h10"/></svg></button>';
+  playback.insertAdjacentHTML('afterbegin','<button id="playback-repeat" type="button" aria-label="Auto-start next session" aria-pressed="false" title="Auto-start next session"><span aria-hidden="true">Auto<br>Start</span></button><button id="playback-compact" type="button" aria-label="Open compact view" aria-describedby="compact-view-status" title="Show compact view">Comp</button><span id="compact-view-status" class="sr-only">Compact view is hidden.</span>');
+  $('visual-clock').after(playback);
+  $('playback-reset').addEventListener('click',()=>$('reset').click());
+  $('playback-end').addEventListener('click',()=>$('end').click());
   editor.after(options);$('repeat').closest('label').after($('cutoff-form'));$('end').hidden=true;$('check-in').classList.add('sr-only');
   const quick=document.createElement('form');quick.id='quick-schedule-form';quick.className='option-row';quick.innerHTML='<label for="quick-start">Start timer at</label><input id="quick-start" type="datetime-local" required><button type="submit">Schedule session</button>';
   const later=new Date(Date.now()+3600000);quick.querySelector('input').value=new Date(later-later.getTimezoneOffset()*60000).toISOString().slice(0,16);

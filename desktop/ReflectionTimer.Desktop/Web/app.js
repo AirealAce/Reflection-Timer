@@ -14,7 +14,7 @@ const requests = new Map();
 // A delayed reply from a crashed document must not resolve a new request.
 const requestPrefix=crypto.randomUUID();
 let requestSequence = 0, state, promptId, initial = true, durationDirty = false, loadedPrompt;
-let reflectionBusy=false, savingAndClosing=false;
+let reflectionBusy=false, savingAndClosing=false, repeatPending=false, repeatDraft=false;
 function setReflectionBusy(busy){
   reflectionBusy=busy;const blocked=busy||savingAndClosing;
   $('reflection-form').setAttribute('aria-busy',String(blocked));
@@ -49,10 +49,19 @@ function readDuration() { return durationSeconds(['hours','minutes','seconds'].m
 function applyDuration(seconds) {
   $('hours').value = Math.floor(seconds / 3600); $('minutes').value = Math.floor(seconds / 60) % 60; $('seconds').value = seconds % 60;
 }
+function renderToggle(action){
+  setText($('toggle'),action);
+  const playback=$('playback-toggle');
+  if(playback){playback.setAttribute('aria-label',`${action} timer`);playback.title=`${action} timer`;setText(playback.firstElementChild,action==='Pause'?'Ⅱ':'▶');}
+}
+function renderRepeat(enabled){
+  $('repeat').checked=enabled;
+  if(view==='main'){$('playback-repeat').setAttribute('aria-pressed',String(enabled));available($('playback-repeat'),!repeatPending);}
+}
 function sharedDuration(parts){
   durationDirty=Array.isArray(parts);
   if(parts)['hours','minutes','seconds'].forEach((id,i)=>{if($(id).value!==parts[i])$(id).value=parts[i];});else if(state)applyDuration(state.timer.durationSeconds);
-  if(state?.clock.status!=='Running'){setText($('toggle'),durationDirty?'Start':state?.clock.status==='Paused'?'Resume':'Start');renderDuration();}
+  if(state?.clock.status!=='Running'){renderToggle(durationDirty?'Start':state?.clock.status==='Paused'?'Resume':'Start');renderDuration();}
 }
 function renderDuration(clock=state?.clock){
   if(!clock)return;
@@ -186,10 +195,14 @@ function render(next) {
   if(initial&&state.durationDraft)sharedDuration(state.durationDraft);
   else if (initial || (!durationDirty && state.timer.durationSeconds !== previous?.timer.durationSeconds)) applyDuration(state.timer.durationSeconds);
   if (!previous || previous.clock.status !== state.clock.status) snapshot(state.clock);
-  $('repeat').checked = state.timer.autoRestart;
-  setText($('toggle'),running ? 'Pause' : state.clock.status === 'Paused' && !durationDirty ? 'Resume' : 'Start');
+  if(!repeatPending)renderRepeat(state.timer.autoRestart);
+  renderToggle(running ? 'Pause' : state.clock.status === 'Paused' && !durationDirty ? 'Resume' : 'Start');
   available($('end'),running); available($('check-in'),running || state.clock.status === 'Paused');
   if (view === 'main') {
+    available($('playback-end'),running);
+    $('playback-compact').dataset.viewVisible=String(Boolean(state.showFloatingTimer));
+    $('playback-compact').title=state.showFloatingTimer?'Bring Compact view to front':'Show compact view';
+    setText($('compact-view-status'),state.showFloatingTimer?'The floating timer is visible.':'The floating timer is hidden.');
     setText($('pending-count'),`${state.prompts.length} pending reflection(s) · ${state.outbox.filter(o=>!['Sent','Simulated success'].includes(o.status)).length} unsent entry/entries`);
     reconcileRows($('pending-list'),state.prompts,record => {
       const li=document.createElement('li'), button=document.createElement('button'); button.type='button'; li.append(button);
@@ -264,9 +277,19 @@ bindTimerEditor($('timer-editor'),['hours','minutes','seconds'].map($),run,async
 bind('read-time',()=>send('readTime'));
 bind('reset',async()=>{ await send('reset',{seconds:readDuration()}); durationDirty=false; applyDuration(state.timer.durationSeconds); render(state); });
 bind('end',()=>send('end')); bind('check-in',()=>send('checkIn')); bind('practice',()=>send('testReflection'));
-$('repeat').addEventListener('change',()=>run(()=>send('repeat',{enabled:$('repeat').checked})));
+$('repeat').addEventListener('change',()=>{
+  if(repeatPending){renderRepeat(repeatDraft);return;}
+  repeatDraft=$('repeat').checked;repeatPending=true;renderRepeat(repeatDraft);
+  run(async()=>{
+    try{await send('repeat',{enabled:repeatDraft});}
+    catch(e){renderRepeat(state?.timer.autoRestart??false);throw e;}
+    finally{repeatPending=false;if(view==='main')available($('playback-repeat'),true);}
+  });
+});
 bind('open-compact',()=>send('toggleCompact')); bind('open-main',()=>send('main')); bind('close-compact',()=>send('close'));
 if(view==='main'){
+  bind('playback-repeat',()=>$('repeat').click());
+  bind('playback-compact',()=>send('compact'));
   bind('show-pending',async()=>{if(!state.prompts.length)return announce('No pending reflections.');await send('openReflection',{id:state.prompts.at(-1).id});});
   bind('edit-schedule',editSelectedSchedule);
   bind('remove-schedule',async()=>{if(!selectedSchedule)return;const id=selectedSchedule;await send('removeSchedule',{id});if(scheduleEdit===id)clearScheduleEdit();($('schedule-rows').querySelector('input:checked')||$('schedule-start')).focus();});

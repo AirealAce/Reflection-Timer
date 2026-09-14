@@ -151,6 +151,23 @@ static class NativeClockSmoke
                                 &&compact.IsTimeOnly&&compact.Bounds==timeOnlyBounds&&JsonDocument.Parse(await Script(compact,"document.activeElement.id")).RootElement.GetString()=="toggle",
                                 "Time-only button toggles the real timer, retains focus and keeps its small native bounds: running="+running);
                         }
+                        await Script(main,"document.querySelector('#playback-reset').click()");
+                        await Until(async()=>JsonDocument.Parse(await Script(main,"document.querySelector('#playback-toggle').title")).RootElement.GetString()=="Start timer");
+                        Check(session.Engine.Snapshot.Timer is {IsRunning:false,RemainingSeconds:123},"App playback reset prepares the entered duration through the real bridge");
+                        foreach(var running in new[]{true,false,true}){
+                            await Script(main,"document.querySelector('#playback-toggle').focus();document.querySelector('#playback-toggle').click()");
+                            await Until(async()=>JsonDocument.Parse(await Script(main,"document.querySelector('#playback-toggle').title")).RootElement.GetString()==(running?"Pause timer":"Resume timer"));
+                            Check(session.Engine.Snapshot.Timer.IsRunning==running,"App playback button starts, pauses and resumes the real timer: running="+running);
+                        }
+                        var beforeComp=session.Engine.Snapshot.Timer;
+                        await Script(main,"document.querySelector('#playback-compact').click()");await Until(()=>Task.FromResult(compact.Visible&&!compact.IsTimeOnly));
+                        Check(session.Engine.Snapshot.Timer==beforeComp,"App Comp button opens full Compact controls without changing the timer");
+                        foreach(var enabled in new[]{true,false}){
+                            await Script(main,"document.querySelector('#playback-repeat').click()");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.AutoRestart==enabled));
+                            Check(JsonDocument.Parse(await Script(main,"document.querySelector('#repeat').checked")).RootElement.GetBoolean()==enabled,"App Auto-start button stays synchronized with its checkbox: enabled="+enabled);
+                        }
+                        await Script(main,"document.querySelector('#playback-end').click()");await Until(()=>Task.FromResult(!session.Engine.Snapshot.Timer.IsRunning));
+                        Check(session.Engine.Snapshot.Prompts.Any(p=>p.EndedEarly&&p.SessionId==beforeComp.SessionId),"App forward arrow opens a reflection for the ended session");
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}

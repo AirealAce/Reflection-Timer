@@ -1,4 +1,6 @@
-# Reflection Timer 4.1.30
+# Reflection Timer 4.1.31
+
+App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (open/focus Compact), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
 
 The accessible interface is now the primary desktop app. Normal launches use the encrypted `%USERPROFILE%\.reflection-timer` profile, independent of a launcher's AppData virtualization. First launch copies and verifies the old ReflectionTimerDesktop profile, retaining its Sheets connection, settings, drafts, schedules and Outbox and leaving the original untouched. A pre-existing shared profile is never replaced by a legacy copy. No personal connection settings belong in the application package.
 
