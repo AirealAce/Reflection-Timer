@@ -22,15 +22,16 @@ internal static class ReflectionShortcut
     }
 }
 
-// Register just the five original chords; retry only registrations another app owns.
+// Register only the listed chords; retry only registrations another app owns.
 internal sealed class PreviewShortcuts : IDisposable
 {
-    internal static readonly (uint Key, int Id)[] Chords = [
-        (GlobalShortcut.Key, GlobalShortcut.HotKeyId),
-        (GlobalShortcut.EndEarlyKey, GlobalShortcut.EndEarlyId),
-        (GlobalShortcut.CompactKey, GlobalShortcut.CompactId),
-        (GlobalShortcut.CompactFocusKey, GlobalShortcut.CompactFocusId),
-        (GlobalShortcut.ReflectionFocusKey, GlobalShortcut.ReflectionFocusId)
+    internal static readonly (uint Key, int Id, uint Modifiers)[] Chords = [
+        (GlobalShortcut.Key, GlobalShortcut.HotKeyId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.EndEarlyKey, GlobalShortcut.EndEarlyId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.CompactKey, GlobalShortcut.CompactId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.CompactFocusKey, GlobalShortcut.CompactFocusId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.ReflectionFocusKey, GlobalShortcut.ReflectionFocusId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleModifiers)
     ];
     private readonly GlobalShortcut?[] registrations = new GlobalShortcut?[Chords.Length];
     private readonly Action[] actions;
@@ -39,7 +40,7 @@ internal sealed class PreviewShortcuts : IDisposable
     private bool disposed;
     internal PreviewShortcuts(Action[] actions, Action<int, bool>? statusChanged = null, IHotKeyRegistration? backend = null)
     {
-        if (actions.Length != Chords.Length) throw new ArgumentException("Provide each original shortcut action.");
+        if (actions.Length != Chords.Length) throw new ArgumentException("Provide each shortcut action.");
         this.actions = actions; this.statusChanged = statusChanged; this.backend = backend;
         RetryUnavailable(initial: true);
     }
@@ -52,7 +53,7 @@ internal sealed class PreviewShortcuts : IDisposable
             if (registrations[i]?.IsRegistered == true) continue;
             registrations[i]?.Dispose(); registrations[i] = null;
             var index = i;
-            try { registrations[i] = new GlobalShortcut(()=>actions[index](), backend, Chords[i].Key, Chords[i].Id); }
+            try { registrations[i] = new GlobalShortcut(()=>actions[index](), backend, Chords[i].Key, Chords[i].Id, Chords[i].Modifiers); }
             catch { /* A later retry can recover a temporarily unavailable registration. */ }
             var available = registrations[i]?.IsRegistered == true;
             changed |= available;

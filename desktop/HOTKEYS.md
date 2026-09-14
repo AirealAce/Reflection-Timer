@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.24. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.26. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -14,6 +14,7 @@ All shortcuts require Reflection Timer to be running, including in the system tr
 
 | Shortcut | Action |
 | --- | --- |
+| Ctrl+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
 | Ctrl+Alt+T | If the main window is focused, hide it exactly like its X button. Otherwise bring it forward, preserving the selected tab; on Timer, select the first positive duration field. The timer and compact view continue unchanged. |
 | Ctrl+Alt+backtick (`) | Start the specified timer, resume a paused timer, or end a running session early and show its reflection. Auto-start and its cutoff still apply. |
 | Ctrl+Alt+/ | Cycle compact controls → time-only → hidden → controls. The countdown continues. |
@@ -30,16 +31,16 @@ In Compact and Time-only, Escape performs the same action as the top-right minus
 
 Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+comma still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
 
-In a reflection window, Ctrl+Enter sends the response and ends that prompt's own unfinished session, including while paused. It records actual time in column C, allotted time in D, ended early in E, and the reason in F. Ending and queuing are one saved change: a failed save leaves the timer and draft intact. This closes the submitted prompt without another completion popup or Session end sound; ordinary delivery success/failure feedback still applies. Auto-start, its cutoff, and scheduled-session handoffs still apply. Alt+Enter sends a check-in without ending the timer, like the Save & send button. A previously completed reflection keeps its original classification with either shortcut; an older draft never ends a newer session. Reaching the deadline before submission records normal completion rather than a false early ending.
+In a reflection window, Ctrl+Enter saves the draft locally and closes while that reflection's own session is running or paused. Once that session has ended, it sends the response. It never ends a session early or affects a newer timer. Alt+Enter and Save & send retain their check-in behavior without ending the timer. Actual time and any existing early-end classification are retained when a completed reflection is sent.
 
-Both shortcuts work anywhere in the reflection window, including buttons and page text. If both text boxes are completely empty, they run Skip without ending the timer. Otherwise a reflection response is required and both fields are saved before queuing. Escape also skips when both boxes are empty; if either contains any text, it saves the draft locally and closes, like Save or Ctrl+Alt+comma from a text box. Spaces and line breaks count as text, so Escape preserves them. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate an action. In App view, Ctrl+Enter continues to save settings only on the Settings tab.
+Both shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter can save a blank active draft; sending a completed reflection requires response text. Alt+Enter skips if both fields are completely empty. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+comma from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
 
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.1.24 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.1.26 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.24. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.26. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.
@@ -58,6 +59,6 @@ Punctuation bindings currently use Windows US-keyboard virtual keys (OEM grave, 
 
 ## Developer regression gate
 
-Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all five exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
+Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all six exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
 
 The public packaging script runs this gate before producing a ZIP, alongside onboarding/install, delivery-safety, receiver, and bundled-audio checks. It includes only the eight hash-verified approved MP3s and excludes local data, credentials, and additional personal audio.

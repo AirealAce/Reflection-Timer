@@ -13,6 +13,7 @@ void Check(bool condition, string name) { if (!condition) throw new Exception(na
 JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, PreviewSession.Json);
 var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
+TimerToggleShortcutTests.Run(Check);
 ClockDisplayTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);

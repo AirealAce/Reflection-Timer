@@ -1,4 +1,4 @@
-# Reflection Timer 4.1.25
+# Reflection Timer 4.1.26
 
 The accessible interface is now the primary desktop app. Normal launches use the encrypted `%USERPROFILE%\.reflection-timer` profile, independent of a launcher's AppData virtualization. First launch copies and verifies the old ReflectionTimerDesktop profile, retaining its Sheets connection, settings, drafts, schedules and Outbox and leaving the original untouched. A pre-existing shared profile is never replaced by a legacy copy. No personal connection settings belong in the application package.
 
@@ -8,7 +8,7 @@ On cold startup, App and Compact keep their web controls hidden behind the saved
 
 Reflection prompts show the session date and time right-aligned beside the local draft status, below the writing area. The timestamp follows the selected reflection when using Prev/Next and updates when a check-in becomes a completed session.
 
-Space or Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves validation and pause/resume behavior without activating other focused buttons, inserting spaces in duration inputs, or scrolling the page. Holding a key does not repeatedly toggle the timer. Open dialogs retain their own keys; Space in App or a reflection keeps its normal behavior.
+Ctrl+Space starts, resumes, or pauses the timer globally while the app is running, including when another app has focus or all timer windows are hidden. It uses the shared duration inputs and keeps focus in the current app. Holding the keys toggles only once. Space or Ctrl+Enter starts, resumes, or pauses the timer anywhere in the focused Compact or Time-only viewer, just like Enter in a duration field. It preserves validation and pause/resume behavior without activating other focused buttons, inserting spaces in duration inputs, or scrolling the page. Holding a key does not repeatedly toggle the timer. Open dialogs retain their own keys; Space in App or a reflection keeps its normal behavior.
 
 In a reflection window, Ctrl+Enter saves the draft locally and closes the window while that reflection's own session is running or paused. Once that session has ended, Ctrl+Enter sends the reflection instead. The native timer resolves this decision, including right at the deadline; it never ends a session early or touches a newer session. Empty active drafts can be saved; sending a completed reflection requires text. Alt+Enter and Save & send retain their check-in behavior without ending the timer. Escape saves and closes, or skips if both fields are empty; empty Alt+Enter also skips. Save and Ctrl+Alt+comma continue to save drafts locally. Saved responses and reasons survive natural completion, and normal delivery success/failure feedback remains enabled.
 
@@ -34,7 +34,7 @@ At natural completion, early ending, and scheduled handoff, the session-end audi
 
 New installations default to Assertive session-end audio, Polite low-time audio, and Disruptive success/failure audio. Upgrades retain all saved choices, including legacy profiles without per-event audio settings. No personal audio paths or connection data are used as defaults.
 
-Compact has a two-line Auto/Start toggle that lights up when enabled. Screen readers announce it as the "Auto-start next session" toggle button; Space or Enter switches it without starting the timer. The narrower editor retains all three duration fields and the App, reset, start/pause, and end-session actions.
+Compact has a two-line Auto/Start toggle that lights up when enabled. Screen readers announce it as the "Auto-start next session" toggle button; Enter switches it without starting the timer. The narrower editor retains all three duration fields and the App, reset, start/pause, and end-session actions.
 
 The App button stays highlighted while App view is shown, even when another window has focus. It dims when App view is hidden or minimized. Its accessible description reports that state; clicking it always shows App view or brings it forward.
 

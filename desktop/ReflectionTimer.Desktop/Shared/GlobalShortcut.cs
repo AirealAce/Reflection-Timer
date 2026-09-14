@@ -23,17 +23,20 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const uint CompactFocusKey = 0xBE; // VK_OEM_PERIOD: period on a US keyboard.
     internal const int ReflectionFocusId = 0x5258;
     internal const uint ReflectionFocusKey = 0xBC; // VK_OEM_COMMA: comma on a US keyboard.
+    internal const int TimerToggleId = 0x5259;
+    internal const uint TimerToggleKey = 0x20; // VK_SPACE
+    internal const uint TimerToggleModifiers = 0x0002 | 0x4000; // Control + NoRepeat
     private readonly IHotKeyRegistration registration;
     private readonly Action pressed;
     private readonly int hotKeyId;
     private bool disposed;
     public bool IsRegistered { get; private set; }
 
-    public GlobalShortcut(Action pressed, IHotKeyRegistration? registration = null, uint key = Key, int id = HotKeyId)
+    public GlobalShortcut(Action pressed, IHotKeyRegistration? registration = null, uint key = Key, int id = HotKeyId, uint modifiers = Modifiers)
     {
         this.pressed = pressed; this.registration = registration ?? new WindowsHotKeyRegistration(); hotKeyId = id;
         CreateHandle(new CreateParams { Caption = "Reflection Timer shortcut", Parent = new nint(-3) }); // HWND_MESSAGE
-        try { IsRegistered = this.registration.Register(Handle, hotKeyId, Modifiers, key); }
+        try { IsRegistered = this.registration.Register(Handle, hotKeyId, modifiers, key); }
         catch { DestroyHandle(); throw; }
     }
 

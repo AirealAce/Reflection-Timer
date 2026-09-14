@@ -125,15 +125,7 @@ public sealed class PreviewSession
         switch (action)
         {
             case "startOrEnd":
-                if(state.Timer.IsRunning)return Execute("end",data);
-                var duration=state.Timer.DurationSeconds;
-                if(durationDraft is {} parts){
-                    var parsed=parts.Select(p=>p.Length==0?0L:long.TryParse(p,NumberStyles.None,CultureInfo.InvariantCulture,out var value)&&value<=TimerEngine.MaxDuration?value:throw new ArgumentException("Enter valid duration fields.")).ToArray();
-                    var total=parsed[0]*3600+parsed[1]*60+parsed[2];
-                    if(total<1||total>TimerEngine.MaxDuration)throw new ArgumentException("Enter a duration between one second and one year.");
-                    duration=(int)total;
-                }
-                return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=state.Timer.AutoRestart,lowTime=state.Timer.LowTime.Enabled},Json));
+                return state.Timer.IsRunning ? Execute("end",data) : ToggleTimerFromShortcut();
             case "toggle":
                 if (state.Timer.IsRunning) {
                     Engine.Pause();
@@ -216,6 +208,21 @@ public sealed class PreviewSession
                 return new("Schedule choice saved.",resolved?.Id,SessionCompleted:resolved is not null);
             default: throw new ArgumentException("Unknown preview command.");
         }
+    }
+    internal CommandResult ToggleTimerFromShortcut()
+    {
+        var timer=Engine.Snapshot.Timer;
+        // Pause before parsing edited fields, just like the Compact form. This
+        // also preserves normal completion if the key arrives at the deadline.
+        if(timer.IsRunning)return Execute("toggle",JsonSerializer.SerializeToElement(new{}));
+        var duration=timer.DurationSeconds;
+        if(durationDraft is {} parts){
+            var parsed=parts.Select(p=>p.Trim().Length==0?0L:long.TryParse(p.Trim(),NumberStyles.None,CultureInfo.InvariantCulture,out var value)&&value<=TimerEngine.MaxDuration?value:throw new ArgumentException("Enter valid duration fields.")).ToArray();
+            var total=parsed[0]*3600+parsed[1]*60+parsed[2];
+            if(total<1||total>TimerEngine.MaxDuration)throw new ArgumentException("Enter a duration between one second and one year.");
+            duration=(int)total;
+        }
+        return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=timer.AutoRestart,lowTime=timer.LowTime.Enabled},Json));
     }
     internal static long ParseLocalTime(string value)
     {

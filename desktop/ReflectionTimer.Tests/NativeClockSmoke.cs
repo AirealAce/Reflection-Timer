@@ -3,6 +3,7 @@ using System.Text.Json;
 using Microsoft.Web.WebView2.WinForms;
 using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
+using ReflectionTimer.Desktop;
 
 // Real WebView2 documents and bridge, with a muted in-memory timer and a
 // disposable browser profile. Never drives the user's installed app or Sheets.
@@ -19,7 +20,7 @@ static class NativeClockSmoke
                 var now=DateTimeOffset.Now;
                 var session=new PreviewSession(new MemoryStore{State=new AppState{LoggingEnabled=false,AutoSendIncompleteReflections=false,Timer=new(){Volume=0}}},()=>now,isolatedProfile:true);
                 session.Engine.Start(20,false,0,lowTime:new(){Enabled=false});
-                app=new(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-ClockSmoke-"+Guid.NewGuid().ToString("N")),startInTray:true,profileName:"clock-smoke");
+                app=new(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-ClockSmoke-"+Guid.NewGuid().ToString("N")),startInTray:true,profileName:"clock-smoke",shortcutRegistration:new Registration());
                 // Advance the test's clock deliberately, without wall-clock tick races.
                 ((System.Windows.Forms.Timer)typeof(PreviewApplication).GetField("pulse",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!).Stop();
                 _=app.MainForm!.Handle;
@@ -86,6 +87,20 @@ static class NativeClockSmoke
                         session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=45}));await Both("0:45","Reset prepares the compact Space start check");
                         await Space("#repeat");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.IsRunning));
                         Check(session.Engine.Snapshot.Timer is {DurationSeconds:45,AutoRestart:false}&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Space starts the specified duration without toggling Auto-start");
+                        var keys=(PreviewShortcuts)typeof(PreviewApplication).GetField("shortcuts",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
+                        foreach(var window in windows)window.Hide();
+                        var draftBefore=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts);
+                        var globalSession=session.Engine.Snapshot.Timer.SessionId;now=now.AddMilliseconds(4123);
+                        Check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Native Ctrl+Space registration routes to the app while all viewers are hidden");
+                        Check(session.Engine.Snapshot.Timer is {IsRunning:false,PausedRemainingMilliseconds:40877}&&session.Engine.Snapshot.Timer.SessionId==globalSession,"Global Ctrl+Space pauses the same session with precise remaining time");
+                        keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
+                        Check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.SessionId==globalSession,"Global Ctrl+Space resumes the same session without a visible Compact window");
+                        keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
+                        await Script(main,"document.querySelector('#minutes').value='2';document.querySelector('#seconds').value='3';document.querySelector('#seconds').dispatchEvent(new Event('input',{bubbles:true}))");
+                        await Both("2:03","A hidden App duration edit reaches the shared native draft");
+                        keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
+                        Check(session.Engine.Snapshot.Timer is {IsRunning:true,DurationSeconds:123},"Global Ctrl+Space starts the shared edited duration through the production shortcut action");
+                        Check(windows.All(w=>!w.Visible)&&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==draftBefore,"Global toggling keeps viewers hidden and leaves pending reflection text unchanged");
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}
@@ -102,4 +117,9 @@ static class NativeClockSmoke
     private static Task<string> Script(PreviewWindow window,string script)=>((WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!).CoreWebView2.ExecuteScriptAsync(script);
     private static async Task<string?> Text(PreviewWindow window)=>JsonDocument.Parse(await Script(window,"document.querySelector('#visual-clock').textContent")).RootElement.GetString();
     private static async Task Until(Func<Task<bool>> predicate){using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(20));while(!await predicate())await Task.Delay(25,timeout.Token);}
+    private sealed class Registration : IHotKeyRegistration
+    {
+        public bool Register(nint window,int id,uint modifiers,uint key)=>true;
+        public bool Unregister(nint window,int id)=>true;
+    }
 }

@@ -71,20 +71,24 @@ static class DefaultsThemeShortcutTests
         Exception? failure=null;
         var thread=new Thread(()=>{
             try {
-                var backend=new Registration();var calls=new int[5];
+                var backend=new Registration();var calls=new int[6];
                 backend.Blocked.Add(GlobalShortcut.CompactId);
-                using var keys=new PreviewShortcuts(Enumerable.Range(0,5).Select(i=>(Action)(()=>calls[i]++)).ToArray(),backend:backend);
-                check(backend.Requests.Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBF,0xBE,0xBC})&&backend.Requests.All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five original global chords register with Ctrl+Alt and no key-repeat");
+                backend.Blocked.Add(GlobalShortcut.TimerToggleId);
+                using var keys=new PreviewShortcuts(Enumerable.Range(0,6).Select(i=>(Action)(()=>calls[i]++)).ToArray(),backend:backend);
+                check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBF,0xBE,0xBC})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five original global chords retain Ctrl+Alt and no key-repeat");
+                check(backend.Requests.Count==6&&backend.Requests[5]==(0x20u,0x4002u),"The added global timer chord registers Ctrl+Space without Alt and suppresses held-key repeats");
                 var states=JsonSerializer.SerializeToElement(keys.Status,PreviewSession.Json);
-                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true}),"A shortcut conflict reports the correct unavailable chord");
+                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false}),"Compact and Ctrl+Space conflicts report their own unavailable status");
                 foreach(var chord in PreviewShortcuts.Chords)keys.Dispatch(GlobalShortcut.HotKeyMessage,chord.Id);
-                check(calls.SequenceEqual(new[]{1,1,0,1,1}),"Registered shortcut messages invoke exactly their matching action");
+                check(calls.SequenceEqual(new[]{1,1,0,1,1,0}),"Registered shortcut messages invoke exactly their matching action");
                 var attempts=backend.Requests.Count;keys.RetryUnavailable();
-                check(backend.Requests.Count==attempts+1&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactId),"Only unavailable chords retry while another app owns them");
+                check(backend.Requests.Count==attempts+2&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Only unavailable chords retry and a blocked Ctrl+Space cannot toggle the timer");
+                backend.Blocked.Remove(GlobalShortcut.TimerToggleId);
+                check(keys.RetryUnavailable()&&keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&calls[5]==1&&calls[1]==1,"Ctrl+Space recovers independently and invokes only its timer toggle action");
                 backend.Blocked.Clear();check(keys.RetryUnavailable(),"Releasing a competing shortcut recovers without restarting");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactId);
                 check(calls[2]==1&&!keys.Dispatch(0,GlobalShortcut.HotKeyId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,-1),"Recovered shortcut works and unrelated messages are ignored");
-                keys.Dispose();check(backend.Removed.Count==5&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.HotKeyId),"Exit releases every owned shortcut and stops dispatch");
+                keys.Dispose();check(backend.Removed.Count==6&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Exit releases all six owned shortcuts and stops timer dispatch");
                 var clock=new Clock();var pairs=new ConsecutiveShortcutPresses(clock);
                 var first=pairs.Press();clock.Ticks+=TimeSpan.FromMilliseconds(799).Ticks;
                 check(!first&&pairs.Press()&&!pairs.Press(),"Period double press selects App once and consumes the pair");
