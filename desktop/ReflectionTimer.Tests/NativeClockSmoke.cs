@@ -142,6 +142,15 @@ static class NativeClockSmoke
                             session.Engine.Pause();await Until(()=>Task.FromResult(!compact.IsTimeOnly));
                             Check(true,"Keeping time-only for "+shortcut+" does not change later ordinary pause behavior");
                         }
+                        compact.Post(new{type="shrinkCompact"});await Until(()=>Task.FromResult(compact.IsTimeOnly));
+                        var buttonSession=session.Engine.Snapshot.Timer.SessionId;
+                        foreach(var running in new[]{true,false,true,false}){
+                            await Script(compact,"document.querySelector('#toggle').focus();document.querySelector('#toggle').click()");
+                            await Until(async()=>JsonDocument.Parse(await Script(compact,"document.querySelector('#toggle').title")).RootElement.GetString()==(running?"Pause timer":"Resume timer"));
+                            Check(session.Engine.Snapshot.Timer.IsRunning==running&&session.Engine.Snapshot.Timer.SessionId==buttonSession
+                                &&compact.IsTimeOnly&&compact.Bounds==timeOnlyBounds&&JsonDocument.Parse(await Script(compact,"document.activeElement.id")).RootElement.GetString()=="toggle",
+                                "Time-only button toggles the real timer, retains focus and keeps its small native bounds: running="+running);
+                        }
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}

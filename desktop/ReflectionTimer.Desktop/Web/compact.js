@@ -39,7 +39,7 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   $('end').setAttribute('aria-disabled',String(!running));$('reset').setAttribute('aria-disabled',String(!dirty&&state.clock.status==='Ready'));
   renderDuration();
   document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(state.timer.durationSeconds).length*15+16)}px`);
-  if(tiny&&['hours','minutes','seconds','toggle','repeat','app','reset','end'].includes(document.activeElement.id))$('read-time').focus();
+  if(tiny&&['hours','minutes','seconds','repeat','app','reset','end'].includes(document.activeElement.id))$('read-time').focus();
 }
 bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve();}
   else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();send('interfaceReady').catch(e=>setText($('error'),e.message));}
@@ -57,9 +57,10 @@ bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply
   const changed=()=>{const parts=['hours','minutes','seconds'].map(id=>$(id).value);sharedDuration(parts);run(()=>send('durationDraft',{parts}));$('reset').setAttribute('aria-disabled','false');};
   $(id).addEventListener('input',changed);normalizeEmptyDuration($(id),changed);
 });
-bindTimerEditor($('timer-editor'),['hours','minutes','seconds'].map($),run,async()=>{
-  if(state?.clock.status==='Running'){await send('toggle');return;}
-  await send('toggle',{seconds:duration(),repeat:repeatEnabled(),lowTime:state.timer.enabled,threshold:state.timer.threshold});dirty=false;fill(state.timer.durationSeconds);
+bindTimerEditor($('timer-editor'),['hours','minutes','seconds'].map($),run,async submitter=>{
+  const keepTimeOnly=tiny&&submitter===$('toggle');
+  if(state?.clock.status==='Running'){await send('toggle',{keepTimeOnly});return;}
+  await send('toggle',{seconds:duration(),repeat:repeatEnabled(),lowTime:state.timer.enabled,threshold:state.timer.threshold,keepTimeOnly});dirty=false;fill(state.timer.durationSeconds);
 });
 bind('repeat',async()=>{
   if(repeatPending)return;
@@ -77,7 +78,7 @@ document.addEventListener('keydown',event=>{
   // Capture before duration fields or focused controls handle Enter or Space.
   // Reuse the form's validation and in-flight guard in both floating layouts.
   event.preventDefault();event.stopPropagation();
-  if(state&&!event.repeat)$('timer-editor').requestSubmit();
+  if(state&&!event.repeat)$('timer-editor').requestSubmit(tiny&&event.target.closest?.('#toggle')?$('toggle'):undefined);
 },true);
 document.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||!state||document.querySelector('dialog[open]'))return;

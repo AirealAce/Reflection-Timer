@@ -83,14 +83,16 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private void ToggleTimerFromGlobalShortcut()
     {
         compactPresses.Reset();
-        // Carry the shortcut's view preference with its state updates so a
-        // pause cannot briefly expand/reposition a time-only viewer.
+        var result=KeepingTimeOnly(Session.ToggleTimerFromShortcut);Announce(result.Message);
+        if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
+    }
+    internal CommandResult KeepingTimeOnly(Func<CommandResult> action)
+    {
+        // Carry the initiating control's view preference with its state updates.
+        var previous=keepTimeOnly;
         keepTimeOnly=true;
-        try {
-            var result=Session.ToggleTimerFromShortcut();Announce(result.Message);
-            if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
-        }
-        finally {keepTimeOnly=false;}
+        try {return action();}
+        finally {keepTimeOnly=previous;}
     }
     internal void SetStartup(bool enabled)
     {

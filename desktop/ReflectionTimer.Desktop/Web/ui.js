@@ -109,7 +109,7 @@ export function bindTimerEditor(form, inputs, run, toggle) {
     if (pending) return;
     pending = true;
     run(async () => {
-      try { await toggle(); }
+      try { await toggle(event.submitter); }
       finally { pending = false; }
     });
   });

@@ -36,7 +36,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser=CreateBrowser();
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information;
         browser.AccessibleName=view=="main"?"Reflection Timer App view":view=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt";
-        Text = view == "main" ? "Reflection Timer — App view · 4.1.29" : view == "compact" ? "Reflection Timer — Compact view · 4.1.29" : "Reflection Timer — Session end · 4.1.29";
+        Text = view == "main" ? "Reflection Timer — App view · 4.1.30" : view == "compact" ? "Reflection Timer — Compact view · 4.1.30" : "Reflection Timer — Session end · 4.1.30";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
         Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.Now))?525:440);
@@ -240,7 +240,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 IsTimeOnly=ReadFlag(data,"tiny");
                 ApplyTopMost();
-                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.29";
+                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.30";
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);return;
             }
@@ -259,7 +259,9 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (action is "draft" or "saveForLater" or "saveOrSendReflection" or "queue" or "skip") {
                 if (PromptId is null || data.GetProperty("id").GetGuid() != PromptId) throw new ArgumentException("This window cannot edit that reflection.");
             } else if (View == "reflection") throw new ArgumentException("That action is unavailable in a reflection window.");
-            var result = app.Session.Execute(action, data);
+            var result = View=="compact"&&action=="toggle"&&ReadFlag(data,"keepTimeOnly")
+                ? app.KeepingTimeOnly(()=>app.Session.Execute(action,data))
+                : app.Session.Execute(action, data);
             Reply(requestId);
             if (result.Close) {
                 CloseAfterSave(); app.Announce(result.Message);
