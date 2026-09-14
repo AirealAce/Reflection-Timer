@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.1.28**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.1.29**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 ## Project folders
 
@@ -25,7 +25,7 @@ The installer backs up the old executable folder and encrypted data, installs al
 
 If an older app appeared to lose its settings depending on how it was launched, there may be separate encrypted profiles in Windows AppData and a packaged launcher's private AppData. Keep both copies. Recover the intended profile into the shared folder while the timer app is fully quit; do not blindly merge Outbox entries or overwrite an existing shared profile. This preserves request IDs and avoids duplicate submissions. Keep this private, Windows-account-encrypted data outside Git and cloud sync; other PCs should use Connection setup.
 
-A fresh installation starts at 15 minutes with the compact timer enabled at bottom left, session-end prompts at bottom right, App centered, and low-time warnings enabled at 15 seconds. Existing choices take precedence. Dark, Light, High Contrast and Glamour themes and the original Ctrl+Alt hotkeys are available. Ctrl+Space starts, resumes, or pauses from any app while Reflection Timer is running, including with all its windows hidden; it uses the same duration and pause/resume behavior as Compact.
+A fresh installation starts at 15 minutes with the compact timer enabled at bottom left, session-end prompts at bottom right, App centered, and low-time warnings enabled at 15 seconds. Existing choices take precedence. Dark, Light, High Contrast and Glamour themes and the original Ctrl+Alt hotkeys are available. Ctrl+Space or Ctrl+Alt+Space starts, resumes, or pauses from any app while Reflection Timer is running, including with all its windows hidden; it uses the same duration and pause/resume behavior as Compact.
 
 ## Views and screen readers
 

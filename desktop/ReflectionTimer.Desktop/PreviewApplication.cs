@@ -56,7 +56,8 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(2, ()=>{compactPresses.Reset();var compact=windows.FirstOrDefault(w=>w.View=="compact");if(compact is null||!compact.Visible)Open("compact");else if(compact.IsTimeOnly)ToggleCompactVisibility();else compact.Post(new{type="shrinkCompact"});}),
             Shortcut(3, ()=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
             Shortcut(4, ()=>{compactPresses.Reset();ReflectionShortcut.Invoke(windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed),OpenPendingOrCheckIn);}),
-            Shortcut(5, ToggleTimerFromGlobalShortcut)
+            Shortcut(5, ToggleTimerFromGlobalShortcut),
+            Shortcut(6, ToggleTimerFromGlobalShortcut)
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(!startInTray)MainForm.Show(); ApplyDisplayPreferences();
     }

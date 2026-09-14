@@ -71,24 +71,28 @@ static class DefaultsThemeShortcutTests
         Exception? failure=null;
         var thread=new Thread(()=>{
             try {
-                var backend=new Registration();var calls=new int[6];
+                var backend=new Registration();var calls=new int[7];
                 backend.Blocked.Add(GlobalShortcut.CompactId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleId);
-                using var keys=new PreviewShortcuts(Enumerable.Range(0,6).Select(i=>(Action)(()=>calls[i]++)).ToArray(),backend:backend);
+                backend.Blocked.Add(GlobalShortcut.TimerToggleAltId);
+                using var keys=new PreviewShortcuts(Enumerable.Range(0,7).Select(i=>(Action)(()=>calls[i]++)).ToArray(),backend:backend);
                 check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBF,0xBE,0xBC})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five original global chords retain Ctrl+Alt and no key-repeat");
-                check(backend.Requests.Count==6&&backend.Requests[5]==(0x20u,0x4002u),"The added global timer chord registers Ctrl+Space without Alt and suppresses held-key repeats");
+                check(backend.Requests.Count==7&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
+                check(backend.Requests[6]==(0x20u,0x4003u),"The alias registers Ctrl+Alt+Space with held-key repeat suppressed");
                 var states=JsonSerializer.SerializeToElement(keys.Status,PreviewSession.Json);
-                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false}),"Compact and Ctrl+Space conflicts report their own unavailable status");
+                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false,false}),"Compact and both timer toggle conflicts report their own unavailable status");
                 foreach(var chord in PreviewShortcuts.Chords)keys.Dispatch(GlobalShortcut.HotKeyMessage,chord.Id);
-                check(calls.SequenceEqual(new[]{1,1,0,1,1,0}),"Registered shortcut messages invoke exactly their matching action");
+                check(calls.SequenceEqual(new[]{1,1,0,1,1,0,0}),"Registered shortcut messages invoke exactly their matching action");
                 var attempts=backend.Requests.Count;keys.RetryUnavailable();
-                check(backend.Requests.Count==attempts+2&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Only unavailable chords retry and a blocked Ctrl+Space cannot toggle the timer");
+                check(backend.Requests.Count==attempts+3&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId),"Only unavailable chords retry and blocked toggle shortcuts cannot change the timer");
                 backend.Blocked.Remove(GlobalShortcut.TimerToggleId);
                 check(keys.RetryUnavailable()&&keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&calls[5]==1&&calls[1]==1,"Ctrl+Space recovers independently and invokes only its timer toggle action");
+                backend.Blocked.Remove(GlobalShortcut.TimerToggleAltId);
+                check(keys.RetryUnavailable()&&keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)&&calls[6]==1&&calls[5]==1,"Ctrl+Alt+Space recovers independently and dispatches once without invoking Ctrl+Space again");
                 backend.Blocked.Clear();check(keys.RetryUnavailable(),"Releasing a competing shortcut recovers without restarting");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactId);
                 check(calls[2]==1&&!keys.Dispatch(0,GlobalShortcut.HotKeyId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,-1),"Recovered shortcut works and unrelated messages are ignored");
-                keys.Dispose();check(backend.Removed.Count==6&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Exit releases all six owned shortcuts and stops timer dispatch");
+                keys.Dispose();check(backend.Removed.Count==7&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId),"Exit releases all seven owned shortcuts and stops both toggle shortcuts");
                 var clock=new Clock();var pairs=new ConsecutiveShortcutPresses(clock);
                 var first=pairs.Press();clock.Ticks+=TimeSpan.FromMilliseconds(799).Ticks;
                 check(!first&&pairs.Press()&&!pairs.Press(),"Period double press selects App once and consumes the pair");
