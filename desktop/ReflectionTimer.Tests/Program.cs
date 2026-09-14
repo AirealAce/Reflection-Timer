@@ -17,6 +17,7 @@ ClockDisplayTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);
 ProfileStorageTests.Run(Check);
+ConditionalReflectionTests.Run(Check);
 var store = new MemoryStore { State = PreviewSession.SampleState(now) };
 var session = new PreviewSession(store, () => now, isolatedProfile: true);
 Check(session.Engine.Snapshot.Timer.DurationSeconds == 900 && session.Engine.Snapshot.Timer.LowTime.Enabled, "Fresh timer and low-time defaults");

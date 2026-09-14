@@ -1,4 +1,4 @@
-Reflection Timer 4.1.24
+Reflection Timer 4.1.25
 
 Open ReflectionTimer.exe. Keep the entire application folder together, including Web and the MP3 files.
 Microsoft Edge WebView2 Runtime is required. The self-contained package includes .NET.

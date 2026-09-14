@@ -389,6 +389,24 @@ public sealed class TimerEngine
             return complete;
         }
     }
+    // Resolve the shortcut against authoritative session state under the same
+    // lock as the save. Browser state can be one tick behind at the deadline.
+    public (bool Queued, bool SessionCompleted) SaveOrSendReflection(Guid promptId, string text, string? reason = null, bool localOnly = false)
+    {
+        lock (gate) {
+            var prompt = state.Prompts.SingleOrDefault(p => p.Id == promptId)
+                ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
+            var attached = !prompt.IsTest && prompt.IsCheckIn && prompt.CheckInSessionId is { } id
+                && id == state.Timer.SessionId && HasUnfinishedSession(state.Timer);
+            if (attached && RemainingMilliseconds(state.Timer, Now) > 0) {
+                SaveReflectionForLater(promptId, text, reason);
+                return (false, false);
+            }
+            // Only an already-expired attached timer needs promotion before
+            // sending. This cannot fast-forward a running or paused session.
+            return (true, QueueReflection(promptId, text, reason, localOnly, endSession: attached));
+        }
+    }
     public OutboxItem? BeginUpload(bool supportsSafeRetry = false)
     {
         lock (gate)

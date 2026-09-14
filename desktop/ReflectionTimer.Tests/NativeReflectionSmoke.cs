@@ -140,16 +140,27 @@ static class NativeReflectionSmoke
         var browser=Browser(window);
         await Script(window,"document.querySelector('#early-reason').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
         await Until(()=>!window.ReflectionOpen&&!window.Visible);
-        check(session.Engine.Snapshot.Outbox.Single(o=>o.Id==second) is {IsCheckIn:false,EndedEarly:true,ActualDurationSeconds:20,DurationSeconds:60,EarlyEndReason:"Reason for stopping",Message:"Current response"},"Native Ctrl+Enter bridge logs an early ending with actual time and reason");
-        check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId!=timer.SessionId,"Native end-and-send honors auto-start without ending the new session");
+        check(session.Engine.Snapshot.Outbox.All(o=>o.Id!=second)&&session.Engine.Snapshot.Prompts.Single(p=>p.Id==second) is {IsCheckIn:true,Draft:"Current response",EarlyEndReason:"Reason for stopping"},"Native Ctrl+Enter saves both active-session fields without submitting them");
+        check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId==timer.SessionId,"Native Ctrl+Enter leaves the same session and auto-start running");
         await Task.Delay(1100);
-        check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==0&&ReferenceEquals(browser,Browser(window)),"A timer tick after end-and-send cannot reopen a blank or duplicate reflection window");
-        app.Open("reflection",second,sessionCompleted:true); // A delayed request for the already submitted prompt.
-        advance(40);await Task.Delay(1100);
+        check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==1&&ReferenceEquals(browser,Browser(window)),"A timer tick after Save cannot reopen the active draft");
+        session.Engine.Pause();var paused=session.Engine.Snapshot.Timer;
+        app.Open("reflection",second);await Until(()=>window.Visible&&window.ReflectionOpen);
+        await Script(window,"document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Until(()=>!window.ReflectionOpen&&!window.Visible);
+        check(session.Engine.Snapshot.Timer==paused&&session.Engine.Snapshot.Outbox.All(o=>o.Id!=second),"Native Ctrl+Enter saves a paused session without sending or resuming");
+        session.Engine.Resume();advance(40);await Until(()=>window.Visible&&window.ReflectionOpen);
+        check(window.PromptId==second&&(await Read(window)).GetProperty("draft").GetString()!.StartsWith("Current response"),"Natural completion reopens the same saved response");
+        var nextSession=session.Engine.Snapshot.Timer.SessionId;
+        await Script(window,"document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Until(()=>!window.ReflectionOpen&&!window.Visible);
+        check(session.Engine.Snapshot.Outbox.Single(o=>o.Id==second) is {IsCheckIn:false,EndedEarly:false,ActualDurationSeconds:60,EarlyEndReason:""}
+            &&session.Engine.Snapshot.Timer.SessionId==nextSession,"Native Ctrl+Enter sends the ended session without changing the next timer");
+        app.Open("reflection",second,sessionCompleted:true);
+        await Task.Delay(1100);
         check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==0,
             "Neither a stale open request nor the original deadline reopens the submitted reflection");
-        var nextSession=session.Engine.Snapshot.Timer.SessionId;
-        advance(20);await Until(()=>window.Visible&&window.ReflectionOpen);
+        advance(60);await Until(()=>window.Visible&&window.ReflectionOpen);
         check(window.PromptId!=second&&session.Engine.Snapshot.Prompts.Single().SessionId==nextSession&&ReferenceEquals(browser,Browser(window)),
             "The next session's own natural completion still opens its distinct reflection in the retained native editor");
         check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
