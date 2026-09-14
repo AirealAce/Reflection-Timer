@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.26. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.27. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -33,14 +33,14 @@ Reflection Prev and Next buttons browse pending drafts without sending them and 
 
 In a reflection window, Ctrl+Enter saves the draft locally and closes while that reflection's own session is running or paused. Once that session has ended, it sends the response. It never ends a session early or affects a newer timer. Alt+Enter and Save & send retain their check-in behavior without ending the timer. Actual time and any existing early-end classification are retained when a completed reflection is sent.
 
-Both shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter can save a blank active draft; sending a completed reflection requires response text. Alt+Enter skips if both fields are completely empty. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+comma from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
+Both shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter and Alt+Enter skip if both fields are completely empty, with success audio, whether the session is running, paused, or ended. Sending a completed reflection requires response text. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+comma from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
 
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.1.26 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.1.27 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.26. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.27. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

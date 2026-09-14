@@ -1,11 +1,11 @@
 // Synthetic bridge only; never dismisses a real prompt or writes to Sheets.
 module.exports=async function reflectionDismiss(context,initial,check){
-  async function open({kind='early',text='',reason='',view='reflection',initialize=true}={}){
+  async function open({kind='early',text='',reason='',view='reflection',initialize=true,status=kind==='check-in'?'Running':'Finished'}={}){
     const page=await context.newPage();
     await page.goto('https://reflection-timer.invalid/index.html?view='+view);
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
     if(initialize)await page.evaluate(state=>window.previewDispatch({type:'init',state,promptId:'dismiss-test'}),{
-      ...initial,prompts:['older','dismiss-test','newer'].map(id=>({id,isCheckIn:kind==='check-in',endedEarly:kind==='early',showEarlyEndReason:kind!=='natural',
+      ...initial,clock:{...initial.clock,status},prompts:['older','dismiss-test','newer'].map(id=>({id,isCheckIn:kind==='check-in',endedEarly:kind==='early',showEarlyEndReason:kind!=='natural',
         draft:text,earlyEndReason:reason,actual:'2 minutes',allotted:'15 minutes',completed:'Today'}))
     });
     return page;
@@ -16,14 +16,26 @@ module.exports=async function reflectionDismiss(context,initial,check){
     else await page.locator(target).focus();
   }
   const targets=['#reflection-text','#early-reason','#reflection-heading','#later','#skip-reflection','#reflection-prev','#reflection-next','#reflection-form button[type=submit]','background'];
-  for(const kind of ['early','natural','check-in'])for(const key of ['Alt+Enter','Escape']){
-    for(const target of kind==='early'?targets:['background']){
+  for(const kind of ['early','natural','check-in'])for(const key of ['Control+Enter','Alt+Enter','Escape']){
+    for(const target of key==='Control+Enter'?targets.filter(id=>kind!=='natural'||id!=='#early-reason'):kind==='early'?targets:['background']){
       const page=await open({kind});await focus(page,target);await page.keyboard.press(key);
       await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='skip'));
       const sent=await actions(page);
       check(sent.length===1&&sent[0].action==='skip'&&sent[0].data.id==='dismiss-test',`${kind} empty ${key} skips once from ${target} without sending or changing the timer`);
       await page.close();
     }
+  }
+  for(const target of targets){
+    const page=await open({kind:'check-in',status:'Paused'});await focus(page,target);await page.keyboard.press('Control+Enter');
+    await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='skip'));
+    const sent=await actions(page);
+    check(sent.length===1&&sent[0].action==='skip',`Paused empty Ctrl+Enter skips instead of saving a blank draft from ${target}`);await page.close();
+  }
+  for(const options of [{reason:'Reason only'},{text:' \n ',reason:'\t'},{kind:'natural',reason:'Retained hidden reason'}]){
+    const page=await open(options);await focus(page,'background');await page.keyboard.press('Control+Enter');
+    await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveOrSendReflection'));
+    const sent=await actions(page);
+    check(sent.length===1&&sent[0].action==='saveOrSendReflection'&&sent[0].data.reason===(options.reason||''),'Ctrl+Enter preserves nonempty or whitespace-only fields and a hidden retained reason');await page.close();
   }
   for(const target of targets){
     const page=await open();
@@ -52,7 +64,7 @@ module.exports=async function reflectionDismiss(context,initial,check){
   check((await actions(reasonOnly)).length===0&&await reasonOnly.locator('#early-reason').inputValue()==='Keep this reason','Reason-only Alt+Enter retains the existing required-response validation and never skips the reason');
   await reasonOnly.close();
 
-  for(const key of ['Alt+Enter','Escape']){
+  for(const key of ['Control+Enter','Alt+Enter','Escape']){
     const page=await open();
     await page.evaluate(()=>{
       const normal=window.chrome.webview.postMessage;

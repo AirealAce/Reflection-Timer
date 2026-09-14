@@ -81,14 +81,16 @@ module.exports=async function reflectionSubmit(context,initial,check){
   });
   await blank.locator('#reflection-text').fill('   ');await blank.locator('#skip-reflection').focus();await blank.keyboard.press('Control+Enter');
   await blank.waitForFunction(()=>document.querySelector('#reflection-text').getAttribute('aria-invalid')==='true');
-  check(await blank.locator('#reflection-text').evaluate(e=>e===document.activeElement)&&await blank.locator('#reflection-text').isEditable()&&!(await messages(blank)).some(m=>['queue','skip'].includes(m.action)),'Blank completed Ctrl+Enter focuses the required response on native validation failure instead of activating Skip');
+  check(await blank.locator('#reflection-text').evaluate(e=>e===document.activeElement)&&await blank.locator('#reflection-text').isEditable()&&!(await messages(blank)).some(m=>['queue','skip'].includes(m.action)),'Whitespace response with a retained reason focuses the response on native validation failure instead of activating Skip');
   await blank.close();
   for(const reason of ['', 'Reason without response']){
     const active=await open('check-in');await active.locator('#reflection-text').fill('');await active.locator('#early-reason').fill(reason);
-    await active.keyboard.press('Control+Enter');await submitted(active);
+    const expected=reason===''?'skip':'saveOrSendReflection';
+    await active.keyboard.press('Control+Enter');await submitted(active,expected);
     const requests=await messages(active);
-    check(requests.some(m=>m.action==='saveOrSendReflection'&&m.data.text===''&&m.data.reason===reason)&&!requests.some(m=>['queue','skip'].includes(m.action)),
-      'Empty/partial active Ctrl+Enter is delegated for local saving without premature validation or Skip');
+    check(requests.some(m=>m.action===expected&&m.data.id==='submit-test')&&!requests.some(m=>['queue',expected==='skip'?'saveOrSendReflection':'skip'].includes(m.action))
+      &&(reason===''||requests.some(m=>m.action===expected&&m.data.text===''&&m.data.reason===reason)),
+      'Active Ctrl+Enter skips completely empty fields and saves a reason-only draft');
     await active.close();
   }
   const guarded=await open();

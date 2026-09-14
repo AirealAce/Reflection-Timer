@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.26</p>
+    <p class="eyebrow">Reflection Timer 4.1.27</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -85,7 +85,7 @@
         <p>On by default. When another session ends, older unfinished session reflections (including blank or closed drafts) are queued and marked “auto-sent”. The new reflection and active check-ins remain available for writing. Turn this off to keep older drafts for Prev/Next review. Practice prompts never auto-send real reflections. Offline entries remain in Outbox.</p>
         <label>Compact timer position<select id="placement"><option value="0">Remember dragged position</option><option value="1">Center</option><option value="2">Top left</option><option value="3">Top right</option><option value="4" selected>Bottom left</option><option value="5">Bottom right</option><option value="6">Top center</option><option value="7">Bottom center</option></select></label>
         <p>Dragging saves a custom position, including across app and PC restarts. Presets use that screen; if it is disconnected, the timer stays on an available screen. Duration fields are shared with the main timer and editable while stopped or paused.</p><h3>Keyboard shortcuts</h3><div id="shortcut-notices"></div><p><kbd>Ctrl+Tab</kbd> switches to the next App tab. <kbd>Ctrl+Shift+Tab</kbd> switches to the previous tab. Both wrap around and work from inputs; an open dialog keeps focus.</p>
-        <p><kbd>Space</kbd> or <kbd>Ctrl+Enter</kbd> starts, resumes, or pauses the timer anywhere in Compact or Time-only view, like <kbd>Enter</kbd> in a duration field. In Settings, Ctrl+Enter saves settings. In a reflection prompt, Ctrl+Enter saves locally while its session is running or paused, and sends once that session has ended. <kbd>Alt+Enter</kbd> sends a check-in without ending the timer.</p>
+        <p><kbd>Space</kbd> or <kbd>Ctrl+Enter</kbd> starts, resumes, or pauses the timer anywhere in Compact or Time-only view, like <kbd>Enter</kbd> in a duration field. In Settings, Ctrl+Enter saves settings. In a reflection prompt, Ctrl+Enter skips when both fields are completely empty; otherwise it saves locally while its session is running or paused, and sends once that session has ended. <kbd>Alt+Enter</kbd> sends a check-in without ending the timer.</p>
         <label>Reflection popup position<select id="popup"><option value="0">Center</option><option value="1">Top left</option><option value="2">Top right</option><option value="3">Bottom left</option><option value="4" selected>Bottom right</option></select></label><p>Saves immediately for regular, scheduled, and test reflections. Uses the screen containing your mouse pointer when the popup opens, leaving space for the taskbar. An already-open reflection stays where it is.</p>
 
 
@@ -147,20 +147,20 @@
     <section id="reflection" class="reflection-only" aria-labelledby="reflection-heading">
       <h2 id="reflection-heading" tabindex="-1">Session reflection</h2><p id="reflection-context"></p>
       <p id="reflection-help">What went well? What would you change next time? Write up to 5,000 characters. Save keeps your draft and closes this window.</p>
-      <form id="reflection-form" novalidate aria-keyshortcuts="Control+Enter Alt+Enter" aria-description="Ctrl+Enter saves locally while this session is running or paused, and sends once it has ended. Alt+Enter sends without ending the timer."><label for="reflection-text">Your reflection</label><textarea id="reflection-text" rows="7" maxlength="5000" aria-describedby="reflection-help"></textarea>
+      <form id="reflection-form" novalidate aria-keyshortcuts="Control+Enter Alt+Enter" aria-description="Ctrl+Enter skips when both fields are completely empty; otherwise it saves locally while this session is running or paused, and sends once it has ended. Alt+Enter sends without ending the timer."><label for="reflection-text">Your reflection</label><textarea id="reflection-text" rows="7" maxlength="5000" aria-describedby="reflection-help"></textarea>
         <div id="reason-group" hidden><label for="early-reason">Reason for ending early (optional)</label><textarea id="early-reason" rows="2" maxlength="1000" placeholder="Reason for ending early" aria-describedby="reason-help"></textarea><p id="reason-help" class="sr-only">Retained with this draft and included in a submission only if the session ends early.</p></div>
         <p id="reflection-delivery">Save &amp; send adds this entry to the Outbox for delivery.</p>
         <div class="reflection-status-row">
           <p id="draft-status">Draft not yet changed.</p>
           <p id="reflection-timestamp"></p>
         </div>
-        <div class="actions reflection-actions"><div class="reflection-navigation" role="group" aria-label="Pending reflections"><button id="reflection-prev" type="button" aria-disabled="true" aria-describedby="reflection-position">Prev</button><button id="reflection-next" type="button" aria-disabled="true" aria-describedby="reflection-position">Next</button><span id="reflection-position" class="sr-only"></span></div><div class="reflection-save-actions"><button id="skip-reflection" type="button">Skip</button><button id="later" type="button">Save</button><button type="submit" class="primary" aria-keyshortcuts="Alt+Enter" title="Alt+Enter: send without ending the timer. Ctrl+Enter: save while this session is active; send after it ends.">Save &amp; send</button></div></div>
+        <div class="actions reflection-actions"><div class="reflection-navigation" role="group" aria-label="Pending reflections"><button id="reflection-prev" type="button" aria-disabled="true" aria-describedby="reflection-position">Prev</button><button id="reflection-next" type="button" aria-disabled="true" aria-describedby="reflection-position">Next</button><span id="reflection-position" class="sr-only"></span></div><div class="reflection-save-actions"><button id="skip-reflection" type="button">Skip</button><button id="later" type="button">Save</button><button type="submit" class="primary" aria-keyshortcuts="Alt+Enter" title="Alt+Enter: send without ending the timer. Ctrl+Enter: skip if both fields are empty; otherwise save while this session is active, or send after it ends.">Save &amp; send</button></div></div>
       </form>
     </section>
   </main>
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.26</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.27</span></footer>
 </body>
 </html>

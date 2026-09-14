@@ -19,10 +19,10 @@ static class ConditionalReflectionTests
             store.Fail = false;
             var result = session.Execute("saveOrSendReflection", data); var saved = session.Engine.Snapshot;
             check(result.Close && !result.SessionCompleted && saved.Timer == timer && saved.Outbox.Count == 0,
-                $"Ctrl+Enter saves without sending/ending: paused={paused}, repeat={repeat}, blank={blank}");
-            check(saved.Prompts.Single() is { IsCheckIn: true, EndedEarly: false } prompt && prompt.Id == id
-                && prompt.Draft == (blank ? "" : "Latest response") && prompt.EarlyEndReason == (blank ? "" : "Provisional reason"),
-                "Conditional save retains both fields and the session link, including empty drafts");
+                $"Ctrl+Enter saves content or skips empty fields without sending/ending: paused={paused}, repeat={repeat}, blank={blank}");
+            check(blank ? saved.Prompts.Count==0 : saved.Prompts.Single() is { IsCheckIn: true, EndedEarly: false } prompt && prompt.Id == id
+                && prompt.Draft == "Latest response" && prompt.EarlyEndReason == "Provisional reason",
+                "Conditional command skips both-empty drafts and retains both fields when either has content");
             check(JsonSerializer.Serialize(new PreviewSession(store).Engine.Snapshot) == JsonSerializer.Serialize(saved), "Conditional saved draft survives reopening");
         }
         foreach (var early in new[] { false, true }) {
@@ -62,7 +62,23 @@ static class ConditionalReflectionTests
             check(session.Engine.Snapshot.Timer == timer && session.Engine.Snapshot.Outbox.Last().IsTest, "Practice Ctrl+Enter sends only the practice reflection");
             id = session.Engine.TestPrompt(); var before = JsonSerializer.Serialize(session.Engine.Snapshot);
             try { session.Execute("saveOrSendReflection", Data(id, "   ")); throw new Exception("Empty completed reflection accepted"); } catch (ArgumentException) { }
-            check(JsonSerializer.Serialize(session.Engine.Snapshot) == before, "An empty completed reflection is retained with a validation error, never skipped");
+            check(JsonSerializer.Serialize(session.Engine.Snapshot) == before, "A whitespace-only completed reflection is retained with a validation error, never skipped");
+        }
+        foreach(var kind in new[]{"natural","early","practice"}){
+            var now=DateTimeOffset.Now;var session=new PreviewSession(new MemoryStore(),()=>now,true);
+            session.Engine.Start(60,true,0);now=now.AddSeconds(kind=="early"?12:60);
+            Guid id;
+            if(kind=="practice")id=session.Engine.TestPrompt();
+            else {if(kind=="early")session.Engine.EndEarly();else session.Tick();id=session.Engine.Snapshot.Prompts.Single().Id;}
+            var timer=session.Engine.Snapshot.Timer;var skips=0;
+            session.Engine.ActivityRecorded+=activity=>{if(activity.Event=="prompt.skipped")skips++;};
+            var result=session.Execute("saveOrSendReflection",Data(id,"",""));
+            check(result.Close&&!result.SessionCompleted&&session.Engine.Snapshot.Timer==timer&&session.Engine.Snapshot.Prompts.Count==0&&session.Engine.Snapshot.Outbox.Count==0&&skips==1,"Native both-empty conditional command uses Skip and preserves the current timer: "+kind);
+        }
+        foreach(var pair in new[]{("","Keep reason"),(" \n ","\t")}){
+            var session=new PreviewSession(new MemoryStore());session.Engine.Start(60,false,0);var id=session.Engine.CheckIn();
+            session.Execute("saveOrSendReflection",Data(id,pair.Item1,pair.Item2));
+            check(session.Engine.Snapshot.Prompts.Single() is {} retained&&retained.Draft==pair.Item1&&retained.EarlyEndReason==pair.Item2,"Native conditional command does not skip a reason-only or whitespace-only draft");
         }
     }
 }

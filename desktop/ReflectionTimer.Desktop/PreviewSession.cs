@@ -160,7 +160,9 @@ public sealed class PreviewSession
                 Engine.SaveReflectionForLater(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000));
                 return new("Reflection saved locally.", Close: true);
             case "saveOrSendReflection":
-                var decision = Engine.SaveOrSendReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000),
+                var response=Text(data,"text",5000);var reason=Text(data,"reason",1000);
+                if(response.Length==0&&reason.Length==0)return Execute("skip",data);
+                var decision = Engine.SaveOrSendReflection(Id(data), response, reason,
                     isolatedProfile && SheetsClient.Validate(state.Connection) is not null);
                 return new(decision.Queued ? "Reflection saved in Outbox for delivery when enabled." : "Reflection saved locally.",
                     Close: true, SessionCompleted: decision.SessionCompleted);

@@ -163,6 +163,22 @@ static class NativeReflectionSmoke
         advance(60);await Until(()=>window.Visible&&window.ReflectionOpen);
         check(window.PromptId!=second&&session.Engine.Snapshot.Prompts.Single().SessionId==nextSession&&ReferenceEquals(browser,Browser(window)),
             "The next session's own natural completion still opens its distinct reflection in the retained native editor");
+        var skipped=0;session.Engine.ActivityRecorded+=activity=>{if(activity.Event=="prompt.skipped")skipped++;};
+        foreach(var kind in new[]{"completed","running","paused"}){
+            if(kind!="completed"){
+                var emptyId=session.Engine.CheckIn();
+                if(kind=="paused")session.Engine.Pause();
+                app.Open("reflection",emptyId);
+                await Until(()=>window.PromptId==emptyId&&window.Visible&&window.ReflectionOpen);
+            }
+            var empty=await Read(window);var emptyPrompt=window.PromptId!.Value;
+            check(empty.GetProperty("draft").GetString()==""&&empty.GetProperty("reason").GetString()=="","Native empty shortcut starts with both fields blank: "+kind);
+            var beforeTimer=session.Engine.Snapshot.Timer;var outboxCount=session.Engine.Snapshot.Outbox.Count;var beforeSkips=skipped;
+            await Script(window,"document.querySelector('#later').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+            await Until(()=>!window.ReflectionOpen&&!window.Visible);
+            check(session.Engine.Snapshot.Prompts.All(p=>p.Id!=emptyPrompt)&&session.Engine.Snapshot.Outbox.Count==outboxCount
+                &&session.Engine.Snapshot.Timer==beforeTimer&&skipped==beforeSkips+1,"Native empty Ctrl+Enter skips once from a button without sending or changing the timer: "+kind);
+        }
         check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
     }
     private static async Task ExerciseRecovery(PreviewApplication app,PreviewWindow reflection,Action<bool,string> check)

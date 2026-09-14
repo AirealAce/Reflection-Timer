@@ -345,8 +345,8 @@ document.addEventListener('keydown',event=>{
   if(event.repeat||event.isComposing||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   // Inspect both fields, including a reason retained after natural completion.
   const empty=['reflection-text','early-reason'].every(id=>$(id).value.length===0);
-  if(saveOrSend)run(()=>submitReflection(true));
-  else if(empty)$('skip-reflection').click();
+  if(empty)$('skip-reflection').click();
+  else if(saveOrSend)run(()=>submitReflection(true));
   else if(dismiss)$('later').click();
   else run(()=>submitReflection());
 });
