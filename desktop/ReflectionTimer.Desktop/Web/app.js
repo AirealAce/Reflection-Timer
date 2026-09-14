@@ -201,7 +201,8 @@ function render(next) {
   if (view === 'main') {
     available($('playback-end'),running);
     $('playback-compact').dataset.viewVisible=String(Boolean(state.showFloatingTimer));
-    $('playback-compact').title=state.showFloatingTimer?'Bring Compact view to front':'Show compact view';
+    $('playback-compact').setAttribute('aria-pressed',String(Boolean(state.showFloatingTimer)));
+    $('playback-compact').title=state.showFloatingTimer?'Hide floating timer':'Show compact view';
     setText($('compact-view-status'),state.showFloatingTimer?'The floating timer is visible.':'The floating timer is hidden.');
     setText($('pending-count'),`${state.prompts.length} pending reflection(s) · ${state.outbox.filter(o=>!['Sent','Simulated success'].includes(o.status)).length} unsent entry/entries`);
     reconcileRows($('pending-list'),state.prompts,record => {
@@ -289,7 +290,7 @@ $('repeat').addEventListener('change',()=>{
 bind('open-compact',()=>send('toggleCompact')); bind('open-main',()=>send('main')); bind('close-compact',()=>send('close'));
 if(view==='main'){
   bind('playback-repeat',()=>$('repeat').click());
-  bind('playback-compact',()=>send('compact'));
+  bind('playback-compact',()=>send('toggleCompact',{expandOnShow:true}));
   bind('show-pending',async()=>{if(!state.prompts.length)return announce('No pending reflections.');await send('openReflection',{id:state.prompts.at(-1).id});});
   bind('edit-schedule',editSelectedSchedule);
   bind('remove-schedule',async()=>{if(!selectedSchedule)return;const id=selectedSchedule;await send('removeSchedule',{id});if(scheduleEdit===id)clearScheduleEdit();($('schedule-rows').querySelector('input:checked')||$('schedule-start')).focus();});

@@ -36,7 +36,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser=CreateBrowser();
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information;
         browser.AccessibleName=view=="main"?"Reflection Timer App view":view=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt";
-        Text = view == "main" ? "Reflection Timer — App view · 4.1.33" : view == "compact" ? "Reflection Timer — Compact view · 4.1.33" : "Reflection Timer — Session end · 4.1.33";
+        Text = view == "main" ? "Reflection Timer — App view · 4.1.34" : view == "compact" ? "Reflection Timer — Compact view · 4.1.34" : "Reflection Timer — Session end · 4.1.34";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
         Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.Now))?525:440);
@@ -224,7 +224,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (action == "flushFailed") { flush?.TrySetException(new IOException("Draft save failed.")); Reply(requestId); return; }
             if(View=="reflection"&&!ReflectionOpen&&(action is "draft" or "saveForLater" or "saveOrSendReflection" or "queue" or "skip" or "navigateReflection" or "close"))throw new InvalidOperationException("This reflection is closed. Reopen it before editing.");
             if (action == "compact") { app.Open("compact"); Reply(requestId); return; }
-            if(action=="toggleCompact") { app.ToggleCompactVisibility();Reply(requestId);return; }
+            if(action=="toggleCompact") { app.ToggleCompactVisibility(data.TryGetProperty("expandOnShow",out var expandOnShow)&&expandOnShow.ValueKind==JsonValueKind.True);Reply(requestId);return; }
             if(action=="quit") { if(View!="main")throw new ArgumentException("Quit from the App view.");Reply(requestId);await app.CloseMainAsync();return; }
             if(action=="durationDraft") {
                 if(View=="reflection")throw new ArgumentException("Edit duration in the App or Compact view.");
@@ -240,7 +240,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 IsTimeOnly=ReadFlag(data,"tiny");
                 ApplyTopMost();
-                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.33";
+                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.34";
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);return;
             }

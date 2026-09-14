@@ -103,7 +103,11 @@ internal sealed partial class PreviewApplication : ApplicationContext
         try { var state=Session.Engine.Snapshot;Session.Engine.SaveSettings(state.Connection,state.LoggingEnabled,enabled,state.ExtensionDisabledConfirmed); }
         catch { PreviewStartup.Set(profile,previous); throw; }
     }
-    internal void ToggleCompactVisibility(){Session.Engine.SetFloatingTimer(!Session.Engine.Snapshot.ShowFloatingTimer);ApplyDisplayPreferences();}
+    internal void ToggleCompactVisibility(bool expandOnShow=false)
+    {
+        if(expandOnShow&&!Session.Engine.Snapshot.ShowFloatingTimer)Open("compact");
+        else {Session.Engine.SetFloatingTimer(!Session.Engine.Snapshot.ShowFloatingTimer);ApplyDisplayPreferences();}
+    }
     private PreviewWindow Create(string view, Guid? prompt = null)
     {
         var window = new PreviewWindow(this, view, prompt);

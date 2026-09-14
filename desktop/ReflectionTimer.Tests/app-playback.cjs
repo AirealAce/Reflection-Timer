@@ -45,9 +45,13 @@ module.exports=async function appPlayback(context,initial,check){
   await page.locator('#repeat').uncheck();await page.waitForFunction(()=>!window.playbackState.timer.autoRestart);
   check(await repeat.getAttribute('aria-pressed')==='false','The original Auto-start checkbox also updates the new button');
   await page.locator('#playback-compact').click();
-  check(await page.evaluate(()=>window.previewMessages.filter(m=>m.action==='compact').length===1&&!window.previewMessages.some(m=>m.action==='toggleCompact')),'Comp requests opening/focusing Compact, without toggling its visibility off');
-  await page.evaluate(()=>{window.playbackState.showFloatingTimer=true;window.previewDispatch({type:'state',state:structuredClone(window.playbackState)});});
-  check(await page.locator('#playback-compact').getAttribute('data-view-visible')==='true','Comp highlights when the floating viewer is visible');
+  check(await page.evaluate(()=>window.previewMessages.filter(m=>m.action==='toggleCompact'&&m.data.expandOnShow===true).length===1&&!window.previewMessages.some(m=>m.action==='compact')),'Comp delegates a visibility toggle that opens full Compact controls when hidden');
+  for(const visible of [true,false]){
+    await page.evaluate(visible=>{window.playbackState.showFloatingTimer=visible;window.previewDispatch({type:'state',state:structuredClone(window.playbackState)});},visible);
+    const button=page.locator('#playback-compact');
+    check(await button.getAttribute('data-view-visible')===String(visible)&&await button.getAttribute('aria-pressed')===String(visible)
+        &&await button.getAttribute('title')===(visible?'Hide floating timer':'Show compact view'),'Comp synchronizes its glow, pressed state, and next-action hint: visible='+visible);
+  }
   await toggle.click();await page.waitForFunction(()=>window.playbackState.clock.status==='Running');await page.locator('#playback-end').click();await page.waitForFunction(()=>window.playbackState.clock.status==='Finished');
   check(await page.evaluate(()=>window.previewMessages.filter(m=>m.action==='end').length===1&&!window.previewMessages.some(m=>m.action==='queue')),'App forward arrow delegates to End early without sending a reflection');
   await page.close();

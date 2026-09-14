@@ -1,6 +1,6 @@
-# Reflection Timer 4.1.33
+# Reflection Timer 4.1.34
 
-App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (open/focus Compact), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
+App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (hide the floating viewer, or show full Compact controls when hidden), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
 
 Ending within a grace period counts as a normal completion: use the ending session's effective low-time threshold when Low on time audio is checked (its override, or the current Settings default), otherwise 15 seconds. Cap that period at 10% of the allotted duration. The exact boundary is included, and paused time does not advance it. This classification applies to all completion paths, preserves actual elapsed time, and remains attached to the completed reflection when settings or the next session change. A normal completion omits the early-end reason from delivery.
 

@@ -160,8 +160,13 @@ static class NativeClockSmoke
                             Check(session.Engine.Snapshot.Timer.IsRunning==running,"App playback button starts, pauses and resumes the real timer: running="+running);
                         }
                         var beforeComp=session.Engine.Snapshot.Timer;
-                        await Script(main,"document.querySelector('#playback-compact').click()");await Until(()=>Task.FromResult(compact.Visible&&!compact.IsTimeOnly));
-                        Check(session.Engine.Snapshot.Timer==beforeComp,"App Comp button opens full Compact controls without changing the timer");
+                        foreach(var visible in new[]{false,true,false,true}){
+                            await Script(main,"document.querySelector('#playback-compact').click()");
+                            await Until(async()=>compact.Visible==visible&&(!visible||!compact.IsTimeOnly)
+                                &&JsonDocument.Parse(await Script(main,"document.querySelector('#playback-compact').getAttribute('aria-pressed')")).RootElement.GetString()==visible.ToString().ToLowerInvariant());
+                            Check(session.Engine.Snapshot.Timer==beforeComp&&session.Engine.Snapshot.ShowFloatingTimer==visible,
+                                "App Comp toggles the viewer, shows full Compact controls and updates its indicator without changing the timer: visible="+visible);
+                        }
                         foreach(var enabled in new[]{true,false}){
                             await Script(main,"document.querySelector('#playback-repeat').click()");await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.AutoRestart==enabled));
                             Check(JsonDocument.Parse(await Script(main,"document.querySelector('#repeat').checked")).RootElement.GetBoolean()==enabled,"App Auto-start button stays synchronized with its checkbox: enabled="+enabled);
