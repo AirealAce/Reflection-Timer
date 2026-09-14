@@ -1,6 +1,8 @@
-# Reflection Timer 4.1.32
+# Reflection Timer 4.1.33
 
 App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (open/focus Compact), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
+
+Ending within a grace period counts as a normal completion: use the ending session's effective low-time threshold when Low on time audio is checked (its override, or the current Settings default), otherwise 15 seconds. Cap that period at 10% of the allotted duration. The exact boundary is included, and paused time does not advance it. This classification applies to all completion paths, preserves actual elapsed time, and remains attached to the completed reflection when settings or the next session change. A normal completion omits the early-end reason from delivery.
 
 The accessible interface is now the primary desktop app. Normal launches use the encrypted `%USERPROFILE%\.reflection-timer` profile, independent of a launcher's AppData virtualization. First launch copies and verifies the old ReflectionTimerDesktop profile, retaining its Sheets connection, settings, drafts, schedules and Outbox and leaving the original untouched. A pre-existing shared profile is never replaced by a legacy copy. No personal connection settings belong in the application package.
 

@@ -179,8 +179,8 @@ static class NativeReflectionSmoke
             check(session.Engine.Snapshot.Prompts.All(p=>p.Id!=emptyPrompt)&&session.Engine.Snapshot.Outbox.Count==outboxCount
                 &&session.Engine.Snapshot.Timer==beforeTimer&&skipped==beforeSkips+1,"Native empty Ctrl+Enter skips once from a button without sending or changing the timer: "+kind);
         }
-        foreach(var useAlt in new[]{false,true})foreach(var pause in new[]{false,true}){
-            session.Engine.Start(60,false,0,lowTime:new(){Enabled=false});advance(7);
+        foreach(var useAlt in new[]{false,true})foreach(var pause in new[]{false,true})foreach(var elapsed in new[]{7,55}){
+            session.Engine.Start(60,false,0,lowTime:new(){Enabled=false});advance(elapsed);
             if(pause)session.Engine.Pause();
             var ending=session.Engine.CheckIn();session.Engine.SaveDraft(ending,"Shortcut response","Shortcut reason");
             var endingSession=session.Engine.Snapshot.Timer.SessionId;
@@ -188,9 +188,10 @@ static class NativeReflectionSmoke
             var chord=useAlt?"key:'s',altKey:true":"key:'Enter',ctrlKey:true";
             await Script(window,"document.querySelector('#reflection-next').focus();document.dispatchEvent(new KeyboardEvent('keydown',{"+chord+",bubbles:true,cancelable:true}))");
             await Until(()=>!window.ReflectionOpen&&!window.Visible);
-            check(session.Engine.Snapshot.Outbox.Single(o=>o.Id==ending) is {IsCheckIn:false,EndedEarly:true,ActualDurationSeconds:7,Message:"Shortcut response",EarlyEndReason:"Shortcut reason"}
+            var entry=session.Engine.Snapshot.Outbox.Single(o=>o.Id==ending);var early=elapsed==7;
+            check(!entry.IsCheckIn&&entry.EndedEarly==early&&entry.ActualDurationSeconds==elapsed&&entry.Message=="Shortcut response"&&entry.EarlyEndReason==(early?"Shortcut reason":"")
                 &&!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.SessionId==endingSession,
-                "Native send shortcut ends its own session once with actual elapsed time: Alt+S="+useAlt+", paused="+pause);
+                "Native send shortcut applies the capped grace period with actual elapsed time: Alt+S="+useAlt+", paused="+pause+", elapsed="+elapsed);
         }
         check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
     }

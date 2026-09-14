@@ -44,6 +44,13 @@ public sealed class TimerEngine
         0, timer.DurationSeconds * 1000L);
     public static int ActualSeconds(TimerState timer, long now) =>
         (int)((timer.DurationSeconds * 1000L - RemainingMilliseconds(timer, now)) / 1000);
+    private static int LowTimeThresholdSeconds(AppState state) =>
+        state.Timer.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds;
+    private static long EarlyEndGraceMilliseconds(AppState state) =>
+        // Use the same effective threshold as the warning, or 15 seconds when
+        // unchecked. The 10% cap stays precise even for sub-ten-second timers.
+        Math.Min((state.Timer.LowTime.Enabled ? LowTimeThresholdSeconds(state) : 15) * 1000L,
+            state.Timer.DurationSeconds * 100L);
     private static void CompletePrompt(AppState state, long now)
     {
         var timer=state.Timer;
@@ -51,7 +58,7 @@ public sealed class TimerEngine
         // Promote the same session's unsent draft in place. Keeping its ID lets
         // an already-open editor keep even keystrokes still awaiting autosave.
         var completed=new ReflectionPrompt(draft?.Id??Guid.NewGuid(),Math.Min(timer.EndTime??now,now),timer.DurationSeconds,timer.Volume,false,draft?.Draft??"") {
-            ActualDurationSeconds=ActualSeconds(timer,now),EndedEarly=RemainingMilliseconds(timer,now)>0,
+            ActualDurationSeconds=ActualSeconds(timer,now),EndedEarly=RemainingMilliseconds(timer,now)>EarlyEndGraceMilliseconds(state),
             EarlyEndReason=draft?.EarlyEndReason??"",ContinuationSeparator=draft?.ContinuationSeparator,SessionId=timer.SessionId
         };
         if(draft is not null)state.Prompts.RemoveAll(p=>p.Id==draft.Id);
@@ -185,7 +192,7 @@ public sealed class TimerEngine
             var cutoffDue = CutoffDue(state.Timer, now);
             var lowTimeDue = !deadlineDue && state.Timer.IsRunning && state.Timer.LowTime.Enabled && !state.Timer.LowTimePlayed
                 && Remaining(state.Timer, now) > 0
-                && Remaining(state.Timer, now) <= (state.Timer.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds);
+                && Remaining(state.Timer, now) <= LowTimeThresholdSeconds(state);
             if (!deadlineDue && !cutoffDue && !lowTimeDue) return;
             Change(cutoffDue ? "timer.autoRestartDisabled" : deadlineDue ? "timer.deadline" : "timer.lowTime", s => {
                 // A cutoff is independent of the countdown, including while paused.

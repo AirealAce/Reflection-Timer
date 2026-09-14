@@ -379,6 +379,14 @@ test('completed entries leave status and reason blank and legacy actual time is 
   assert.deepEqual(h.grids.get('test')[0].slice(2, 6), ['', 120 / 86400, '', '']);
 });
 
+test('a grace-period completion retains shorter actual time without an early status or reason', () => {
+  const h = createHarness(['test']);
+  const result = h.request({ ...datedRequest, isTest: true, durationSeconds: 900, actualDurationSeconds: 885,
+    endedEarly: false, earlyEndReason: 'Provisional reason' });
+  assert.equal(result.success, true, result.error);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [885 / 86400, 900 / 86400, '', '']);
+});
+
 test('auto-sent status combines with ended early and retains the response and reason', () => {
   const h=createHarness(['test']);
   const p={...datedRequest,isTest:true,durationSeconds:900,actualDurationSeconds:17,endedEarly:true,earlyEndReason:'Appointment',autoSent:true,message:'[auto-sent]\nFinal response',requestId:crypto.randomUUID(),deliveryProtocol:'request-id-v1'};
