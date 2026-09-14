@@ -17,7 +17,7 @@ module.exports=async function messageSentFade(context,initial,settings,check){
     const checkbox=page.getByRole('checkbox',{name:'Fade out after message sent',exact:true}),seconds=page.getByRole('spinbutton',{name:'Low-time message-sent fade duration in seconds',exact:true});
     check(await checkbox.count()===1&&await checkbox.evaluate(e=>e.closest('form').id==='sound-form-3'),'Only Low on time audio has the message-sent fade option');
     check(!await checkbox.isChecked()&&await seconds.isDisabled()&&await seconds.inputValue()==='3','Legacy settings default to disabled message-sent fading with three seconds');
-    check((await page.locator('#sound-message-fade-help-3').textContent()).includes('Disruptive'),'The option explains confirmed delivery and the Disruptive audio exception');
+    check(await page.locator('#sound-message-fade-help-3').textContent().then(text=>text.includes('before validation or delivery')&&text.includes('Disruptive')),'The option explains immediate Send feedback and the Disruptive audio exception');
     await checkbox.check();
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveSound'&&m.data.kind===3&&m.data.fadeAfterMessageSent&&m.data.messageSentFadeSeconds===3&&m.data.quiet));
     check(await seconds.isEnabled(),'Enabling message-sent fading silently saves it and enables its duration');

@@ -22,6 +22,7 @@ module.exports=async function reflectionDismiss(context,initial,check){
       await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='skip'));
       const sent=await actions(page);
       check(sent.length===1&&sent[0].action==='skip'&&sent[0].data.id==='dismiss-test',`${kind} empty ${key} skips once from ${target} without sending or changing the timer`);
+      check(!await page.evaluate(()=>window.previewMessages.some(m=>m.action==='reflectionSendStarted')),'Empty-response Skip does not request Send audio feedback');
       await page.close();
     }
   }

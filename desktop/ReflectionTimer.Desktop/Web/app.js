@@ -319,6 +319,9 @@ bind('schedule-cancel',()=>{clearScheduleEdit();$('schedule-start').focus();});
 }));
 async function submitReflection(endSession=false){
   if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
+  // Start the optional audio fade before validation or a durable draft save.
+  // Audio feedback must not delay or prevent saving the response.
+  send('reflectionSendStarted',{id:promptId}).catch(()=>{});
   if(!$('reflection-text').value.trim()) { $('reflection-text').setAttribute('aria-invalid','true'); $('reflection-text').focus(); throw new Error('Write a reflection before sending.'); }
   $('reflection-text').removeAttribute('aria-invalid');
   // Lock before the draft flush so another shortcut cannot submit it twice.

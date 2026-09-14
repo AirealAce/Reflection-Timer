@@ -36,13 +36,19 @@ public sealed class PreviewServices : IDisposable
         // Session transitions must let the incoming sound's playback behavior
         // decide whether existing audio is mixed, ducked, or interrupted.
         var state=engine.Snapshot;
-        if(activity.Event=="upload.sent"&&state.Outbox.SingleOrDefault(o=>o.Id==activity.ItemId) is {Status:DeliveryStatus.Sent,LocalOnly:false,IsTest:false,SessionId:{} sessionId}) {
-            var low=AudioSettings.From(state).LowTime;
-            if(low.FadeOutAfterMessageSent)sounds.FadeOut(SoundEvent.LowTime,sessionId,low.MessageSentFadeSeconds);
-        }
         var completed=state.Prompts.Any(p=>!p.IsCheckIn&&!sounded.Contains(p.Id));
         if (!completed&&(activity.Event is "timer.paused" or "timer.reset" or "timer.started" ||
             activity.Event=="timer.lowTimeOptions"&&!state.Timer.LowTime.Enabled)) sounds.Stop(SoundEvent.LowTime);
+    }
+    internal void ReflectionSendStarted(Guid promptId)
+    {
+        if(disposed)return;
+        var state=engine.Snapshot;
+        var prompt=state.Prompts.SingleOrDefault(p=>p.Id==promptId);
+        if(prompt is null||prompt.IsTest)return;
+        var low=AudioSettings.From(state).LowTime;
+        if(low.FadeOutAfterMessageSent&&(prompt.SessionId??prompt.CheckInSessionId) is {} sessionId)
+            sounds.FadeOut(SoundEvent.LowTime,sessionId,low.MessageSentFadeSeconds);
     }
     private void LowTime(TimerState timer) => _ = Play(SoundEvent.LowTime, false, AudioSettings.From(engine.Snapshot).ForLowTime(timer.LowTime),sessionId:timer.SessionId);
     private void Changed()

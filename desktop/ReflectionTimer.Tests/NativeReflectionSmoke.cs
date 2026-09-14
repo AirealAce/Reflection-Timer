@@ -130,10 +130,22 @@ static class NativeReflectionSmoke
     private static async Task ExerciseSendModes(PreviewApplication app,PreviewWindow window,Action<int> advance,Action<bool,string> check)
     {
         var session=app.Session;var first=window.PromptId!.Value;var timer=session.Engine.Snapshot.Timer;
+        var beforeFeedback=JsonSerializer.Serialize(session.Engine.Snapshot);
+        check(!(await RequestSendFade(window,first)).TryGetProperty("error",out _)
+            &&JsonSerializer.Serialize(session.Engine.Snapshot)==beforeFeedback,
+            "Native Send feedback is accepted before submission without mutating the timer or draft");
+        check((await RequestSendFade(window,Guid.NewGuid())).TryGetProperty("error",out _),
+            "Native Send feedback cannot target another reflection");
+        await ((IReflectionPromptWindow)window).PrepareHandoffAsync();
+        check((await RequestSendFade(window,first)).TryGetProperty("error",out _),
+            "Native Send feedback is blocked while a reflection hands off");
+        ((IReflectionPromptWindow)window).ResumeEditing();
         advance(13);
         await Script(window,"document.querySelector('#later').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',altKey:true,bubbles:true,cancelable:true}))");
         await Until(()=>!window.ReflectionOpen&&!window.Visible);
         check(session.Engine.Snapshot.Timer==timer&&session.Engine.Snapshot.Outbox.Single(o=>o.Id==first) is {IsCheckIn:true,EndedEarly:false,ActualDurationSeconds:13,Message:"Saved native-window draft"},"Native Alt+Enter bridge submits a check-in and hides the editor without changing the session");
+        check((await RequestSendFade(window,first)).TryGetProperty("error",out _),
+            "Native Send feedback cannot run from a closed editor");
         var second=session.Engine.CheckIn();session.Engine.SaveDraft(second,"Current response","Reason for stopping");
         session.Engine.SetPreferences(true,0);advance(7);
         app.Open("reflection",second);await UntilAsync(async()=>window.PromptId==second&&window.Visible&&(await Read(window)).GetProperty("draft").GetString()=="Current response");
@@ -283,6 +295,14 @@ static class NativeReflectionSmoke
         session.Engine.SaveDraft(id,"Typed just before zero","");
     }
     private static bool GetFlag(PreviewWindow window,string name)=>(bool)typeof(PreviewWindow).GetField(name,BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!;
+    private static async Task<JsonElement> RequestSendFade(PreviewWindow window,Guid promptId)
+    {
+        var requestId=Guid.NewGuid().ToString("N");
+        var message=JsonSerializer.Serialize(new{requestId,action="reflectionSendStarted",data=new{id=promptId}});
+        await Script(window,"window.__sendFadeReply=null;window.chrome.webview.addEventListener('message',function reply(e){if(e.data.type==='reply'&&e.data.requestId==='"+requestId+"'){window.__sendFadeReply=e.data;window.chrome.webview.removeEventListener('message',reply);}});window.chrome.webview.postMessage("+message+")");
+        await UntilAsync(async()=>JsonDocument.Parse(await Script(window,"window.__sendFadeReply!==null")).RootElement.GetBoolean());
+        return JsonDocument.Parse(await Script(window,"window.__sendFadeReply")).RootElement.Clone();
+    }
     private static WebView2 Browser(PreviewWindow window)=>(WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!;
     private static Task<string> Script(PreviewWindow window,string script)=>((WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!).CoreWebView2.ExecuteScriptAsync(script);
     private static async Task<JsonElement> Read(PreviewWindow window)=>JsonDocument.Parse(await Script(window,"JSON.parse(JSON.stringify({draft:document.querySelector('#reflection-text').value,reason:document.querySelector('#early-reason').value,reasonVisible:!document.querySelector('#reason-group').hidden,theme:document.documentElement.dataset.theme,focused:document.activeElement.id}))")).RootElement.Clone();

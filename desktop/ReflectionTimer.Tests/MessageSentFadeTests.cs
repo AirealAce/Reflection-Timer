@@ -55,7 +55,7 @@ static class MessageSentFadeTests
             check(first.Level.RequestedFadeSeconds==4&&!first.Token.IsCancellationRequested&&first.Level.Gain==.2f,"A session-scoped fade requests gradual attenuation instead of abrupt cancellation");
             check(next.Level.RequestedFadeSeconds==0&&preview.Level.RequestedFadeSeconds==0&&end.Level.RequestedFadeSeconds==0,"Sending an older reflection cannot fade the next session, a preview, or session-end audio");
             player.FadeOut(SoundEvent.LowTime,firstId,8);
-            check(first.Level.RequestedFadeSeconds==4,"Repeated delivery acknowledgement cannot restart or lengthen a fade");
+            check(first.Level.RequestedFadeSeconds==4,"Repeated send requests cannot restart or lengthen a fade");
             _=player.PlayAsync("success",80,SoundBehavior.Disruptive,SoundEvent.Success);await backend.Next();
             check(first.Token.IsCancellationRequested&&next.Token.IsCancellationRequested,"Disruptive audio retains its explicit immediate-stop behavior during a fade");
         }finally{player.Dispose();await backend.FinishAll();}
@@ -79,20 +79,32 @@ static class MessageSentFadeTests
             check(engine.Snapshot.Prompts.Single(p=>p.Id==prompt).SessionId==sessionId,"Reflection retains its audio session identity through "+ending);
             engine.SaveReflectionForLater(prompt,"Ready to send");
             check(low.Level.RequestedFadeSeconds==0,"Saving a "+ending+" draft does not fade low-time audio");
-            engine.QueueReflection(prompt,"A synthetic reflection",autoSent:ending=="natural",endSession:ending=="end-and-send");
-            check(engine.Snapshot.Outbox.Single().SessionId==sessionId&&low.Level.RequestedFadeSeconds==0,"Queuing a "+ending+" reflection retains session identity but does not fade audio");
             Playback? newer=null;
             if(ending is "natural" or "scheduled"){
                 now=now.AddSeconds(10);engine.Advance();newer=await backend.Next();
             }
+            var before=JsonSerializer.Serialize(engine.Snapshot);
+            services.ReflectionSendStarted(prompt);
+            check(low.Level.RequestedFadeSeconds==4&&!low.Token.IsCancellationRequested&&JsonSerializer.Serialize(engine.Snapshot)==before,
+                "Send immediately starts the configured fade before validation, storage, or delivery, without changing state: "+ending);
+            check(newer is null||newer.Level.RequestedFadeSeconds==0,"Sending an older response leaves the next session's warning unchanged: "+ending);
+            try{engine.QueueReflection(prompt,"",endSession:ending=="end-and-send");throw new Exception("Invalid response accepted");}catch(ArgumentException){}
+            memory.Fail=true;
+            try{engine.SaveDraft(prompt,"Uncommitted final keystrokes");throw new Exception("Failed save accepted");}catch(IOException){}
+            memory.Fail=false;
+            check(JsonSerializer.Serialize(engine.Snapshot)==before&&low.Level.RequestedFadeSeconds==4,
+                "Validation and draft-storage failures preserve the response and leave the already-started fade active: "+ending);
+            services.ReflectionSendStarted(prompt);
+            engine.QueueReflection(prompt,"A synthetic reflection",endSession:ending=="end-and-send");
+            check(engine.Snapshot.Outbox.Single().SessionId==sessionId&&low.Level.RequestedFadeSeconds==4,"Retry and queue retain the original fade and audio session identity: "+ending);
             receiver.Fail=true;await services.Sync();
-            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.NeedsReview&&low.Level.RequestedFadeSeconds==0,"Failed "+ending+" delivery leaves the requested fade untouched");
+            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.NeedsReview&&low.Level.RequestedFadeSeconds==4,"Failed "+ending+" delivery leaves the requested fade untouched");
             engine.RetryUpload(prompt);receiver.Fail=false;receiver.OnAppend=()=>memory.Fail=true;
             await services.Sync();memory.Fail=false;receiver.OnAppend=null;
-            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.Sending&&low.Level.RequestedFadeSeconds==0,"A failed delivery-state save cannot trigger the "+ending+" fade");
+            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.Sending&&low.Level.RequestedFadeSeconds==4,"A failed delivery-state save cannot restart the "+ending+" fade");
             // Resolve the synthetic interrupted upload as a failure before its retry.
             engine.FinishUpload(prompt,false,"test_failure");engine.RetryUpload(prompt);await services.Sync();
-            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.Sent&&low.Level.RequestedFadeSeconds==4&&!low.Token.IsCancellationRequested,"Confirmed "+ending+" delivery starts the configured gradual fade");
+            check(engine.Snapshot.Outbox.Single().Status==DeliveryStatus.Sent&&low.Level.RequestedFadeSeconds==4&&!low.Token.IsCancellationRequested,"Confirmed "+ending+" delivery leaves the original fade unchanged");
             check(newer is null||newer.Level.RequestedFadeSeconds==0,"Delayed "+ending+" delivery leaves newer low-time audio playing");
             check(!receiver.LastBody.Contains("sessionId",StringComparison.OrdinalIgnoreCase),"Local audio session identifiers are not added to the Sheets protocol: "+ending);
             var settings=JsonSerializer.SerializeToElement(services.Settings(),PreviewSession.Json).GetProperty("sounds").EnumerateArray().Single(x=>x.GetProperty("kind").GetInt32()==3);
@@ -101,20 +113,24 @@ static class MessageSentFadeTests
     }
     private static async Task NonDelivery(Action<bool,string> check)
     {
-        foreach(var mode in new[]{"disabled","local simulation","practice","manual confirmation","unknown session","different session","skip"}){
+        foreach(var mode in new[]{"disabled","local simulation","practice","manual confirmation","unknown session","different session","missing prompt","skip","background delivery","automatic send"}){
             var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-NoSentFade-"+Guid.NewGuid().ToString("N"));
             var now=DateTimeOffset.Now;var id=Guid.NewGuid();var itemId=Guid.NewGuid();
             var engine=new TimerEngine(new MemoryStore{State=new(){LoggingEnabled=false,
                 Timer=new(){SessionId=id,IsRunning=true,DurationSeconds=20,RemainingSeconds=20,EndTime=now.AddSeconds(10).ToUnixTimeMilliseconds(),LowTime=new(){ThresholdSeconds=10}},
                 Audio=new(){LowTime=new(){Behavior=SoundBehavior.Polite,FadeOutAfterMessageSent=mode!="disabled"},Success=new(){Track=LibrarySound.None},SessionEnd=new(){Track=LibrarySound.None}},
-                Outbox=[new(){Id=itemId,SessionId=mode=="unknown session"?null:mode=="different session"?Guid.NewGuid():id,LocalOnly=mode=="local simulation",IsTest=mode=="practice",Status=DeliveryStatus.NeedsReview}]
+                Outbox=mode=="automatic send"?[]:[new(){Id=itemId,SessionId=id,LocalOnly=mode=="local simulation",IsTest=mode=="practice",Status=DeliveryStatus.NeedsReview}],
+                Prompts=[new(itemId,now.ToUnixTimeMilliseconds(),20,80,mode=="practice"){
+                    SessionId=mode=="unknown session"?null:mode=="different session"?Guid.NewGuid():id}]
             }},()=>now);
             var backend=new HoldingAudio();using var services=new PreviewServices(engine,directory,audio:backend);
             try{
                 engine.Advance();var low=await backend.Next();
                 if(mode=="manual confirmation")engine.MarkAlreadySent(itemId);
-                else if(mode=="skip")engine.SkipPrompt(engine.TestPrompt());
-                else engine.FinishUpload(itemId,true);
+                else if(mode=="skip")engine.SkipPrompt(itemId);
+                else if(mode=="automatic send")engine.AutoSendReflection(itemId);
+                else if(mode is "local simulation" or "background delivery")engine.FinishUpload(itemId,true);
+                else services.ReflectionSendStarted(mode=="missing prompt"?Guid.NewGuid():itemId);
                 check(low.Level.RequestedFadeSeconds==0&&!low.Token.IsCancellationRequested,mode+" does not start the low-time message-sent fade");
             }finally{services.Dispose();await backend.FinishAll();CleanDiagnostics(directory);}
         }

@@ -26,6 +26,9 @@ module.exports=async function reflectionSubmit(context,initial,check){
       const sent=await messages(page),entry=sent.filter(m=>m.action===action);
       check(entry.length===1&&entry[0].data.id==='submit-test'&&entry[0].data.text==='Saved response'&&entry[0].data.reason==='Saved reason'&&(action!=='queue'||entry[0].data.endSession===endSession),`${kind} ${key} delegates the current fields to ${action} with its intended save/send mode from ${target}`);
       check(!sent.some(m=>['skip','navigateReflection','toggle','end','checkIn',action==='queue'?'saveForLater':'queue'].includes(m.action)),`${kind} ${key} overrides the focused action without a separate unscoped timer command`);
+      const feedback=sent.filter(m=>m.action==='reflectionSendStarted');
+      check(action==='queue'?feedback.length===1&&feedback[0].data.id==='submit-test'&&sent.indexOf(feedback[0])<sent.findIndex(m=>['draft','queue'].includes(m.action)):feedback.length===0,
+        `${kind} ${key} starts Send audio before saving, and keeps local Save silent from ${target}`);
       await page.close();
     }
   }
@@ -45,6 +48,8 @@ module.exports=async function reflectionSubmit(context,initial,check){
   await page.waitForFunction(()=>window.draftRequest);
   await page.keyboard.down('Control');await page.keyboard.down('Enter');await page.keyboard.down('Enter');await page.keyboard.up('Enter');await page.keyboard.up('Control');
   await page.keyboard.press('Alt+Enter');await page.keyboard.press('Alt+s');await page.keyboard.press('Control+s');
+  check((await messages(page)).filter(m=>m.action==='reflectionSendStarted').length===1,'The Send audio request happens once while draft storage and competing shortcuts are blocked');
+  check((await messages(page)).findIndex(m=>m.action==='reflectionSendStarted')<(await messages(page)).findIndex(m=>m.action==='draft'),'Send feedback precedes storage of the final keystrokes');
   check((await messages(page)).filter(m=>m.action==='draft').length===1&&!(await messages(page)).some(m=>['queue','saveForLater'].includes(m.action))&&await page.locator('#reflection-text').evaluate(e=>e.readOnly),'Repeated Ctrl+Enter waits for one durable draft save and freezes edits');
   await page.evaluate(()=>window.previewDispatch({type:'reply',requestId:window.draftRequest.requestId,error:'Draft save failed.'}));
   await page.waitForFunction(()=>document.querySelector('#error').textContent==='Draft save failed.');
@@ -68,6 +73,7 @@ module.exports=async function reflectionSubmit(context,initial,check){
 
   const clicked=await open('check-in');await clicked.locator('#reflection-form button[type=submit]').click();await submitted(clicked,'queue');
   check((await messages(clicked)).find(m=>m.action==='queue').data.endSession===false,'The Save & send button keeps its existing non-ending check-in behavior');
+  check((await messages(clicked)).findIndex(m=>m.action==='reflectionSendStarted')<(await messages(clicked)).findIndex(m=>['draft','queue'].includes(m.action)),'Save & send starts feedback before storing or queueing the response');
   await clicked.close();
 
   const blank=await open();
@@ -82,6 +88,7 @@ module.exports=async function reflectionSubmit(context,initial,check){
   await blank.locator('#reflection-text').fill('   ');await blank.locator('#skip-reflection').focus();await blank.keyboard.press('Control+Enter');
   await blank.waitForFunction(()=>document.querySelector('#reflection-text').getAttribute('aria-invalid')==='true');
   check(await blank.locator('#reflection-text').evaluate(e=>e===document.activeElement)&&await blank.locator('#reflection-text').isEditable()&&!(await messages(blank)).some(m=>['queue','skip'].includes(m.action)),'Whitespace response with a retained reason focuses the response on native validation failure instead of activating Skip');
+  check((await messages(blank)).filter(m=>m.action==='reflectionSendStarted').length===1,'A Send attempt triggers feedback even when validation rejects its response');
   await blank.close();
   for(const reason of ['', 'Reason without response']){
     const active=await open('check-in');await active.locator('#reflection-text').fill('');await active.locator('#early-reason').fill(reason);
@@ -111,21 +118,34 @@ module.exports=async function reflectionSubmit(context,initial,check){
   check(await saved.locator('#reflection-text').isEditable()&&await saved.locator('#early-reason').inputValue()==='Saved reason','A failed Ctrl+S save retains both editable fields');
   await saved.keyboard.press('Control+s');await saved.waitForFunction(()=>window.previewMessages.filter(m=>m.action==='saveForLater').length===2);
   await saved.evaluate(()=>window.previewDispatch({type:'reply',requestId:window.saveRequest.requestId}));await saved.close();
+  for(const mode of ['delayed','failed']){
+    const feedback=await open();
+    await feedback.evaluate(mode=>{
+      const normal=window.chrome.webview.postMessage;window.chrome.webview.postMessage=message=>{
+        if(message.action!=='reflectionSendStarted')return normal(message);
+        window.previewMessages.push(message);
+        if(mode==='failed')queueMicrotask(()=>window.previewDispatch({type:'reply',requestId:message.requestId,error:'Audio unavailable.'}));
+      };
+    },mode);
+    await feedback.keyboard.press('Alt+s');await submitted(feedback,'queue');
+    check((await messages(feedback)).some(m=>m.action==='reflectionSendStarted')&&await feedback.locator('#error').textContent()==='',
+      'A '+mode+' optional audio reply cannot delay or prevent sending the response');await feedback.close();
+  }
   const guarded=await open();
   await guarded.locator('#reflection-form button[type=submit]').focus();
   for(const key of ['Control+Alt+Enter','Control+Shift+Enter','Alt+Shift+Enter','Control+Alt+s','Control+Shift+s','Alt+Shift+s'])await guarded.keyboard.press(key);
   await guarded.locator('#reflection-text').dispatchEvent('keydown',{key:'Enter',altKey:true,isComposing:true,bubbles:true});
-  check(!(await messages(guarded)).some(m=>['queue','saveForLater'].includes(m.action)),'Other modifier combinations and composition cannot accidentally save or send a session');
+  check(!(await messages(guarded)).some(m=>['queue','saveForLater','reflectionSendStarted'].includes(m.action)),'Other modifier combinations and composition cannot accidentally save, send, or fade a session');
   await guarded.evaluate(()=>{const dialog=document.createElement('dialog');document.body.append(dialog);dialog.showModal();});
   for(const key of ['Control+Enter','Alt+Enter','Alt+s','Control+s'])await guarded.keyboard.press(key);
-  check(!(await messages(guarded)).some(m=>['queue','saveForLater'].includes(m.action)),'An open modal retains Ctrl+Enter instead of submitting the reflection behind it');
+  check(!(await messages(guarded)).some(m=>['queue','saveForLater','reflectionSendStarted'].includes(m.action)),'An open modal retains Ctrl+Enter instead of submitting or fading the reflection behind it');
   await guarded.evaluate(()=>{document.querySelector('dialog[open]').close();window.previewDispatch({type:'flush',freeze:true});});
   await guarded.locator('#later').focus();for(const key of ['Control+Enter','Alt+Enter','Alt+s','Control+s'])await guarded.keyboard.press(key);
-  check(!(await messages(guarded)).some(m=>['queue','saveForLater'].includes(m.action)),'Window-wide Ctrl+Enter respects automatic replacement and navigation freezes');
+  check(!(await messages(guarded)).some(m=>['queue','saveForLater','reflectionSendStarted'].includes(m.action)),'Window-wide Ctrl+Enter respects automatic replacement and navigation freezes');
   await guarded.close();
   for(const [view,initialize] of [['main',true],['compact',true],['reflection',false]]){
     const other=await open('early',view,initialize);for(const key of ['Control+Enter','Alt+Enter','Alt+s','Control+s'])await other.keyboard.press(key);
-    check(!(await messages(other)).some(m=>['queue','saveForLater'].includes(m.action)),`Ctrl+Enter does not save/send from ${initialize?view:'an uninitialized reflection'}`);
+    check(!(await messages(other)).some(m=>['queue','saveForLater','reflectionSendStarted'].includes(m.action)),`Ctrl+Enter does not save/send/fade from ${initialize?view:'an uninitialized reflection'}`);
     await other.close();
   }
 };
