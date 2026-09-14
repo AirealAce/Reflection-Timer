@@ -53,6 +53,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
   submit('connection-form','connectionSave',connection);
   async function saveSettings(){
+    if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
     if(!$('appearance-form').reportValidity())return;
     await displaySaving;await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
     if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
@@ -104,7 +105,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   bind('clear-log-confirm',async()=>{await send('clearDiagnostics',{confirmed:true});$('clear-log-dialog').close();$('clear-diagnostics').focus();});
   return {
     scheduleLow:()=>lowTime.scheduleData(),timerLow:()=>lowTime.timerData(),resetScheduleLow:()=>lowTime.resetSchedule(),
-    load() { if(view==='main') run(()=>send('settingsLoad')); },
+    load() { return view==='main'?send('settingsLoad'):Promise.resolve(); },
     state(state) {
       lowTime.state(state);
       updateTheme(state.theme??0);

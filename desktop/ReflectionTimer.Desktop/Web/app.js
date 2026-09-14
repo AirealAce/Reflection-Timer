@@ -212,9 +212,8 @@ bridge?.addEventListener('message', event => {
     // Initial focus is deliberate; subsequent updates never repeat this.
     if(view==='reflection'){$('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;}
     else {const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
-    settings.load();
     if(view==='reflection')run(()=>send('reflectionReady',{id:promptId}));
-    else run(()=>send('interfaceReady'));
+    else run(async()=>{await settings.load();await send('interfaceReady');});
   } else if(message.type==='showReflection'&&view==='reflection') {
     // The host flushed and froze both fields. Rebind the same document and
     // controls to a saved reflection, keeping WebView2 alive across Prev/Next.

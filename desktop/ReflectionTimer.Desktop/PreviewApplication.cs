@@ -28,6 +28,8 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice;
         Services = new(session.Engine, directory); Services.Announcement += Announce;
+        Services.Log.Record("app.started");
+        Services.Log.Record("theme.loaded",value:(int)session.Engine.Snapshot.Theme);
         promptCoordinator=new(session,()=>windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed).Cast<IReflectionPromptWindow>().ToArray(),ShowReflection,()=>{_ = Services.Sync();});
         MainForm = Create("main");
         var menu=new ContextMenuStrip();

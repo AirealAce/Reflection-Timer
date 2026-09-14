@@ -1,8 +1,10 @@
-# Reflection Timer 4.1.23
+# Reflection Timer 4.1.24
 
 The accessible interface is now the primary desktop app. It uses the existing encrypted ReflectionTimerDesktop profile and retains the original Sheets connection, settings, drafts, schedules and Outbox. No personal connection settings belong in the application package.
 
 The four views, themes, audio controls, window positions and Ctrl+Alt shortcuts are retained. App and reflection prompts can coexist with either Compact or Time-only. Semantic HTML supports screen-reader web navigation; quiet countdown updates do not interrupt reading.
+
+On cold startup, App and Compact keep their web controls hidden behind the saved theme's native background until preferences are restored. App also waits for its Settings fields to load, so an early Save cannot replace preferences with HTML defaults. If loading fails, the app shows an error instead of pretending default settings are your saved choices. Optional local diagnostics record startup and the loaded theme (0 Dark, 1 Light, 2 High Contrast, 3 Glamour); no setting credentials or reflection text are logged.
 
 Reflection prompts show the session date and time right-aligned beside the local draft status, below the writing area. The timestamp follows the selected reflection when using Prev/Next and updates when a check-in becomes a completed session.
 

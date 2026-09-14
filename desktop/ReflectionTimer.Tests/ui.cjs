@@ -477,6 +477,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./reflection-navigation.cjs')(context,initial,check);
     await require('./reflection-separators.cjs')(context,initial,settings,check);
     await require('./settings-success.cjs')(context,initial,settings,check);
+    await require('./settings-startup.cjs')(context,initial,settings,check);
     await require('./message-sent-fade.cjs')(context,initial,settings,check);
     await require('./timer-enter.cjs')(context,initial,check);
     await require('./compact-escape.cjs')(context,initial,check);

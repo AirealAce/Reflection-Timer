@@ -36,7 +36,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser=CreateBrowser();
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information;
         browser.AccessibleName=view=="main"?"Reflection Timer App view":view=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt";
-        Text = view == "main" ? "Reflection Timer — App view · 4.1.23" : view == "compact" ? "Reflection Timer — Compact view · 4.1.23" : "Reflection Timer — Session end · 4.1.23";
+        Text = view == "main" ? "Reflection Timer — App view · 4.1.24" : view == "compact" ? "Reflection Timer — Compact view · 4.1.24" : "Reflection Timer — Session end · 4.1.24";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
         Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.Now))?525:440);
@@ -47,10 +47,18 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         Location = view == "main" ? ViewPlacement.Calculate(area,Size,1)
             : new(view == "compact" ? area.Left + 16 : Math.Max(area.Left, area.Right - Width - 16), Math.Max(area.Top, area.Bottom - Height - 16));
         ApplyTopMost();
-        browser.Visible=view!="reflection";
+        // Do not expose the HTML's dark/default controls during a cold start.
+        // The native background already uses the saved theme; the browser is
+        // revealed only after that document has applied its saved preferences.
+        browser.Visible=false;
         Controls.Add(browser);
         HandleCreated+=(_,_)=>ApplyWindowTheme();
-        Shown += async (_, _) => await (initialization??=InitializeAsync());
+        Shown += async (_, _) => {
+            await (initialization??=InitializeAsync());
+            if(View=="reflection"||IsDisposed)return;
+            try {await interfaceReady.Task.WaitAsync(TimeSpan.FromSeconds(20));}
+            catch {if(!IsDisposed&&!recoveringInterface)ShowFailure("Saved settings could not be loaded into the interface. Close and reopen the app. Your saved data has not been reset.");}
+        };
         ResizeEnd+=(_,_)=>{if(View=="compact")try{app.Session.Engine.SetFloatingTimerPosition(Left,Top);}catch{app.Announce("Could not save the compact position.");}};
         FormClosing += async (_, e) => {
             if (allowClose) return;
@@ -199,7 +207,10 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 if(View=="main"&&!app.StartInTray&&!recoveringInterface)ReflectionTimer.Desktop.WindowActivation.Focus(this);
                 Reply(requestId); return;
             }
-            if(action=="interfaceReady") {interfaceReady.TrySetResult();Reply(requestId);return;}
+            if(action=="interfaceReady") {
+                if(!recoveringInterface&&View!="reflection")browser.Visible=true;
+                interfaceReady.TrySetResult();Reply(requestId);return;
+            }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
             if (action == "reflectionReady") {
                 if(View!="reflection")throw new ArgumentException("Only a reflection can finish loading its editor.");
@@ -229,7 +240,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 IsTimeOnly=ReadFlag(data,"tiny");
                 ApplyTopMost();
-                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.23";
+                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.1.24";
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);return;
             }
