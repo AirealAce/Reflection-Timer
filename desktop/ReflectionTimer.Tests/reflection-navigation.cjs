@@ -1,4 +1,4 @@
-module.exports=async function reflectionNavigation(context,initial,check){
+module.exports=async function reflectionNavigation(context,initial,check,settings){
   const page=await context.newPage();
   const prompts=['first','middle','last'].map((id,i)=>({id,isCheckIn:false,endedEarly:i===1,showEarlyEndReason:i===1,draft:id+' saved response',earlyEndReason:i===1?'An interruption':'',actual:'5 seconds',allotted:'1 minute',completed:`9/12/2026 ${i+1}:30 PM`}));
   async function open(index){
@@ -63,7 +63,10 @@ module.exports=async function reflectionNavigation(context,initial,check){
   check(await page.evaluate(()=>!window.previewMessages.some(m=>['queue','saveForLater','skip','close'].includes(m.action))),'Browsing and failed loads never submit, skip, or close a reflection');
   await page.goto('https://reflection-timer.invalid/index.html?view=main');
   await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='ready'));
-  await page.evaluate(state=>window.previewDispatch({type:'init',state}),initial);
+  await page.evaluate(({state,settings})=>{
+    window.previewDispatch({type:'init',state});
+    window.previewDispatch({type:'settings',settings});
+  },{state:initial,settings});
   await page.getByRole('tab',{name:'Settings',exact:true}).click();
   const checkbox=page.locator('#autoSendIncompleteReflections');
   check(await checkbox.isChecked(),'Auto-send incomplete reflections is checked by default');
