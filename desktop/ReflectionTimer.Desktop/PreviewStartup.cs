@@ -22,15 +22,15 @@ internal static class PreviewStartup
         return (profile, tray, check);
     }
     internal static string DirectoryFor(string? profile) => profile is null
-        ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReflectionTimerDesktop")
+        ? ProfileStorage.DirectoryPath
         : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReflectionTimerAccessibilityPreview", ValidProfile(profile) ? profile : throw new ArgumentException("Invalid profile."));
     // Share the installed app's identity to prevent simultaneous edits by old and new versions.
     internal static string InstanceSuffix(string directory) => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(directory)))[..16];
     internal static string MutexName(string? profile) => profile is null
-        ? @"Local\ReflectionTimerDesktop-" + InstanceSuffix(DirectoryFor(null))
+        ? @"Local\ReflectionTimerDesktop-" + InstanceSuffix(ProfileStorage.LegacyDirectory)
         : @"Local\ReflectionTimerAccessibilityPreview-" + (ValidProfile(profile) ? profile.ToLowerInvariant() : throw new ArgumentException("Invalid profile."));
     internal static string ShowEventName(string? profile) => profile is null
-        ? @"Local\ReflectionTimerDesktopShow-" + InstanceSuffix(DirectoryFor(null))
+        ? @"Local\ReflectionTimerDesktopShow-" + InstanceSuffix(ProfileStorage.LegacyDirectory)
         : @"Local\ReflectionTimerAccessibilityPreviewShow-" + profile.ToLowerInvariant();
     internal static string ValueName(string? profile)
     {

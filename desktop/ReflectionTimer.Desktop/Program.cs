@@ -30,6 +30,7 @@ internal static class Program
         using var show = new EventWaitHandle(false, EventResetMode.AutoReset, PreviewStartup.ShowEventName(launch.Profile));
         if (!first) { if (!launch.Tray) show.Set(); return; }
         try {
+            if (launch.Profile is null) ProfileStorage.MigrateLegacy(root, ProfileStorage.LegacyDirectory);
             var store = new EncryptedStore(root);
             var session = new PreviewSession(store, isolatedProfile: launch.Profile is not null);
             using var app = new PreviewApplication(session, root, store.RecoveryNotice, launch.Tray, launch.Profile);

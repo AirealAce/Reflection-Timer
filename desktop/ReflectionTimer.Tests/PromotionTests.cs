@@ -12,8 +12,9 @@ static class PromotionTests
     {
         var root = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "ReflectionTimerDesktop");
         var suffix = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(root)))[..16];
-        check(PreviewStartup.DirectoryFor(null) == root && PreviewStartup.MutexName(null) == @"Local\ReflectionTimerDesktop-" + suffix
-            && PreviewStartup.ShowEventName(null) == @"Local\ReflectionTimerDesktopShow-" + suffix, "Primary app uses the original encrypted profile and single-instance signals");
+        check(PreviewStartup.DirectoryFor(null) == Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".reflection-timer")
+            && PreviewStartup.MutexName(null) == @"Local\ReflectionTimerDesktop-" + suffix
+            && PreviewStartup.ShowEventName(null) == @"Local\ReflectionTimerDesktopShow-" + suffix, "Primary app uses launcher-independent storage and retains original single-instance signals");
         check(PreviewStartup.DirectoryFor("review-03") != root && PreviewStartup.MutexName("review-03") == @"Local\ReflectionTimerAccessibilityPreview-review-03",
             "Named test profiles remain isolated and compatible with earlier previews");
         check(PreviewStartup.ValueName(null) == "Reflection Timer Desktop"

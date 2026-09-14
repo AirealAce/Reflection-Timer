@@ -47,12 +47,23 @@ if (Test-Path -LiteralPath $installPath) {
         }
     }
 }
-$dataPath = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'ReflectionTimerDesktop'
-$dataBackup = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) ('ReflectionTimerDesktopBackups\' + $stamp)
-if (Test-Path -LiteralPath $dataPath) {
-    New-Item -ItemType Directory -Path $dataBackup -Force | Out-Null
-    Get-ChildItem -LiteralPath $dataPath -File | Where-Object { $_.Name -like 'state.dat*' -or $_.Name -like 'diagnostics.dat*' } |
-        ForEach-Object { Copy-Item -LiteralPath $_.FullName -Destination (Join-Path $dataBackup $_.Name) }
+$dataBackup = Join-Path ([Environment]::GetFolderPath('UserProfile')) ('.reflection-timer-backups\' + $stamp)
+$profileSources = @{
+    Shared = Join-Path ([Environment]::GetFolderPath('UserProfile')) '.reflection-timer'
+    Legacy = Join-Path ([Environment]::GetFolderPath('LocalApplicationData')) 'ReflectionTimerDesktop'
+}
+foreach ($name in $profileSources.Keys) {
+    $dataPath = $profileSources[$name]
+    if (Test-Path -LiteralPath $dataPath) {
+        $copyDirectory = Join-Path $dataBackup $name
+        New-Item -ItemType Directory -Path $copyDirectory -Force | Out-Null
+        Get-ChildItem -LiteralPath $dataPath -File | Where-Object { $_.Name -like 'state.dat*' -or $_.Name -like 'diagnostics.dat*' } |
+            ForEach-Object {
+                $copyPath = Join-Path $copyDirectory $_.Name
+                Copy-Item -LiteralPath $_.FullName -Destination $copyPath
+                if ((Get-FileHash -LiteralPath $_.FullName).Hash -ne (Get-FileHash -LiteralPath $copyPath).Hash) { throw 'Encrypted profile backup verification failed.' }
+            }
+    }
 }
 # Recheck immediately before changing the executable path.
 if (Get-Process ReflectionTimer -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq $exePath }) { throw 'Reflection Timer reopened. Quit it and rerun the installer.' }

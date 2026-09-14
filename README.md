@@ -21,7 +21,9 @@ From source with the .NET 10 SDK:
 .\desktop\install.ps1
 ```
 
-The installer backs up the old executable folder and encrypted data, installs all web assets, and retains the usual desktop shortcut. It does not publish anything. The app reads the existing `%LOCALAPPDATA%\ReflectionTimerDesktop` profile, including the same Sheet, receiver URL, token, routing, drafts, schedules, Outbox, audio choices, and preferences. Do not copy private configuration into this repository.
+The installer backs up the old executable folder and encrypted data, installs all web assets, and retains the usual desktop shortcut. It does not publish anything. Starting with 4.1.24, normal launches share `%USERPROFILE%\.reflection-timer`, outside AppData's package-specific redirection. On first launch, the app copies and verifies the existing `%LOCALAPPDATA%\ReflectionTimerDesktop` encrypted profile without deleting the original. The same Sheet, receiver URL, token, routing, drafts, schedules, Outbox, audio choices, and preferences are retained. Once the shared profile exists, a stale AppData copy cannot replace it. Installer backups are in `%USERPROFILE%\.reflection-timer-backups`. Do not copy private configuration into this repository.
+
+If an older app appeared to lose its settings depending on how it was launched, there may be separate encrypted profiles in Windows AppData and a packaged launcher's private AppData. Keep both copies. Recover the intended profile into the shared folder while the timer app is fully quit; do not blindly merge Outbox entries or overwrite an existing shared profile. This preserves request IDs and avoids duplicate submissions. Keep this private, Windows-account-encrypted data outside Git and cloud sync; other PCs should use Connection setup.
 
 A fresh installation starts at 15 minutes with the compact timer enabled at bottom left, session-end prompts at bottom right, App centered, and low-time warnings enabled at 15 seconds. Existing choices take precedence. Dark, Light, High Contrast and Glamour themes and the original Ctrl+Alt hotkeys are available.
 
