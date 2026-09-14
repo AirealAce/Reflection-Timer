@@ -101,6 +101,37 @@ static class NativeClockSmoke
                         keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
                         Check(session.Engine.Snapshot.Timer is {IsRunning:true,DurationSeconds:123},"Global Ctrl+Space starts the shared edited duration through the production shortcut action");
                         Check(windows.All(w=>!w.Visible)&&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==draftBefore,"Global toggling keeps viewers hidden and leaves pending reflection text unchanged");
+                        compact.Show();
+                        await Until(()=>Task.FromResult(compact.Visible&&compact.IsTimeOnly));
+                        var timeOnlyBounds=compact.Bounds;
+                        var resizedModes=new List<bool>();
+                        var compactBrowser=(WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(compact)!;
+                        compactBrowser.CoreWebView2.WebMessageReceived+=(_,e)=>{
+                            using var message=JsonDocument.Parse(e.WebMessageAsJson);
+                            if(message.RootElement.GetProperty("action").GetString()=="compactSize")resizedModes.Add(message.RootElement.GetProperty("data").GetProperty("tiny").GetBoolean());
+                        };
+                        foreach(var focused in new[]{true,false}){
+                            if(focused)WindowActivation.Focus(compact);else app.Open("main");
+                            await Script(compact,"document.querySelector('#read-time').focus()");
+                            var toggleSession=session.Engine.Snapshot.Timer.SessionId;
+                            foreach(var running in new[]{false,true,false,true}){
+                                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
+                                await Until(async()=>JsonDocument.Parse(await Script(compact,"document.querySelector('#toggle').title")).RootElement.GetString()==(running?"Pause timer":"Resume timer"));
+                                await Task.Delay(75);
+                                Check(session.Engine.Snapshot.Timer.IsRunning==running&&session.Engine.Snapshot.Timer.SessionId==toggleSession
+                                    &&compact.Visible&&compact.IsTimeOnly&&compact.Bounds==timeOnlyBounds&&!resizedModes.Contains(false),
+                                    $"Global Ctrl+Space preserves time-only mode, size and position without even briefly expanding: focused={focused}, running={running}");
+                            }
+                        }
+                        Check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==draftBefore,"Time-only global pause/resume retains all reflection drafts");
+                        session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=123}));
+                        await Until(()=>Task.FromResult(!compact.IsTimeOnly));
+                        compact.Post(new{type="shrinkCompact"});await Until(()=>Task.FromResult(compact.IsTimeOnly));
+                        keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
+                        await Until(async()=>JsonDocument.Parse(await Script(compact,"document.querySelector('#toggle').title")).RootElement.GetString()=="Pause timer");
+                        Check(session.Engine.Snapshot.Timer is {IsRunning:true,DurationSeconds:123}&&compact.IsTimeOnly&&compact.Bounds==timeOnlyBounds,"Ctrl+Space starts a ready timer without expanding time-only view");
+                        session.Engine.Pause();await Until(()=>Task.FromResult(!compact.IsTimeOnly));
+                        Check(true,"Keeping time-only for Ctrl+Space does not change later ordinary pause behavior");
                         Check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.Count==0,"Clock checks stay disconnected and never submit a reflection");
                     } catch(Exception error){failure=error;}
                     finally {await app.CloseMainAsync();}

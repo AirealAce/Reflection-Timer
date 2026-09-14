@@ -16,7 +16,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly List<PreviewWindow> windows = [];
     private readonly System.Windows.Forms.Timer pulse = new() { Interval = 1000 };
     private PreviewWindow? active;
-    private bool closing, tickFailed;
+    private bool closing, tickFailed, keepTimeOnly;
     private bool? publishedAppViewVisible;
     private long lastSync;
     private readonly NotifyIcon tray;
@@ -39,7 +39,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
-        session.Engine.Changed += () => {ApplyTheme();Broadcast(new { type = "state", state = session.View() });};
+        session.Engine.Changed += () => {ApplyTheme();Broadcast(new { type = "state", state = session.View(), keepTimeOnly });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
@@ -56,7 +56,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(2, ()=>{compactPresses.Reset();var compact=windows.FirstOrDefault(w=>w.View=="compact");if(compact is null||!compact.Visible)Open("compact");else if(compact.IsTimeOnly)ToggleCompactVisibility();else compact.Post(new{type="shrinkCompact"});}),
             Shortcut(3, ()=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
             Shortcut(4, ()=>{compactPresses.Reset();ReflectionShortcut.Invoke(windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed),OpenPendingOrCheckIn);}),
-            Shortcut(5, ()=>{compactPresses.Reset();var result=Session.ToggleTimerFromShortcut();Announce(result.Message);if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);})
+            Shortcut(5, ToggleTimerFromGlobalShortcut)
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(!startInTray)MainForm.Show(); ApplyDisplayPreferences();
     }
@@ -78,6 +78,18 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         if(Session.ReflectionForShortcut() is {} id)Open("reflection",id);
         else Announce("No pending reflection. Start a timer before making a check-in.");
+    }
+    private void ToggleTimerFromGlobalShortcut()
+    {
+        compactPresses.Reset();
+        // Carry the shortcut's view preference with its state updates so a
+        // pause cannot briefly expand/reposition a time-only viewer.
+        keepTimeOnly=true;
+        try {
+            var result=Session.ToggleTimerFromShortcut();Announce(result.Message);
+            if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
+        }
+        finally {keepTimeOnly=false;}
     }
     internal void SetStartup(bool enabled)
     {

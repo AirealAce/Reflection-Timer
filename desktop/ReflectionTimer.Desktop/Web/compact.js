@@ -29,11 +29,11 @@ function focusDuration(){const id=['hours','minutes','seconds'].find(id=>Number(
 function expand(){revealed=true;mode(false);focusDuration();}
 function shrink(){revealed=false;mode(true);$('read-time').focus();}
 function snapshot(clock,speak=false){try{clock=displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),dirty);}catch{}const text=`${clock.text} ${clock.status==='Finished'?'set':'remaining'}. ${clock.status}.`;setText($('time-snapshot'),`Time checked: ${text}`);if(speak)announce(text);}
-function render(next){const previous=state;state=next;document.documentElement.dataset.theme=String(state.theme??0);const running=state.clock.status==='Running';
+function render(next,keepTimeOnly=false){const previous=state;state=next;document.documentElement.dataset.theme=String(state.theme??0);const running=state.clock.status==='Running';
   if(!previous&&state.durationDraft)sharedDuration(state.durationDraft);
   else if(!previous||(!dirty&&state.timer.durationSeconds!==previous.timer.durationSeconds))fill(state.timer.durationSeconds);
   if(!previous||previous.clock.status!==state.clock.status)snapshot(state.clock);
-  if(running!==lastRunning||lastDeadline!==state.timer.endTime){revealed=false;mode(running);}lastRunning=running;lastDeadline=state.timer.endTime;
+  if(running!==lastRunning||lastDeadline!==state.timer.endTime){revealed=false;if(running||!tiny||!keepTimeOnly)mode(running);}lastRunning=running;lastDeadline=state.timer.endTime;
   if(!repeatPending)setRepeat(state.timer.autoRestart);['hours','minutes','seconds'].forEach(id=>$(id).readOnly=running);
   const action=running?'Pause':state.clock.status==='Paused'&&!dirty?'Resume':'Start';$('toggle').setAttribute('aria-label',`${action} timer`);$('toggle').title=`${action} timer`;setText($('toggle').firstElementChild,running?'Ⅱ':'▶');
   $('end').setAttribute('aria-disabled',String(!running));$('reset').setAttribute('aria-disabled',String(!dirty&&state.clock.status==='Ready'));
@@ -44,7 +44,7 @@ function render(next){const previous=state;state=next;document.documentElement.d
 bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve();}
   else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();send('interfaceReady').catch(e=>setText($('error'),e.message));}
   else if(m.type==='appViewVisibility')setAppVisibility(m.visible);
-  else if(m.type==='state')render(m.state);
+  else if(m.type==='state')render(m.state,m.keepTimeOnly===true);
   else if(m.type==='clock'){if(state?.clock.status===m.clock.status)renderDuration(m.clock);}
   else if(m.type==='timeRead')snapshot(m.clock,true);
   else if(m.type==='announcement')announce(m.message);
