@@ -16,7 +16,7 @@ module.exports=async function reflectionDismiss(context,initial,check){
     else await page.locator(target).focus();
   }
   const targets=['#reflection-text','#early-reason','#reflection-heading','#later','#skip-reflection','#reflection-prev','#reflection-next','#reflection-form button[type=submit]','background'];
-  for(const kind of ['early','natural','check-in'])for(const key of ['Control+Enter','Alt+Enter','Escape']){
+  for(const kind of ['early','natural','check-in'])for(const key of ['Control+Enter','Alt+s','Alt+Enter','Escape']){
     for(const target of key==='Control+Enter'?targets.filter(id=>kind!=='natural'||id!=='#early-reason'):kind==='early'?targets:['background']){
       const page=await open({kind});await focus(page,target);await page.keyboard.press(key);
       await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='skip'));
@@ -33,9 +33,9 @@ module.exports=async function reflectionDismiss(context,initial,check){
   }
   for(const options of [{reason:'Reason only'},{text:' \n ',reason:'\t'},{kind:'natural',reason:'Retained hidden reason'}]){
     const page=await open(options);await focus(page,'background');await page.keyboard.press('Control+Enter');
-    await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveOrSendReflection'));
+    await page.waitForFunction(()=>document.querySelector('#reflection-text').getAttribute('aria-invalid')==='true');
     const sent=await actions(page);
-    check(sent.length===1&&sent[0].action==='saveOrSendReflection'&&sent[0].data.reason===(options.reason||''),'Ctrl+Enter preserves nonempty or whitespace-only fields and a hidden retained reason');await page.close();
+    check(sent.length===0&&await page.locator('#early-reason').inputValue()===(options.reason||''),'Ctrl+Enter preserves nonempty or whitespace-only fields and a hidden retained reason');await page.close();
   }
   for(const target of targets){
     const page=await open();
@@ -64,7 +64,7 @@ module.exports=async function reflectionDismiss(context,initial,check){
   check((await actions(reasonOnly)).length===0&&await reasonOnly.locator('#early-reason').inputValue()==='Keep this reason','Reason-only Alt+Enter retains the existing required-response validation and never skips the reason');
   await reasonOnly.close();
 
-  for(const key of ['Control+Enter','Alt+Enter','Escape']){
+  for(const key of ['Control+Enter','Alt+s','Alt+Enter','Escape']){
     const page=await open();
     await page.evaluate(()=>{
       const normal=window.chrome.webview.postMessage;

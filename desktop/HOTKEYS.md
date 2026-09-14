@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.31. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.32. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -17,9 +17,9 @@ All shortcuts require Reflection Timer to be running, including in the system tr
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
 | Ctrl+Alt+T | If the main window is focused, hide it exactly like its X button. Otherwise bring it forward, preserving the selected tab; on Timer, select the first positive duration field. The timer and compact view continue unchanged. |
 | Ctrl+Alt+backtick (`) | Start the specified timer, resume a paused timer, or end a running session early and show its reflection. Auto-start and its cutoff still apply. |
-| Ctrl+Alt+/ | Cycle compact controls → time-only → hidden → controls. The countdown continues. |
+| Ctrl+Alt+, | Cycle compact controls → time-only → hidden → controls. The countdown continues. |
 | Ctrl+Alt+. | Select the compact duration. Press twice within 0.8 seconds to select it in the full Timer tab. |
-| Ctrl+Alt+, | Bring an existing reflection forward and focus its first text box. In the focused reflection, focus the first box if neither is focused; if either text box is focused, Save the draft and close. With no open window, reopen the latest pending reflection or create a check-in for a running/paused session. Never opens App. |
+| Ctrl+Alt+/ | Bring an existing reflection forward and focus its first text box. In the focused reflection, focus the first box if neither is focused; if either text box is focused, Save the draft and close. With no open window, reopen the latest pending reflection or create a check-in for a running/paused session. Never opens App. |
 
 Duration focus chooses the first value above zero from the left, or Hours if all are zero. Running-session duration fields are read-only; pause to edit. Period double-press pairing resets after a different app shortcut or more than 0.8 seconds.
 
@@ -33,18 +33,18 @@ Space or Ctrl+Enter performs that same timer action from anywhere in the focused
 
 In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either control switches to Time-only and focuses the clock. From Time-only, either hides the floating viewer. This works while ready, running, paused, or finished and does not change the timer or other windows. Holding Escape performs only one step.
 
-Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+comma still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
+Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+slash still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
 
-In a reflection window, Ctrl+Enter saves the draft locally and closes while that reflection's own session is running or paused. Once that session has ended, it sends the response. It never ends a session early or affects a newer timer. Alt+Enter and Save & send retain their check-in behavior without ending the timer. Actual time and any existing early-end classification are retained when a completed reflection is sent.
+In a reflection window, Ctrl+Enter or Alt+S sends the response and ends that reflection's own session early if it is still running or paused. Sending an older or completed reflection never stops a newer timer. Actual elapsed time, auto-start, and its cutoff are respected; at or after the deadline, the session is recorded as a normal completion. Ctrl+S saves the draft locally and closes, including empty or partially written drafts. Alt+Enter and Save & send retain their check-in behavior without ending the timer.
 
-Both shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter and Alt+Enter skip if both fields are completely empty, with success audio, whether the session is running, paused, or ended. Sending a completed reflection requires response text. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+comma from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
+These shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter, Alt+S, and Alt+Enter skip if both fields are completely empty, with success audio, whether the session is running, paused, or ended. Sending requires response text; a reason-only response remains editable for completion or Ctrl+S. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+slash from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
 
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.1.31 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.1.32 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.31. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.32. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

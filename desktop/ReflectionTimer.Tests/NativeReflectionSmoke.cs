@@ -138,17 +138,17 @@ static class NativeReflectionSmoke
         session.Engine.SetPreferences(true,0);advance(7);
         app.Open("reflection",second);await UntilAsync(async()=>window.PromptId==second&&window.Visible&&(await Read(window)).GetProperty("draft").GetString()=="Current response");
         var browser=Browser(window);
-        await Script(window,"document.querySelector('#early-reason').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Script(window,"document.querySelector('#early-reason').focus();document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}))");
         await Until(()=>!window.ReflectionOpen&&!window.Visible);
-        check(session.Engine.Snapshot.Outbox.All(o=>o.Id!=second)&&session.Engine.Snapshot.Prompts.Single(p=>p.Id==second) is {IsCheckIn:true,Draft:"Current response",EarlyEndReason:"Reason for stopping"},"Native Ctrl+Enter saves both active-session fields without submitting them");
-        check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId==timer.SessionId,"Native Ctrl+Enter leaves the same session and auto-start running");
+        check(session.Engine.Snapshot.Outbox.All(o=>o.Id!=second)&&session.Engine.Snapshot.Prompts.Single(p=>p.Id==second) is {IsCheckIn:true,Draft:"Current response",EarlyEndReason:"Reason for stopping"},"Native Ctrl+S saves both active-session fields without submitting them");
+        check(session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.AutoRestart&&session.Engine.Snapshot.Timer.SessionId==timer.SessionId,"Native Ctrl+S leaves the same session and auto-start running");
         await Task.Delay(1100);
         check(!window.Visible&&!window.ReflectionOpen&&session.Engine.Snapshot.Prompts.Count==1&&ReferenceEquals(browser,Browser(window)),"A timer tick after Save cannot reopen the active draft");
         session.Engine.Pause();var paused=session.Engine.Snapshot.Timer;
         app.Open("reflection",second);await Until(()=>window.Visible&&window.ReflectionOpen);
-        await Script(window,"document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Script(window,"document.dispatchEvent(new KeyboardEvent('keydown',{key:'s',ctrlKey:true,bubbles:true,cancelable:true}))");
         await Until(()=>!window.ReflectionOpen&&!window.Visible);
-        check(session.Engine.Snapshot.Timer==paused&&session.Engine.Snapshot.Outbox.All(o=>o.Id!=second),"Native Ctrl+Enter saves a paused session without sending or resuming");
+        check(session.Engine.Snapshot.Timer==paused&&session.Engine.Snapshot.Outbox.All(o=>o.Id!=second),"Native Ctrl+S saves a paused session without sending or resuming");
         session.Engine.Resume();advance(40);await Until(()=>window.Visible&&window.ReflectionOpen);
         check(window.PromptId==second&&(await Read(window)).GetProperty("draft").GetString()!.StartsWith("Current response"),"Natural completion reopens the same saved response");
         var nextSession=session.Engine.Snapshot.Timer.SessionId;
@@ -178,6 +178,19 @@ static class NativeReflectionSmoke
             await Until(()=>!window.ReflectionOpen&&!window.Visible);
             check(session.Engine.Snapshot.Prompts.All(p=>p.Id!=emptyPrompt)&&session.Engine.Snapshot.Outbox.Count==outboxCount
                 &&session.Engine.Snapshot.Timer==beforeTimer&&skipped==beforeSkips+1,"Native empty Ctrl+Enter skips once from a button without sending or changing the timer: "+kind);
+        }
+        foreach(var useAlt in new[]{false,true})foreach(var pause in new[]{false,true}){
+            session.Engine.Start(60,false,0,lowTime:new(){Enabled=false});advance(7);
+            if(pause)session.Engine.Pause();
+            var ending=session.Engine.CheckIn();session.Engine.SaveDraft(ending,"Shortcut response","Shortcut reason");
+            var endingSession=session.Engine.Snapshot.Timer.SessionId;
+            app.Open("reflection",ending);await UntilAsync(async()=>window.PromptId==ending&&window.Visible&&(await Read(window)).GetProperty("draft").GetString()=="Shortcut response");
+            var chord=useAlt?"key:'s',altKey:true":"key:'Enter',ctrlKey:true";
+            await Script(window,"document.querySelector('#reflection-next').focus();document.dispatchEvent(new KeyboardEvent('keydown',{"+chord+",bubbles:true,cancelable:true}))");
+            await Until(()=>!window.ReflectionOpen&&!window.Visible);
+            check(session.Engine.Snapshot.Outbox.Single(o=>o.Id==ending) is {IsCheckIn:false,EndedEarly:true,ActualDurationSeconds:7,Message:"Shortcut response",EarlyEndReason:"Shortcut reason"}
+                &&!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.SessionId==endingSession,
+                "Native send shortcut ends its own session once with actual elapsed time: Alt+S="+useAlt+", paused="+pause);
         }
         check(session.Engine.Snapshot.Connection.WebAppUrl==""&&session.Engine.Snapshot.Outbox.All(o=>o.LocalOnly)&&session.Engine.Snapshot.Timer.Volume==0,"Native shortcut smoke remains muted, isolated, and disconnected from Sheets");
     }

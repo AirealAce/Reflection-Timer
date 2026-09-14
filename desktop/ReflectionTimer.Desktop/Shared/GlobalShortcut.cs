@@ -18,11 +18,11 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const int EndEarlyId = 0x5255;
     internal const uint EndEarlyKey = 0xC0; // VK_OEM_3: backtick/tilde on a US keyboard.
     internal const int CompactId = 0x5256;
-    internal const uint CompactKey = 0xBF; // VK_OEM_2: slash/question mark on a US keyboard.
+    internal const uint CompactKey = 0xBC; // VK_OEM_COMMA: comma on a US keyboard.
     internal const int CompactFocusId = 0x5257;
     internal const uint CompactFocusKey = 0xBE; // VK_OEM_PERIOD: period on a US keyboard.
     internal const int ReflectionFocusId = 0x5258;
-    internal const uint ReflectionFocusKey = 0xBC; // VK_OEM_COMMA: comma on a US keyboard.
+    internal const uint ReflectionFocusKey = 0xBF; // VK_OEM_2: slash/question mark on a US keyboard.
     internal const int TimerToggleId = 0x5259;
     internal const int TimerToggleAltId = 0x525A;
     internal const uint TimerToggleKey = 0x20; // VK_SPACE

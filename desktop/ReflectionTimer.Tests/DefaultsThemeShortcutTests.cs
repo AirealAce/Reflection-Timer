@@ -76,7 +76,7 @@ static class DefaultsThemeShortcutTests
                 backend.Blocked.Add(GlobalShortcut.TimerToggleId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleAltId);
                 using var keys=new PreviewShortcuts(Enumerable.Range(0,7).Select(i=>(Action)(()=>calls[i]++)).ToArray(),backend:backend);
-                check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBF,0xBE,0xBC})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five original global chords retain Ctrl+Alt and no key-repeat");
+                check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBC,0xBE,0xBF})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five global chords use the swapped comma/slash mappings with Ctrl+Alt and no key-repeat");
                 check(backend.Requests.Count==7&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
                 check(backend.Requests[6]==(0x20u,0x4003u),"The alias registers Ctrl+Alt+Space with held-key repeat suppressed");
                 var states=JsonSerializer.SerializeToElement(keys.Status,PreviewSession.Json);
