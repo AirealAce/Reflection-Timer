@@ -1,6 +1,6 @@
 {
   "name": "reflection-timer-desktop",
-  "version": "4.1.36",
+  "version": "4.1.37",
   "private": true,
   "description": "Accessible Windows focus timer with Google Sheets reflection logging.",
   "scripts": {

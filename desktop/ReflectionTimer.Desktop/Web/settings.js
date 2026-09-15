@@ -33,7 +33,6 @@ export function settingsUI({send, run, bind, view, announce}) {
       setValue($('reflectionSeparator'),settings.reflectionSeparator??3);
       $('show-compact').checked=settings.showFloatingTimer; $('logging').checked=settings.loggingEnabled;$('start-at-login').checked=!!settings.startAtLogin;
       ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections'].forEach(id=>$(id).checked=settings[id]!==false);
-      $('default-threshold').value=settings.threshold;
     } else if(form==='volume-form'&&!dirty.has('settings-volume-form')) setMasterVolume(settings.volume);
     else if(form==='connection-form') {
       populateConnection(settings); $('connection-token').value=''; $('connection-enabled').checked=settings.connected;$('extension-off').checked=!!settings.extensionDisabledConfirmed;
@@ -47,7 +46,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     });});
   }
   const appearance=()=>({theme:Number($('theme').value),placement:Number($('placement').value),popup:Number($('popup').value),
-    overlap:Number($('overlap').value),reflectionSeparator:Number($('reflectionSeparator').value),threshold:Number($('default-threshold').value),logging:$('logging').checked,showCompact:$('show-compact').checked,startAtLogin:$('start-at-login').checked,
+    overlap:Number($('overlap').value),reflectionSeparator:Number($('reflectionSeparator').value),logging:$('logging').checked,showCompact:$('show-compact').checked,startAtLogin:$('start-at-login').checked,
     compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,quiet:true});
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
@@ -55,7 +54,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   async function saveSettings(){
     if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
     if(!$('appearance-form').reportValidity())return;
-    await displaySaving;await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
+    await displaySaving;await lowTime.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
     if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
     if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
     // One success sound after every part of this explicit save has succeeded.
@@ -86,7 +85,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     run(()=>volumeSaving);
   });
   $('settings-volume-form').addEventListener('submit',event=>event.preventDefault());
-  $('default-threshold').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey){event.preventDefault();$('settings-volume').focus();}});
+  $('default-threshold').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.isComposing){event.preventDefault();$('settings-low-time').focus();}});
   $('sheet-mode').addEventListener('change',()=>{$('sheet-name').disabled=$('sheet-mode').value!=='fixed';});
   $('connection-enabled').closest('label').hidden=true;
   bind('pause-delivery',async()=>{await send('connectionPause');$('connection-enabled').checked=false;$('extension-off').checked=false;});

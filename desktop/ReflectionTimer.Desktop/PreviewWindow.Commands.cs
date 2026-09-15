@@ -115,10 +115,9 @@ internal sealed partial class PreviewWindow
             case "saveAppearance":
                 var theme=(AppColorTheme)ReadInt(data,"theme",0,3);var placement=(FloatingTimerPlacement)ReadInt(data,"placement",0,7);
                 var popup=(ReflectionPopupPosition)ReadInt(data,"popup",0,4);var overlap=(ScheduleOverlapPolicy)ReadInt(data,"overlap",0,2);
-                var threshold=ReadInt(data,"threshold",1,TimerEngine.MaxDuration);
                 app.SetStartup(ReadFlag(data,"startAtLogin"));
                 engine.SetTheme(theme); engine.SetFloatingTimerPlacement(placement); engine.SetPopupPosition(popup);
-                engine.SetScheduleOverlap(overlap); engine.SetLowTimeDefault(threshold);
+                engine.SetScheduleOverlap(overlap);
                 engine.SaveSettings(state.Connection,ReadFlag(data,"logging"),engine.Snapshot.StartAtLogin,state.ExtensionDisabledConfirmed);
                 engine.SetFloatingTimer(ReadFlag(data,"showCompact"));
                 engine.SetAlwaysOnTop(ReadFlag(data,"compactAlwaysOnTop"),ReadFlag(data,"timeOnlyAlwaysOnTop"),ReadFlag(data,"promptAlwaysOnTop"));

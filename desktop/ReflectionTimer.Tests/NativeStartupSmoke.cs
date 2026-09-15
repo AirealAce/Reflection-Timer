@@ -51,6 +51,10 @@ static class NativeStartupSmoke
                             Check(JsonSerializer.Serialize(new EncryptedStore(directory).Load(),DataJson.Options)==expected,"cold startup does not rewrite saved preferences with UI defaults");
                             main.Hide();app.Open("main");
                             Check(JsonSerializer.Serialize(session.Engine.Snapshot,DataJson.Options)==expected,"hiding and reopening retains the complete saved state");
+                            if(theme==AppColorTheme.Dark&&!tray){
+                                await ThresholdControls(app,main,Check);
+                                expected=JsonSerializer.Serialize(session.Engine.Snapshot,DataJson.Options);
+                            }
                         } catch(Exception error){failure=error;}
                         finally {await app.CloseMainAsync();}
                     });
@@ -66,6 +70,27 @@ static class NativeStartupSmoke
         Console.WriteLine($"{passed} native startup checks passed.");
     }
     private static List<PreviewWindow> Windows(PreviewApplication app)=>(List<PreviewWindow>)typeof(PreviewApplication).GetField("windows",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
+    private static async Task ThresholdControls(PreviewApplication app,PreviewWindow main,Action<bool,string> check)
+    {
+        var engine=app.Session.Engine;
+        engine.Start(180,false,0);
+        engine.SaveSchedule(null,DateTimeOffset.Now.AddDays(1),120,false,0);
+        var schedule=engine.Snapshot.Schedules.Single();var deadline=engine.Snapshot.Timer.EndTime;
+        Task<string> Script(string script)=>Browser(main).CoreWebView2.ExecuteScriptAsync(script);
+        async Task Until(Func<Task<bool>> ready){using var limit=new CancellationTokenSource(TimeSpan.FromSeconds(15));while(!await ready())await Task.Delay(25,limit.Token);}
+        await Script("document.querySelector('#tab-settings').click();document.querySelector('#settings-low-time').checked=false;document.querySelector('#settings-low-time').dispatchEvent(new Event('change',{bubbles:true}))");
+        await Until(()=>Task.FromResult(!engine.Snapshot.Timer.LowTime.Enabled));
+        check(engine.Snapshot.Timer.EndTime==deadline&&engine.Snapshot.Audio!.LowTimeThresholdSeconds==23&&engine.Snapshot.Schedules.Single()==schedule,
+            "Settings Use threshold turns off the current warning without changing its deadline or saved schedule");
+        await Script("document.querySelector('#settings-low-time').checked=true;document.querySelector('#settings-low-time').dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('#default-threshold').value='37';document.querySelector('#default-threshold').dispatchEvent(new Event('input',{bubbles:true}));document.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',ctrlKey:true,bubbles:true,cancelable:true}))");
+        await Until(async()=>JsonDocument.Parse(await Script("document.querySelector('#status').textContent")).RootElement.GetString()=="Settings saved.");
+        check(engine.Snapshot.Timer.LowTime is {Enabled:true,ThresholdSeconds:37}&&engine.Snapshot.Timer.EndTime==deadline,
+            "Native Ctrl+Enter saves the last typed Settings threshold as the Timer preference");
+        check(engine.Snapshot.Audio!.LowTimeThresholdSeconds==23&&engine.Snapshot.Schedules.Single()==schedule,
+            "Save settings does not change the legacy default used by an existing inherited schedule");
+        check(JsonDocument.Parse(await Script("document.querySelector('#threshold').value==='37'&&!document.querySelector('#threshold').readOnly&&document.querySelector('#low-time').checked")).RootElement.GetBoolean(),
+            "Native Settings and Timer controls show the same editable enabled threshold");
+    }
     private static WebView2 Browser(PreviewWindow window)=>(WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!;
     private static Task Ready(PreviewWindow window)=>((TaskCompletionSource)typeof(PreviewWindow).GetField("interfaceReady",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!).Task;
 }
