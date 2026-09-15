@@ -1,6 +1,8 @@
-# Reflection Timer 4.1.35
+# Reflection Timer 4.1.36
 
 App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (hide the floating viewer, or show full Compact controls when hidden), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
+
+In Timer and Scheduler, “Use default threshold” keeps its seconds field focusable and read-only while following Settings → Audio. Uncheck it to edit a custom value. Rechecking it immediately restores the current default; later default changes update inherited values without replacing unfinished custom edits. Screen-reader help explains the choice. Optional auto-start cutoffs and audio fade durations remain disabled only while their corresponding feature is off.
 
 Ending within a grace period counts as a normal completion: use the ending session's effective low-time threshold when Low on time audio is checked (its override, or the current Settings default), otherwise 15 seconds. Cap that period at 10% of the allotted duration. The exact boundary is included, and paused time does not advance it. This classification applies to all completion paths, preserves actual elapsed time, and remains attached to the completed reflection when settings or the next session change. A normal completion omits the early-end reason from delivery.
 
