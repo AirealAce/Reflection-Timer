@@ -1,4 +1,4 @@
-import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges} from './ui.js';
+import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
 
@@ -226,8 +226,8 @@ bridge?.addEventListener('message', event => {
     // Initial focus is deliberate; subsequent updates never repeat this.
     if(view==='reflection'){$('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;}
     else {const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
-    if(view==='reflection')run(()=>send('reflectionReady',{id:promptId}));
-    else run(async()=>{await settings.load();await send('interfaceReady');});
+    if(view==='reflection')run(async()=>{restoreReloadView();await send('reflectionReady',{id:promptId});});
+    else run(async()=>{await settings.load();restoreReloadView();await send('interfaceReady');});
   } else if(message.type==='showReflection'&&view==='reflection') {
     // The host flushed and froze both fields. Rebind the same document and
     // controls to a saved reflection, keeping WebView2 alive across Prev/Next.
@@ -261,6 +261,7 @@ bridge?.addEventListener('message', event => {
   } else settings.message(message);
 });
 const settings=settingsUI({send,run,bind,view,announce});
+const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>state&&(view!=='reflection'||(loadedPrompt&&!queued&&!reflectionBusy&&!savingAndClosing)),selectTab:layout.select});
 bind('delivery-confirm',async()=>{
   const decision=deliveryDecision;await send(decision.action,{id:decision.id,confirmed:true});$('delivery-dialog').close();
   $('retry-selected').focus();

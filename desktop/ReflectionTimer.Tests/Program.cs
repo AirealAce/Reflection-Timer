@@ -6,6 +6,7 @@ using ReflectionTimer.Desktop;
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
+if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 
 var passed = 0;
@@ -14,6 +15,7 @@ JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, Previ
 var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
 TimerToggleShortcutTests.Run(Check);
+ResetShortcutTests.Run(Check);
 ClockDisplayTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);

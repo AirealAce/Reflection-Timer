@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.37</p>
+    <p class="eyebrow">Reflection Timer 4.1.38</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -86,6 +86,7 @@
         <label>Compact timer position<select id="placement"><option value="0">Remember dragged position</option><option value="1">Center</option><option value="2">Top left</option><option value="3">Top right</option><option value="4" selected>Bottom left</option><option value="5">Bottom right</option><option value="6">Top center</option><option value="7">Bottom center</option></select></label>
         <p>Dragging saves a custom position, including across app and PC restarts. Presets use that screen; if it is disconnected, the timer stays on an available screen. Duration fields are shared with the main timer and editable while stopped or paused.</p><h3>Keyboard shortcuts</h3><div id="shortcut-notices"></div><p><kbd>Ctrl+Tab</kbd> switches to the next App tab. <kbd>Ctrl+Shift+Tab</kbd> switches to the previous tab. Both wrap around and work from inputs; an open dialog keeps focus.</p>
         <p><kbd>Space</kbd> or <kbd>Ctrl+Enter</kbd> starts, resumes, or pauses the timer anywhere in Compact or Time-only view, like <kbd>Enter</kbd> in a duration field. In Settings, <kbd>Ctrl+Enter</kbd> saves settings. In a reflection prompt, <kbd>Ctrl+Enter</kbd> or <kbd>Alt+S</kbd> sends the response and ends its own session early if it is still running or paused. Both skip when both fields are completely empty. <kbd>Ctrl+S</kbd> saves the draft locally and closes. <kbd>Alt+Enter</kbd> sends a check-in without ending the timer.</p>
+        <p><kbd>Ctrl+R</kbd> resets the timer to the duration inputs and refreshes the focused view, including session-end prompts. The timer becomes ready to start. Your App tab, Compact or Time-only mode, and reflection drafts are retained. Save unfinished settings before refreshing.</p>
         <label>Reflection popup position<select id="popup"><option value="0">Center</option><option value="1">Top left</option><option value="2">Top right</option><option value="3">Bottom left</option><option value="4" selected>Bottom right</option></select></label><p>Saves immediately for regular, scheduled, and test reflections. Uses the screen containing your mouse pointer when the popup opens, leaving space for the taskbar. An already-open reflection stays where it is.</p>
 
 
@@ -162,6 +163,6 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.37</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.38</span></footer>
 </body>
 </html>

@@ -492,6 +492,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./compact-escape.cjs')(context,initial,check);
     await require('./app-escape.cjs')(context,initial,settings,check);
     await require('./select-announcements.cjs')(context,initial,settings,check);
+    await require('./reset-reload.cjs')(context,initial,settings,check);
     check(failures.length===0,'No browser JavaScript errors');
     console.log(`${count} browser checks passed.`);
   } finally { await browser.close(); }

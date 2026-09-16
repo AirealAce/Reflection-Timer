@@ -1,4 +1,4 @@
-# Reflection Timer 4.1.37
+# Reflection Timer 4.1.38
 
 App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (hide the floating viewer, or show full Compact controls when hidden), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
 

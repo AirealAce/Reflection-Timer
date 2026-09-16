@@ -73,13 +73,52 @@ internal sealed partial class PreviewWindow
     private WebView2 CreateBrowser()
     {
         var control=new WebView2 {Dock=DockStyle.Fill,AccessibleName=View=="main"?"Reflection Timer App view":View=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt"};
+        var resetPressed=false;
         // Preserve the native accelerator workaround on replacement controls too.
         control.KeyDown+=(_,e)=>{
+            if(e.KeyCode==Keys.R&&e.Modifiers==Keys.Control){
+                // WebView handles Ctrl+R before DOM listeners. Defer browser
+                // work until its synchronous accelerator callback has returned.
+                e.Handled=true;
+                if(resetPressed)return;
+                resetPressed=true;
+                if(ready)BeginInvoke(()=>{if(!IsDisposed&&ReferenceEquals(browser,control))Post(new{type="resetAndReloadShortcut"});});
+                return;
+            }
             if(View!="main"||!ready||e.KeyCode!=Keys.Tab||(e.Modifiers!=Keys.Control&&e.Modifiers!=(Keys.Control|Keys.Shift)))return;
             var backward=e.Shift;e.Handled=true;e.SuppressKeyPress=true;
             BeginInvoke(()=>Post(new{type="cycleAppTab",backward}));
         };
+        control.KeyUp+=(_,e)=>{if(e.KeyCode is Keys.R or Keys.ControlKey)resetPressed=false;};
+        control.LostFocus+=(_,_)=>resetPressed=false;
         return control;
+    }
+    private bool resetAndReloadInProgress;
+    private async Task ResetAndReloadAsync(string requestId)
+    {
+        if(resetAndReloadInProgress)throw new InvalidOperationException("The timer is already being reset and refreshed.");
+        resetAndReloadInProgress=true;
+        var reloading=false;
+        try {
+            await app.WithPromptLock(async()=>{
+                if(!ready||recoveringInterface||handoffInProgress||requestingClose||(View=="reflection"&&!ReflectionOpen))
+                    throw new InvalidOperationException("Wait for this view to finish opening or saving before resetting the timer.");
+                // Finish the current draft before navigation destroys its DOM.
+                // The prompt lock also keeps Prev/Next and handoffs out of this gap.
+                await FlushDraftAsync(freeze:true);
+                var result=app.KeepingTimeOnly(app.Session.ResetTimerFromShortcut);
+                Reply(requestId);
+                recoveringInterface=true;ResetReadiness();reloading=true;
+                browser.CoreWebView2.Reload();
+                await interfaceReady.Task.WaitAsync(TimeSpan.FromSeconds(20));
+                recoveringInterface=false;
+                Post(new{type="announcement",message=result.Message+" Page refreshed."});
+            });
+        } catch {
+            if(reloading)ShowFailure("The timer was reset, but this page could not be refreshed. Close and reopen this view. Saved drafts are retained.");
+            else if(View=="reflection")Post(new{type="resumeReflection"});
+            throw;
+        } finally {resetAndReloadInProgress=false;}
     }
     private bool IsCurrent(object? core)=>!IsDisposed&&!allowClose&&!browser.IsDisposed&&ReferenceEquals(browser.CoreWebView2,core);
     internal void MarkInterfaceUnavailable()

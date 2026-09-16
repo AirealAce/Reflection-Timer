@@ -1,12 +1,14 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.37. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.1.38. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
 In App view, Ctrl+Tab selects the next tab and Ctrl+Shift+Tab selects the previous tab. The order is Timer, Scheduler, Outbox, Settings, Diagnostics, then back to Timer. These shortcuts work from inputs, preserve unfinished edits, and focus the selected tab for screen readers. An open dialog retains focus. Ordinary Tab and Shift+Tab continue to move between controls.
 
 Escape hides the focused App view, like Ctrl+Alt+T or its X button. It works on every tab, including from inputs, and retains the selected tab and unfinished edits. The timer and other viewers continue unchanged. If an App dialog is open, Escape dismisses that dialog first.
+
+Ctrl+R resets the timer to the shared duration inputs, like Reset, and refreshes the focused App, Compact, Time-only, or session-end page. It works while running, paused, or stopped and leaves the timer ready to start. The current App tab and floating view mode are retained. Reflection text is saved locally before refreshing and is not sent. Invalid duration or a failed draft save leaves the page open for correction. An open dialog keeps focus. Save unfinished settings before refreshing.
 
 ## Current mappings
 
@@ -44,9 +46,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.1.37 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.1.38 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.37. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.1.38. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

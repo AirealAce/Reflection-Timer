@@ -1,4 +1,4 @@
-import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges} from './ui.js';
+import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload} from './ui.js';
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
@@ -42,7 +42,7 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   if(tiny&&['hours','minutes','seconds','repeat','app','reset','end'].includes(document.activeElement.id))$('read-time').focus();
 }
 bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve();}
-  else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();send('interfaceReady').catch(e=>setText($('error'),e.message));}
+  else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>setText($('error'),e.message));}
   else if(m.type==='appViewVisibility')setAppVisibility(m.visible);
   else if(m.type==='state')render(m.state,m.keepTimeOnly===true);
   else if(m.type==='clock'){if(state?.clock.status===m.clock.status)renderDuration(m.clock);}
@@ -53,6 +53,7 @@ bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply
   else if(m.type==='shrinkCompact')shrink();
   else if(m.type==='measureCompact')resize();
 });
+const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>Boolean(state)});
 ['hours','minutes','seconds'].forEach(id=>{
   const changed=()=>{const parts=['hours','minutes','seconds'].map(id=>$(id).value);sharedDuration(parts);run(()=>send('durationDraft',{parts}));$('reset').setAttribute('aria-disabled','false');};
   $(id).addEventListener('input',changed);normalizeEmptyDuration($(id),changed);

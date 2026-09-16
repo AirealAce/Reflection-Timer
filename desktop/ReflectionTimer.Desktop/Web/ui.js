@@ -1,3 +1,35 @@
+// All viewer documents share the same shortcut, including WebView's native
+// accelerator route. Store navigation only; reflection text stays encrypted.
+export function bindResetAndReload({bridge,send,run,canReset,selectTab=()=>{}}) {
+  const key='timer-reset-reload-view';
+  let pending=false,restore;
+  try{restore=JSON.parse(sessionStorage.getItem(key));sessionStorage.removeItem(key);}catch{}
+  function invoke(){
+    if(pending||!canReset()||document.querySelector('dialog[open]'))return;
+    pending=true;
+    run(async()=>{
+      try{
+        const active=document.activeElement;
+        sessionStorage.setItem(key,JSON.stringify({tab:document.body.dataset.tab,scroll:document.getElementById('main')?.scrollTop||0,focus:active?.id}));
+        await send('resetAndReload');
+      }catch(error){pending=false;sessionStorage.removeItem(key);throw error;}
+    });
+  }
+  document.addEventListener('keydown',event=>{
+    if(event.key.toLowerCase()!=='r'||!event.ctrlKey||event.altKey||event.shiftKey||event.metaKey||event.isComposing)return;
+    event.preventDefault();event.stopPropagation();
+    if(!event.repeat)invoke();
+  },true);
+  bridge?.addEventListener('message',event=>{if(event.data.type==='resetAndReloadShortcut')invoke();});
+  return ()=>{
+    if(!restore)return;
+    selectTab(restore.tab);
+    const active=document.getElementById(restore.focus);
+    if(active&&!active.closest('[hidden]')&&active.getClientRects().length)active.focus({preventScroll:true});
+    const main=document.getElementById('main');if(main)main.scrollTop=restore.scroll;
+    restore=undefined;
+  };
+}
 export function setText(element, value) {
   const text = String(value ?? '');
   if (element.textContent !== text) element.textContent = text;

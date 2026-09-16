@@ -1,4 +1,4 @@
-# Reflection Timer desktop 4.1.37
+# Reflection Timer desktop 4.1.38
 
 This is the primary accessible desktop app. Build `ReflectionTimer.Desktop/ReflectionTimer.Desktop.csproj`; run `ReflectionTimer.Tests` and its `ui.cjs` browser checks.
 

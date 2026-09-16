@@ -217,14 +217,20 @@ public sealed class PreviewSession
         // Pause before parsing edited fields, just like the Compact form. This
         // also preserves normal completion if the key arrives at the deadline.
         if(timer.IsRunning)return Execute("toggle",JsonSerializer.SerializeToElement(new{}));
-        var duration=timer.DurationSeconds;
+        var duration=ShortcutDuration();
+        return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=timer.AutoRestart,lowTime=timer.LowTime.Enabled},Json));
+    }
+    internal CommandResult ResetTimerFromShortcut()=>Execute("reset",JsonSerializer.SerializeToElement(new{seconds=ShortcutDuration()},Json));
+    private int ShortcutDuration()
+    {
+        var duration=Engine.Snapshot.Timer.DurationSeconds;
         if(durationDraft is {} parts){
             var parsed=parts.Select(p=>p.Trim().Length==0?0L:long.TryParse(p.Trim(),NumberStyles.None,CultureInfo.InvariantCulture,out var value)&&value<=TimerEngine.MaxDuration?value:throw new ArgumentException("Enter valid duration fields.")).ToArray();
             var total=parsed[0]*3600+parsed[1]*60+parsed[2];
             if(total<1||total>TimerEngine.MaxDuration)throw new ArgumentException("Enter a duration between one second and one year.");
             duration=(int)total;
         }
-        return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=timer.AutoRestart,lowTime=timer.LowTime.Enabled},Json));
+        return duration;
     }
     internal static long ParseLocalTime(string value)
     {
