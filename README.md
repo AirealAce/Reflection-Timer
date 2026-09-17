@@ -39,7 +39,7 @@ After a session ends, the clock and read-time feedback use the duration in the i
 
 Compact, Time-only, and reflection prompts each have an independent **always on top** setting, enabled by default. Reflection prompts stay out of Alt+Tab. Only one session-end prompt is shown at a time: a new prompt saves and queues the previous open response, including a blank response, marked **auto-sent**. An early-ended response retains both flags and its reason. An unsent check-in becomes the same session's completion prompt, keeping its saved text and editor; older sessions' check-ins remain separate. Failed local saves keep the old prompt open and the new prompt pending; offline delivery stays in Outbox.
 
-Existing Sheets receivers show `[auto-sent]` in the reflection text. The bundled receiver 2.8.0 puts `auto-sent` beside `ended early` in column E and keeps the original response in B, including an empty response. A full 5,000-character automatic response requires that receiver update; older deployments keep it safely in Outbox until updated. Receiver code changes are not deployed automatically.
+Older Sheets receivers show `[auto-sent]` in the reflection text. The bundled receiver 2.8.1 puts `auto-sent` beside any `ended early` or `Check-in` status in column E, without brackets. Column B keeps the original response, or shows `N/A` when an auto-sent response is blank. A full 5,000-character automatic response requires that receiver update; older deployments keep it safely in Outbox until updated. Receiver code changes are not deployed automatically.
 
 ## Development checks
 

@@ -11,7 +11,7 @@
  * the request works cleanly from a Manifest V3 service worker.
  */
 
-const APP_VERSION = '2.8.0';
+const APP_VERSION = '2.8.1';
 const DELIVERY_PROTOCOL = 'request-id-v1';
 const RECEIPT_PREFIX = 'RT_RECEIPT_';
 const ROWS_PER_BLOCK = 16;
@@ -449,7 +449,8 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   entry.getCell(1, 3).setNumberFormat(durationNumberFormat_(session.actualDurationSeconds));
   entry.getCell(1, 4).setNumberFormat(durationNumberFormat_(durationSeconds));
   const clockLabel = `${moment.hour % 12 || 12}:${String(moment.minute).padStart(2, '0')}`;
-  entry.setValues([[clockLabel, message.startsWith('=') ? "'" + message : message,
+  const response = session.autoSent && !message.trim() ? 'N/A' : message;
+  entry.setValues([[clockLabel, response.startsWith('=') ? "'" + response : response,
     session.actualDurationSeconds === null ? '' : session.actualDurationSeconds / 86400,
     durationSeconds === null ? '' : durationSeconds / 86400, [session.isCheckIn ? 'Check-in' : session.endedEarly ? 'ended early' : '', session.autoSent ? 'auto-sent' : ''].filter(Boolean).join(' · '),
     session.earlyEndReason.startsWith('=') ? "'" + session.earlyEndReason : session.earlyEndReason]])

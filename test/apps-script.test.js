@@ -398,7 +398,37 @@ test('auto-sent status combines with ended early and retains the response and re
 test('blank and full-length automatic responses are supported without losing text', () => {
   for(const text of ['', 'x'.repeat(5000)]){
     const h=createHarness(['test']);const p={...datedRequest,isTest:true,durationSeconds:900,actualDurationSeconds:900,autoSent:true,message:'[auto-sent]'+(text?'\n'+text:'')};
-    assert.equal(h.request(p).success,true);assert.equal(h.grids.get('test')[0][1],text);assert.equal(h.grids.get('test')[0][4],'auto-sent');
+    assert.equal(h.request(p).success,true);assert.equal(h.grids.get('test')[0][1],text||'N/A');assert.equal(h.grids.get('test')[0][4],'auto-sent');
+  }
+});
+
+test('blank automatic responses use N/A only in B and preserve other status flags', () => {
+  for (const message of ['', ' \n ', '[auto-sent]', ' [auto-sent]\n \t ']) {
+    for (const status of [{}, { endedEarly: true, earlyEndReason: 'Appointment' }, { isCheckIn: true }]) {
+      const h = createHarness(['test']);
+      const p = { ...datedRequest, isTest: true, durationSeconds: 900, actualDurationSeconds: 17,
+        autoSent: true, message, ...status, requestId: crypto.randomUUID(), deliveryProtocol: 'request-id-v1' };
+      assert.equal(h.request(p).success, true);
+      assert.equal(h.grids.get('test')[0][1], 'N/A');
+      assert.equal(h.grids.get('test')[0][4], status.endedEarly ? 'ended early · auto-sent' : status.isCheckIn ? 'Check-in · auto-sent' : 'auto-sent');
+      assert.equal(h.grids.get('test')[0][5], status.earlyEndReason || '');
+      const before = structuredClone(h.grids.get('test'));
+      assert.equal(h.request(p).duplicate, true);
+      assert.deepEqual(h.grids.get('test'), before);
+    }
+  }
+  const h = createHarness(['test']);
+  assert.equal(h.request({ ...datedRequest, isTest: true, message: ' \n ' }).success, false);
+  assert.equal(h.insertedCells.length, 0);
+});
+
+test('legacy auto-sent markers preserve real text and formula-like responses as plain text', () => {
+  for (const message of ['[auto-sent]\nA real response', '[auto-sent]\n=SUM(1,2)', '[auto-sent]']) {
+    const h = createHarness(['test']);
+    assert.equal(h.request({ ...datedRequest, isTest: true, message }).success, true);
+    const response = message.slice('[auto-sent]'.length).trim();
+    assert.equal(h.grids.get('test')[0][1], response.startsWith('=') ? "'" + response : response || 'N/A');
+    assert.equal(h.grids.get('test')[0][4], 'auto-sent');
   }
 });
 
