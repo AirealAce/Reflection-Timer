@@ -32,14 +32,15 @@ internal sealed class PreviewShortcuts : IDisposable
         (GlobalShortcut.CompactFocusKey, GlobalShortcut.CompactFocusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.ReflectionFocusKey, GlobalShortcut.ReflectionFocusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleModifiers),
-        (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleAltId, GlobalShortcut.Modifiers)
+        (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleAltId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.ModeToggleKey, GlobalShortcut.ModeToggleId, GlobalShortcut.Modifiers)
     ];
     private readonly GlobalShortcut?[] registrations = new GlobalShortcut?[Chords.Length];
-    private readonly Action[] actions;
+    private readonly Action<TimeSpan>[] actions;
     private readonly IHotKeyRegistration? backend;
     private readonly Action<int, bool>? statusChanged;
     private bool disposed;
-    internal PreviewShortcuts(Action[] actions, Action<int, bool>? statusChanged = null, IHotKeyRegistration? backend = null)
+    internal PreviewShortcuts(Action<TimeSpan>[] actions, Action<int, bool>? statusChanged = null, IHotKeyRegistration? backend = null)
     {
         if (actions.Length != Chords.Length) throw new ArgumentException("Provide each shortcut action.");
         this.actions = actions; this.statusChanged = statusChanged; this.backend = backend;
@@ -54,7 +55,7 @@ internal sealed class PreviewShortcuts : IDisposable
             if (registrations[i]?.IsRegistered == true) continue;
             registrations[i]?.Dispose(); registrations[i] = null;
             var index = i;
-            try { registrations[i] = new GlobalShortcut(()=>actions[index](), backend, Chords[i].Key, Chords[i].Id, Chords[i].Modifiers); }
+            try { registrations[i] = new GlobalShortcut(delay=>actions[index](delay), backend, Chords[i].Key, Chords[i].Id, Chords[i].Modifiers); }
             catch { /* A later retry can recover a temporarily unavailable registration. */ }
             var available = registrations[i]?.IsRegistered == true;
             changed |= available;
@@ -62,7 +63,7 @@ internal sealed class PreviewShortcuts : IDisposable
         }
         return changed;
     }
-    internal bool Dispatch(int message, int id) => !disposed && registrations.Any(shortcut => shortcut?.Dispatch(message, id) == true);
+    internal bool Dispatch(int message, int id, TimeSpan queueDelay = default) => !disposed && registrations.Any(shortcut => shortcut?.Dispatch(message, id, queueDelay) == true);
     public void Dispose()
     {
         if (disposed) return;

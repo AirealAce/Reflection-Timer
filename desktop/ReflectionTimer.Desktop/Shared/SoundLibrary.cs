@@ -10,7 +10,7 @@ public static class SoundLibrary
         ? Name(DefaultFor(kind)) : "Built-in " + (kind == SoundEvent.SessionEnd ? "session-end tone" : kind == SoundEvent.LowTime ? "low-time tone" : kind.ToString().ToLowerInvariant() + " tone");
     public static LibrarySound DefaultFor(SoundEvent kind) => kind switch {
         SoundEvent.Success => LibrarySound.LevelUp, SoundEvent.Failure => LibrarySound.OutOfHealth,
-        SoundEvent.LowTime => LibrarySound.TrainerBattle, _ => LibrarySound.SessionEnd
+        SoundEvent.LowTime or SoundEvent.TimeReached => LibrarySound.TrainerBattle, _ => LibrarySound.SessionEnd
     };
     public static string Name(LibrarySound track) => track switch {
         LibrarySound.SessionEnd => "Original extension sound", LibrarySound.ObtainedItem => "Obtained an Item",

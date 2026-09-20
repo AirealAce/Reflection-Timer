@@ -115,6 +115,8 @@ function createHarness(names = ['Template'], timezone = 'America/New_York', opti
             return this;
           },
           setValues(values) {
+            assert.equal(values.length, rowCount, 'values must match the target rows');
+            values.forEach(line => assert.equal(line.length, columnCount, 'values must match the target columns'));
             if (/^\d{1,2}:00 (AM|PM)$/.test(values[0]?.[0])) {
               assert.equal(formatsGrid[row - 1]?.[column - 1]?.numberFormat, '@',
                 'format hour labels as text before writing to prevent Sheets time coercion');
@@ -238,13 +240,13 @@ test('Apps Script prepends timestamp/activity pairs newest first', () => {
   };
   const first = harness.request({ ...base, message: 'First session' });
   const second = harness.request({ ...base, message: 'Second session' });
-  assert.equal(first.range, 'A1:F1');
-  assert.equal(second.range, 'A1:F1');
+  assert.equal(first.range, 'A1:G1');
+  assert.equal(second.range, 'A1:G1');
   assert.equal(harness.grid[0][1], 'Second session');
   assert.equal(harness.grid[1][1], 'First session');
 });
 
-test('Apps Script grows A:F past 16 entries without using other column pairs', () => {
+test('Apps Script grows A:G past 16 entries without using other column pairs', () => {
   const harness = createHarness();
   const base = {
     action: 'appendReflection',
@@ -257,7 +259,7 @@ test('Apps Script grows A:F past 16 entries without using other column pairs', (
   for (let index = 1; index <= 17; index += 1) {
     result = harness.request({ ...base, message: `Session ${index}` });
   }
-  assert.equal(result.range, 'A1:F1');
+  assert.equal(result.range, 'A1:G1');
   assert.equal(harness.grid[0][1], 'Session 17');
   assert.equal(harness.grid[16][1], 'Session 1');
   assert.equal(harness.grid[0][3] || '', '');
@@ -284,6 +286,67 @@ const datedRequest = {
   timezoneOffsetMinutes: 240
 };
 
+test('stopwatch entries advertise support and store active time without allotted time or early-ending status', () => {
+  const h=createHarness(['test']);
+  assert.equal(h.request({...datedRequest,action:'ping',isTest:true}).supportsStopwatch,true);
+  for(const seconds of [0,5,3607,31536000]){
+    const request={...datedRequest,isTest:true,sessionMode:'stopwatch',durationSeconds:null,actualDurationSeconds:seconds,requestId:crypto.randomUUID(),deliveryProtocol:'request-id-v1'};
+    assert.equal(h.request(request).success,true);
+    assert.deepEqual(h.grids.get('test')[0].slice(2,7),[seconds/86400,'','','','stop watch']);
+    assert.equal(h.request(request).success,true);
+    assert.equal(h.request({...request,sessionMode:'timer',durationSeconds:31536000}).success,false);
+  }
+});
+
+test('column G records exact mode labels independently of status in E and reason in F', () => {
+  for (const sessionMode of [undefined, 'timer', 'stopwatch']) {
+    for (const flags of [{}, { isCheckIn: true }, { autoSent: true }, { isCheckIn: true, autoSent: true }]) {
+      const h = createHarness(['test']);
+      const p = { ...datedRequest, isTest: true, sessionMode, ...flags,
+        durationSeconds: sessionMode === 'stopwatch' ? null : 300, actualDurationSeconds: 12 };
+      assert.equal(h.request(p).success, true);
+      const row = h.grids.get('test')[0];
+      assert.equal(row[4], [flags.isCheckIn ? 'Check-in' : '', flags.autoSent ? 'auto-sent' : ''].filter(Boolean).join(' · '));
+      assert.equal(row[6], sessionMode === 'stopwatch' ? 'stop watch' : 'timer');
+      assert.equal(row[5], '');
+      const styles = h.formats.get('test')[0];
+      for (const [column, background, fontColor] of [[5, '#000000', '#ffffff'], [6, '#ffffff', '#000000']]) {
+        assert.equal(styles[column].background, background);
+        assert.equal(styles[column].fontColor, fontColor);
+        assert.equal(styles[column].numberFormat, '@');
+        assert.equal(styles[column].wrap, true);
+      }
+    }
+  }
+});
+
+test('new schema preserves historical mode/status/reason cells and prior stopwatch receipts', () => {
+  const h = createHarness(['test']);
+  const p = { ...datedRequest, isTest: true, sessionMode: 'stopwatch', durationSeconds: null,
+    actualDurationSeconds: 12, requestId: crypto.randomUUID() };
+  const fields = [SPREADSHEET_ID, 'date', '', true, p.submittedAt, p.timezoneOffsetMinutes,
+    p.message, null, 12, false, '', 'stopwatch'];
+  const fingerprint = crypto.createHash('sha256').update(JSON.stringify(fields)).digest('hex');
+  assert.equal(h.context.requestFingerprint_(p), fingerprint);
+  h.properties.set('RT_RECEIPT_' + p.requestId, JSON.stringify({ status: 'done', fingerprint,
+    sheet: 'test', range: 'A1:F1', timestamp: p.submittedAt }));
+  const historical = ['9:30', 'Historical entry', 12 / 86400, '', 'Stopwatch', 'Old column F', 'Keep G'];
+  h.grids.get('test')[0] = historical.slice();
+  assert.equal(h.request(p).duplicate, true);
+  assert.deepEqual(h.grids.get('test')[0], historical);
+  assert.equal(h.insertedCells.length, 0);
+  assert.equal(h.request({ ...p, requestId: crypto.randomUUID() }).success, true);
+  assert.deepEqual(h.grids.get('test')[2].slice(0, 7), historical);
+});
+
+test('invalid stopwatch metadata is rejected before any sheet write', () => {
+  for(const invalid of [{sessionMode:'unknown'},{actualDurationSeconds:null},{actualDurationSeconds:-1},{actualDurationSeconds:1.5},{durationSeconds:60},{endedEarly:true}]){
+    const h=createHarness(['test']);
+    assert.equal(h.request({...datedRequest,isTest:true,sessionMode:'stopwatch',durationSeconds:null,actualDurationSeconds:5,...invalid}).success,false);
+    assert.deepEqual(h.grids.get('test')[0],['','']);
+  }
+});
+
 for (const [seconds, pattern] of [
   [0, '[s]" secs"'], [1, '[s]" sec"'], [15, '[s]" secs"'],
   [60, '[m]" min"'], [61, '[m]" min" s" sec"'],
@@ -295,7 +358,7 @@ for (const [seconds, pattern] of [
   const harness = createHarness(['test', 'Temp', '09/05/2026']);
   const result = harness.request({ ...datedRequest, isTest: true, durationSeconds: seconds, actualDurationSeconds: seconds });
   assert.equal(result.success, true, result.error);
-  assert.equal(result.range, 'A1:F1');
+  assert.equal(result.range, 'A1:G1');
   assert.equal(harness.grids.get('test')[0][2], seconds / 86400);
   const cell = harness.formats.get('test')[0][2];
   assert.equal(cell.numberFormat, pattern);
@@ -361,22 +424,22 @@ test('safe protocol requires valid IDs and ping advertises support without writi
   assert.equal(h.properties.size, 0); assert.equal(h.insertedCells.length, 0);
 });
 
-test('early-finish details write actual, allotted, status and safe reason to C:F', () => {
+test('early-finish details write actual, allotted, status, safe reason and mode to C:G', () => {
   const h = createHarness(['test']);
   const result = h.request({ ...datedRequest, isTest: true, durationSeconds: 1800, actualDurationSeconds: 480,
     endedEarly: true, earlyEndReason: '=appointment' });
   assert.equal(result.success, true, result.error);
-  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [480 / 86400, 1800 / 86400, 'ended early', "'=appointment"]);
-  assert.deepEqual(h.grids.get('test')[1].slice(2, 6), ['', '', '', '']);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 7), [480 / 86400, 1800 / 86400, 'ended early', "'=appointment", 'timer']);
+  assert.deepEqual(h.grids.get('test')[1].slice(2, 7), ['', '', '', '', '']);
   assert.equal(h.formats.get('test')[0][5].numberFormat, '@');
 });
 
 test('completed entries leave status and reason blank and legacy actual time is unknown', () => {
   const h = createHarness(['test']);
   h.request({ ...datedRequest, isTest: true, durationSeconds: 60, actualDurationSeconds: 60, earlyEndReason: 'not applicable' });
-  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [60 / 86400, 60 / 86400, '', '']);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 7), [60 / 86400, 60 / 86400, '', '', 'timer']);
   h.request({ ...datedRequest, isTest: true, durationSeconds: 120 });
-  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), ['', 120 / 86400, '', '']);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 7), ['', 120 / 86400, '', '', 'timer']);
 });
 
 test('a grace-period completion retains shorter actual time without an early status or reason', () => {
@@ -384,14 +447,14 @@ test('a grace-period completion retains shorter actual time without an early sta
   const result = h.request({ ...datedRequest, isTest: true, durationSeconds: 900, actualDurationSeconds: 885,
     endedEarly: false, earlyEndReason: 'Provisional reason' });
   assert.equal(result.success, true, result.error);
-  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [885 / 86400, 900 / 86400, '', '']);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 7), [885 / 86400, 900 / 86400, '', '', 'timer']);
 });
 
 test('auto-sent status combines with ended early and retains the response and reason', () => {
   const h=createHarness(['test']);
   const p={...datedRequest,isTest:true,durationSeconds:900,actualDurationSeconds:17,endedEarly:true,earlyEndReason:'Appointment',autoSent:true,message:'[auto-sent]\nFinal response',requestId:crypto.randomUUID(),deliveryProtocol:'request-id-v1'};
   assert.equal(h.request(p).success,true);
-  assert.deepEqual(h.grids.get('test')[0].slice(1,6),['Final response',17/86400,900/86400,'ended early · auto-sent','Appointment']);
+  assert.deepEqual(h.grids.get('test')[0].slice(1,7),['Final response',17/86400,900/86400,'ended early · auto-sent','Appointment','timer']);
   const before=structuredClone(h.grids.get('test'));assert.equal(h.request(p).duplicate,true);assert.deepEqual(h.grids.get('test'),before);
 });
 
@@ -449,7 +512,7 @@ test('check-ins write elapsed/allotted durations and Check-in status with no ear
     const p = { ...datedRequest, isTest: true, isCheckIn: true, durationSeconds: 60,
       actualDurationSeconds, earlyEndReason: 'not applicable', requestId: crypto.randomUUID(), deliveryProtocol: 'request-id-v1' };
     const result = h.request(p); assert.equal(result.success, true, result.error);
-    assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [actualDurationSeconds / 86400, 60 / 86400, 'Check-in', '']);
+    assert.deepEqual(h.grids.get('test')[0].slice(2, 7), [actualDurationSeconds / 86400, 60 / 86400, 'Check-in', '', 'timer']);
     assert.equal(JSON.parse(h.notesBySheet.get('test')[0][0].slice('Reflection Timer: '.length)).isCheckIn, true);
     assert.equal(h.formats.get('test')[0][2].background, '#ffffff');
     assert.equal(h.formats.get('test')[0][3].background, '#000000');
@@ -496,7 +559,7 @@ test('invalid session details fail before sheet mutations', () => {
 test('zero actual time and optional early reason remain meaningful', () => {
   const h = createHarness(['test']);
   assert.equal(h.request({ ...datedRequest, isTest: true, durationSeconds: 60, actualDurationSeconds: 0, endedEarly: true }).success, true);
-  assert.deepEqual(h.grids.get('test')[0].slice(2, 6), [0, 60 / 86400, 'ended early', '']);
+  assert.deepEqual(h.grids.get('test')[0].slice(2, 7), [0, 60 / 86400, 'ended early', '', 'timer']);
 });
 
 test('legacy missing durations stay blank instead of inventing a duration', () => {
@@ -520,17 +583,18 @@ test('invalid durations are rejected before creating a tab or changing any cells
   }
 });
 
-test('durations move with their reflections and only C:F is widened when needed', () => {
+test('durations move with their reflections and only C:G is widened when needed', () => {
   const harness = createHarness(['test']);
   const sheet = harness.sheets[0];
-  sheet.setColumnWidth(2, 450); sheet.setColumnWidth(7, 105);
+  sheet.setColumnWidth(2, 450); sheet.setColumnWidth(8, 105);
   for (const [minute, durationSeconds] of [[1, 15], [2, 2104], [3, 6620]]) {
     assert.equal(harness.request({ ...datedRequest, isTest: true, durationSeconds, actualDurationSeconds: durationSeconds,
       submittedAt: `2026-09-05T18:0${minute}:00-04:00` }).success, true);
   }
   assert.deepEqual(harness.grids.get('test').slice(0, 4).map(row => row[2]), [6620 / 86400, 2104 / 86400, 15 / 86400, '']);
   assert.equal(sheet.getColumnWidth(3), 220);
-  assert.equal(sheet.getColumnWidth(2), 450); assert.equal(sheet.getColumnWidth(7), 105);
+  assert.equal(sheet.getColumnWidth(2), 450); assert.equal(sheet.getColumnWidth(8), 105);
+  assert.equal(sheet.getColumnWidth(6), 300); assert.equal(sheet.getColumnWidth(7), 135);
   sheet.setColumnWidth(3, 300);
   assert.equal(harness.request({ ...datedRequest, isTest: true, durationSeconds: 60 }).success, true);
   assert.equal(sheet.getColumnWidth(3), 300, 'retain a user-chosen wider duration column');
@@ -605,12 +669,12 @@ test('reused and inserted entry rows have thin white borders in every column wit
 
 test('full-row column stripes preserve the other columns font weight and notes', () => {
   const harness = createHarness(['test']);
-  harness.sheets[0].getRange(1, 7, 1, 27).setBackground('#abcdef')
+  harness.sheets[0].getRange(1, 8, 1, 26).setBackground('#abcdef')
     .setFontColor('#123456').setFontWeight('bold').setNote('Keep my note');
   assert.equal(harness.request({ ...datedRequest, isTest: true }).success, true);
   const format = harness.formats.get('test')[0];
   const notes = harness.notesBySheet.get('test')[0];
-  for (let column = 6; column < 33; column += 1) {
+  for (let column = 7; column < 33; column += 1) {
     assert.equal(format[column].background, column % 2 === 1 ? '#000000' : '#ffffff');
     assert.equal(format[column].fontColor, column % 2 === 1 ? '#ffffff' : '#000000');
     assert.equal(format[column].fontWeight, 'bold');
@@ -821,7 +885,7 @@ test('the first send copies Template once and clears only the copy log area', ()
   assert.equal(first.success, true);
   assert.equal(first.sheet, '09/05/2026');
   assert.equal(first.created, true);
-  assert.equal(first.range, 'A1:F1');
+  assert.equal(first.range, 'A1:G1');
   const dailyGrid = harness.grids.get(first.sheet);
   assert.equal(dailyGrid[0][1], datedRequest.message);
   assert.deepEqual(dailyGrid[18].slice(0, 4), ['', '', ...original[16].slice(2)]);
@@ -829,7 +893,7 @@ test('the first send copies Template once and clears only the copy log area', ()
   assert.deepEqual(harness.grid, original, 'source template is never cleared');
   const second = harness.request({ ...datedRequest, message: 'Next session' });
   assert.equal(second.created, false);
-  assert.equal(second.range, 'A1:F1');
+  assert.equal(second.range, 'A1:G1');
   assert.equal(harness.createdSheets.length, 1);
 });
 

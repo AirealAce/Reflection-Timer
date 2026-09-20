@@ -51,13 +51,14 @@ internal sealed partial class PreviewApplication : ApplicationContext
             catch { if (!tickFailed) Announce("Could not save a timer update. Your last saved state is retained."); tickFailed = true; }
         };
         shortcuts = new PreviewShortcuts([
-            Shortcut(0, ()=>{compactPresses.Reset();if(WindowActivation.IsForeground(MainForm))MainForm.Hide();else Open("main");}),
-            Shortcut(1, ()=>{compactPresses.Reset();var result=Session.Execute("startOrEnd",System.Text.Json.JsonSerializer.SerializeToElement(new{}));if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);}),
-            Shortcut(2, ()=>{compactPresses.Reset();var compact=windows.FirstOrDefault(w=>w.View=="compact");if(compact is null||!compact.Visible)Open("compact");else if(compact.IsTimeOnly)ToggleCompactVisibility();else compact.Post(new{type="shrinkCompact"});}),
-            Shortcut(3, ()=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
-            Shortcut(4, ()=>{compactPresses.Reset();ReflectionShortcut.Invoke(windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed),OpenPendingOrCheckIn);}),
+            Shortcut(0, _=>{compactPresses.Reset();if(WindowActivation.IsForeground(MainForm))MainForm.Hide();else Open("main");}),
+            Shortcut(1, at=>{compactPresses.Reset();var result=Session.Execute("startOrEnd",System.Text.Json.JsonSerializer.SerializeToElement(new{}),at);if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);}),
+            Shortcut(2, _=>{compactPresses.Reset();var compact=windows.FirstOrDefault(w=>w.View=="compact");if(compact is null||!compact.Visible)Open("compact");else if(compact.IsTimeOnly)ToggleCompactVisibility();else compact.Post(new{type="shrinkCompact"});}),
+            Shortcut(3, _=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
+            Shortcut(4, ReflectionHotkey),
             Shortcut(5, ToggleTimerFromGlobalShortcut),
-            Shortcut(6, ToggleTimerFromGlobalShortcut)
+            Shortcut(6, ToggleTimerFromGlobalShortcut),
+            Shortcut(7, ToggleModeFromGlobalShortcut)
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(!startInTray)MainForm.Show(); ApplyDisplayPreferences();
     }
@@ -68,22 +69,34 @@ internal sealed partial class PreviewApplication : ApplicationContext
         if(menuTheme==preference)return;
         menuTheme=preference;PreviewTheme.ApplyMenu(tray.ContextMenuStrip!,PreviewTheme.Palette(preference.Item1,preference.Item2));
     }
-    private Action Shortcut(int id, Action action) => () =>
+    private Action<TimeSpan> Shortcut(int id, Action<long> action) => queueDelay =>
     {
+        var requestedAt=Session.Engine.Now-(long)Math.Max(0,queueDelay.TotalMilliseconds);
         if(closing)return;
-        Services.Log.Record("shortcut.used",value:id);
-        try { action(); }
+        try { action(requestedAt); }
         catch(Exception e) { if(id!=4)Open("main"); Announce(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained."); }
+        finally { Services.Log.Record(new Activity(requestedAt,"shortcut.used",null,id)); }
     };
-    private void OpenPendingOrCheckIn()
+    private void OpenPendingOrCheckIn(long requestedAt)
     {
-        if(Session.ReflectionForShortcut() is {} id)Open("reflection",id);
+        if(Session.ReflectionForShortcut(requestedAt) is {} id)Open("reflection",id);
         else Announce("No pending reflection. Start a timer before making a check-in.");
     }
-    private void ToggleTimerFromGlobalShortcut()
+    private void ReflectionHotkey(long requestedAt)
     {
         compactPresses.Reset();
-        var result=KeepingTimeOnly(Session.ToggleTimerFromShortcut);Announce(result.Message);
+        var state=Session.Engine.Snapshot;
+        if(state.Timer.Mode==SessionMode.Stopwatch&&(state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer))) {
+            var attached=state.Prompts.LastOrDefault(p=>p.Mode==SessionMode.Stopwatch&&p.CheckInSessionId==state.Timer.SessionId);
+            var visible=windows.FirstOrDefault(w=>w.ReflectionOpen&&!w.IsDisposed&&w.PromptId==attached?.Id);
+            if(state.Timer.IsRunning||visible is null){OpenPendingOrCheckIn(requestedAt);return;}
+            ReflectionShortcut.Invoke([visible],()=>OpenPendingOrCheckIn(requestedAt));
+        } else ReflectionShortcut.Invoke(windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed),()=>OpenPendingOrCheckIn(requestedAt));
+    }
+    private void ToggleTimerFromGlobalShortcut(long requestedAt)
+    {
+        compactPresses.Reset();
+        var result=KeepingTimeOnly(()=>Session.ToggleTimerFromShortcut(requestedAt));Announce(result.Message);
         if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
     }
     internal CommandResult KeepingTimeOnly(Func<CommandResult> action)
@@ -93,6 +106,12 @@ internal sealed partial class PreviewApplication : ApplicationContext
         keepTimeOnly=true;
         try {return action();}
         finally {keepTimeOnly=previous;}
+    }
+    private void ToggleModeFromGlobalShortcut(long requestedAt)
+    {
+        compactPresses.Reset();
+        var result=KeepingTimeOnly(()=>Session.ToggleModeFromShortcut(requestedAt));Announce(result.Message);
+        if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
     }
     internal void SetStartup(bool enabled)
     {

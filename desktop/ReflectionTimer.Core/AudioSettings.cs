@@ -1,6 +1,6 @@
 namespace ReflectionTimer.Core;
 
-public enum SoundEvent { SessionEnd, Success, Failure, LowTime }
+public enum SoundEvent { SessionEnd, Success, Failure, LowTime, TimeReached }
 public enum SoundBehavior { Disruptive = 0, Assertive = 1, Polite = 2 }
 // Append new values: existing encrypted selections use these stable IDs.
 public enum LibrarySound { Default, SessionEnd, ObtainedItem, LevelUp, PokemonHealed, KeyItem, TrainerBattle, ChampionBattle, OutOfHealth, None }
@@ -32,16 +32,23 @@ public record AudioSettings
     public SoundSetting Success { get; init; } = new();
     public SoundSetting Failure { get; init; } = new();
     public SoundSetting LowTime { get; init; } = new();
+    // Existing profiles initially inherit their own low-time sound and behavior.
+    // Once edited, the stopwatch sound becomes an independent preference.
+    public SoundSetting? TimeReached { get; init; }
+    public bool TimeReachedEnabled { get; init; } = true;
+    public int TimeReachedSeconds { get; init; } = 5 * 60;
     public int LowTimeThresholdSeconds { get; init; } = DefaultLowTimeThresholdSeconds;
 
     public static AudioSettings From(AppState state) => state.Audio ?? new() { SessionEnd = new() { Mp3Path = state.AlertSoundPath } };
     public SoundSetting For(SoundEvent kind) => kind switch {
         SoundEvent.SessionEnd => SessionEnd, SoundEvent.Success => Success, SoundEvent.Failure => Failure, SoundEvent.LowTime => LowTime,
+        SoundEvent.TimeReached => TimeReached ?? LowTime,
         _ => throw new ArgumentException("Choose a sound event.")
     };
     public AudioSettings With(SoundEvent kind, SoundSetting setting) => kind switch {
         SoundEvent.SessionEnd => this with { SessionEnd = setting }, SoundEvent.Success => this with { Success = setting },
         SoundEvent.Failure => this with { Failure = setting }, SoundEvent.LowTime => this with { LowTime = setting },
+        SoundEvent.TimeReached => this with { TimeReached = setting },
         _ => throw new ArgumentException("Choose a sound event.")
     };
     public SoundSetting ForLowTime(LowTimeOptions options) => options.Mp3Path.Length > 0 || options.Track != LibrarySound.Default

@@ -41,7 +41,7 @@ function available(button, yes) { button.setAttribute('aria-disabled', String(!y
 function bind(id, action) { $(id).addEventListener('click', () => { if ($(id).getAttribute('aria-disabled') !== 'true') run(action); }); }
 function snapshot(clock, speak = false) {
   try{clock=displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),durationDirty);}catch{}
-  const text = `${clock.text} ${clock.status==='Finished'?'set':'remaining'}. ${clock.status}.`;
+  const text = `${clock.text} ${clock.stopwatch?'elapsed':clock.status==='Finished'?'set':'remaining'}. ${clock.status}.`;
   setText($('time-snapshot'), `Time checked: ${text}`);
   if (speak) announce(text);
 }
@@ -52,7 +52,7 @@ function applyDuration(seconds) {
 function renderToggle(action){
   setText($('toggle'),action);
   const playback=$('playback-toggle');
-  if(playback){playback.setAttribute('aria-label',`${action} timer`);playback.title=`${action} timer`;setText(playback.firstElementChild,action==='Pause'?'Ⅱ':'▶');}
+  if(playback){const label=`${action} ${state?.timer.mode===1?'stopwatch':'timer'}`;playback.setAttribute('aria-label',label);playback.title=label;setText(playback.firstElementChild,action==='Pause'?'Ⅱ':'▶');}
 }
 function renderRepeat(enabled){
   $('repeat').checked=enabled;
@@ -61,7 +61,7 @@ function renderRepeat(enabled){
 function sharedDuration(parts){
   durationDirty=Array.isArray(parts);
   if(parts)['hours','minutes','seconds'].forEach((id,i)=>{if($(id).value!==parts[i])$(id).value=parts[i];});else if(state)applyDuration(state.timer.durationSeconds);
-  if(state?.clock.status!=='Running'){renderToggle(durationDirty?'Start':state?.clock.status==='Paused'?'Resume':'Start');renderDuration();}
+  if(state?.clock.status!=='Running'){renderToggle(durationDirty&&state?.timer.mode!==1?'Start':state?.clock.status==='Paused'?'Resume':'Start');renderDuration();}
 }
 function renderDuration(clock=state?.clock){
   if(!clock)return;
@@ -83,8 +83,8 @@ function renderReflection() {
   renderReflectionNavigation();
   const prompt = state.prompts.find(p => p.id === promptId);
   if (!prompt) return;
-  setText($('reflection-heading'), prompt.isCheckIn ? 'Session check-in' : 'Session reflection');
-  setText($('reflection-context'), `${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted.`);
+  setText($('reflection-heading'), prompt.mode===1?'Stopwatch reflection':prompt.isCheckIn ? 'Session check-in' : 'Session reflection');
+  setText($('reflection-context'), prompt.mode===1?`${prompt.actual} active time. ${prompt.resumeOnSave?'Save resumes this stopwatch.':'Save keeps this draft for later.'} Send finishes the reflection.`:`${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted.`);
   setText($('reflection-timestamp'), prompt.completed);
   $('reason-group').hidden = !(prompt.showEarlyEndReason??prompt.endedEarly);
   if($('reason-group').hidden&&document.activeElement===$('early-reason')&&document.hasFocus())$('reflection-text').focus();
@@ -146,7 +146,7 @@ function renderSelections() {
   let text='';
   if(entry){
     const actual=entry.actualDurationSeconds;
-    text=entry.message+'\n\n'+(actual!=null?formatClock(actual)+' spent / ':'Actual time unavailable / ')+(entry.durationSeconds!=null?formatClock(entry.durationSeconds):entry.duration)+' allotted';
+    text=entry.message+'\n\n'+(actual!=null?formatClock(actual)+' spent':'Actual time unavailable')+(entry.mode===1?' · Stopwatch · no allotted time':' / '+(entry.durationSeconds!=null?formatClock(entry.durationSeconds):entry.duration)+' allotted');
     if(entry.isCheckIn)text+=' · Check-in';
     else if(entry.endedEarly)text+=' · ended early\nReason: '+(entry.earlyEndReason||'Not supplied');
     if(entry.autoSent)text+='\nauto-sent';
@@ -188,6 +188,17 @@ function render(next) {
   const previous = state; state = next;
   settings.state(state);
   if (view === 'reflection') { renderReflection(); return; }
+  const stopwatch=state.timer.mode===1;
+  document.body.dataset.stopwatch=String(stopwatch);
+  if(view==='main'){
+    setText($('session-mode'),stopwatch?'Stopwatch · switch to Timer':'Timer · switch to Stopwatch');
+    $('repeat').closest('label').hidden=stopwatch;
+    $('read-time').textContent=stopwatch?'Read elapsed time':'Read remaining time';
+    setText($('timer-heading'),stopwatch?'Stopwatch':'Focus timer');
+    setText($('check-in'),stopwatch?'Pause and reflect':'Check in');
+    const resetLabel=stopwatch?'Reset stopwatch':'Reset timer';
+    $('playback-reset').setAttribute('aria-label',resetLabel);$('playback-reset').title=resetLabel;
+  }
   setText($('timer-state'),state.clock.status==='Running'&&state.timer.endTime?'Running · ends '+new Date(state.timer.endTime).toLocaleTimeString([], {hour:'numeric',minute:'2-digit'}):state.clock.status);
   const running = state.clock.status === 'Running';
   ['hours','minutes','seconds'].forEach(id => $(id).readOnly = running);
@@ -196,10 +207,11 @@ function render(next) {
   else if (initial || (!durationDirty && state.timer.durationSeconds !== previous?.timer.durationSeconds)) applyDuration(state.timer.durationSeconds);
   if (!previous || previous.clock.status !== state.clock.status) snapshot(state.clock);
   if(!repeatPending)renderRepeat(state.timer.autoRestart);
-  renderToggle(running ? 'Pause' : state.clock.status === 'Paused' && !durationDirty ? 'Resume' : 'Start');
-  available($('end'),running); available($('check-in'),running || state.clock.status === 'Paused');
+  renderToggle(running ? 'Pause' : state.clock.status === 'Paused' && (!durationDirty||stopwatch) ? 'Resume' : 'Start');
+  available($('end'),running||stopwatch&&state.clock.status==='Paused'); available($('check-in'),running || state.clock.status === 'Paused');
   if (view === 'main') {
-    available($('playback-end'),running);
+    available($('playback-end'),running||stopwatch&&state.clock.status==='Paused');
+    $('playback-end').title=stopwatch?'Pause and reflect':'End timer early';$('playback-end').setAttribute('aria-label',$('playback-end').title);
     $('playback-compact').dataset.viewVisible=String(Boolean(state.showFloatingTimer));
     $('playback-compact').setAttribute('aria-pressed',String(Boolean(state.showFloatingTimer)));
     $('playback-compact').title=state.showFloatingTimer?'Hide floating timer':'Show compact view';
@@ -208,7 +220,7 @@ function render(next) {
     reconcileRows($('pending-list'),state.prompts,record => {
       const li=document.createElement('li'), button=document.createElement('button'); button.type='button'; li.append(button);
       button.addEventListener('click',()=>run(()=>send('openReflection',{id:record.id}))); return li;
-    },(li,record)=>setText(li.firstChild,`${record.isCheckIn ? 'Check-in' : 'Reflection'} from ${record.completed}`));
+    },(li,record)=>setText(li.firstChild,`${record.mode===1?'Stopwatch reflection':record.isCheckIn ? 'Check-in' : 'Reflection'} from ${record.completed}`));
     tables();
   }
   initial = false;
@@ -225,6 +237,7 @@ bridge?.addEventListener('message', event => {
     if(view!=='reflection'&&message.state.durationDraft)sharedDuration(message.state.durationDraft);
     // Initial focus is deliberate; subsequent updates never repeat this.
     if(view==='reflection'){$('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;}
+    else if(state.timer.mode===1)$('toggle').focus();
     else {const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
     if(view==='reflection')run(async()=>{restoreReloadView();await send('reflectionReady',{id:promptId});});
     else run(async()=>{await settings.load();restoreReloadView();await send('interfaceReady');});
@@ -241,7 +254,7 @@ bridge?.addEventListener('message', event => {
     $('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;
     run(()=>send('reflectionReady',{id:promptId}));
   } else if (message.type === 'state') render(message.state);
-  else if (message.type === 'clock') {if(state?.clock.status===message.clock.status)renderDuration(message.clock);}
+  else if (message.type === 'clock') {if(state?.clock.status===message.clock.status&&Boolean(message.clock.stopwatch)===(state?.timer.mode===1))renderDuration(message.clock);}
   else if (message.type === 'timeRead') snapshot(message.clock,true);
   else if (message.type === 'announcement') announce(message.message);
   else if (message.type === 'durationDraft'&&view!=='reflection')sharedDuration(message.parts);
@@ -252,7 +265,7 @@ bridge?.addEventListener('message', event => {
     else $('reflection-text').focus();
   }
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
-  else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
+  else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;if(state?.timer.mode===1){$('toggle').focus();return;}const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
   else if (message.type === 'cycleAppTab') layout.cycle(message.backward);
   else if (message.type === 'flush') {
     if(message.freeze)setReflectionBusy(true);
@@ -272,12 +285,13 @@ bind('delivery-confirm',async()=>{
 });
 ['schedule-hours','schedule-minutes','schedule-seconds'].forEach(id=>normalizeEmptyDuration($(id),()=>{}));
 bindTimerEditor($('timer-editor'),['hours','minutes','seconds'].map($),run,async()=>{
+  if(state?.timer.mode===1){await send('toggle');return;}
   if(state?.clock.status==='Running'){await send('toggle');return;}
   const seconds = readDuration(), threshold = Number($('threshold').value);
   await send('toggle',{seconds,threshold,repeat:$('repeat').checked,lowTime:$('low-time').checked}); durationDirty=false; applyDuration(state.timer.durationSeconds); render(state);
 });
 bind('read-time',()=>send('readTime'));
-bind('reset',async()=>{ await send('reset',{seconds:readDuration()}); durationDirty=false; applyDuration(state.timer.durationSeconds); render(state); });
+bind('reset',async()=>{ await send('reset',state?.timer.mode===1?{}:{seconds:readDuration()}); if(state?.timer.mode!==1){durationDirty=false; applyDuration(state.timer.durationSeconds);} render(state); });
 bind('end',()=>send('end')); bind('check-in',()=>send('checkIn')); bind('practice',()=>send('testReflection'));
 $('repeat').addEventListener('change',()=>{
   if(repeatPending){renderRepeat(repeatDraft);return;}
@@ -290,6 +304,7 @@ $('repeat').addEventListener('change',()=>{
 });
 bind('open-compact',()=>send('toggleCompact')); bind('open-main',()=>send('main')); bind('close-compact',()=>send('close'));
 if(view==='main'){
+  bind('session-mode',()=>send('switchMode',{mode:state?.timer.mode===1?0:1}));
   bind('playback-repeat',()=>$('repeat').click());
   bind('playback-compact',()=>send('toggleCompact',{expandOnShow:true}));
   bind('show-pending',async()=>{if(!state.prompts.length)return announce('No pending reflections.');await send('openReflection',{id:state.prompts.at(-1).id});});

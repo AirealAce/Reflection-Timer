@@ -10,7 +10,7 @@ internal sealed class BuiltInTone(SoundEvent kind) : ISampleProvider
     private int position;
     private readonly double[] frequencies = kind switch {
         SoundEvent.Success => [523.25, 659.25, 783.99], SoundEvent.Failure => [392, 293.66, 220],
-        SoundEvent.LowTime => [440, 440, 554.37], _ => [659.25, 523.25, 783.99, 659.25]
+        SoundEvent.LowTime or SoundEvent.TimeReached => [440, 440, 554.37], _ => [659.25, 523.25, 783.99, 659.25]
     };
     public int Read(float[] buffer, int offset, int count) => Read(buffer.AsSpan(offset, count));
     public int Read(Span<float> buffer)

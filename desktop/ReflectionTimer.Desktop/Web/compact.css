@@ -5,7 +5,9 @@
 *{box-sizing:border-box}
 body{width:228px;margin:0;padding:8px;overflow:hidden}
 header{height:26px;display:flex;align-items:center;justify-content:space-between;margin-bottom:4px;cursor:move}
-h1{font:inherit;margin:0}
+h1{font:inherit;margin:0;font-size:12px}
+body[data-stopwatch=true] .duration,body[data-stopwatch=true] #repeat{display:none}
+body[data-stopwatch=true] .footer{justify-content:flex-end}
 .window-actions{display:flex;gap:1px}
 button,input{font:inherit}
 button{border:1px solid var(--border);border-radius:2px;background:var(--raised);color:var(--text);cursor:pointer}

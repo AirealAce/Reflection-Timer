@@ -22,11 +22,12 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action)) return false;
+        if (!SettingsCommands.Contains(action) && action!="timeReached") return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
         switch (action) {
+            case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;
             case "settingsSaveComplete":
                 _=services.Play(SoundEvent.Success);Reply(requestId);return true;
             case "settingsLoad": Post(new{type="shortcuts",shortcuts=app.ShortcutState});break;
@@ -39,7 +40,8 @@ internal sealed partial class PreviewWindow
                 if(target is not "timer" and not "schedule")throw new ArgumentException("Choose timer or schedule audio.");
                 using(var picker=new OpenFileDialog{Title="Choose low-time audio",Filter="MP3 audio (*.mp3)|*.mp3",CheckFileExists=true}){
                     if(picker.ShowDialog(this)==DialogResult.OK){var path=Mp3AudioBackend.ValidateCustomFile(picker.FileName);
-                        var options=PreviewSession.ReadLow(data.GetProperty("options"),target=="timer"?engine.Snapshot.Timer.LowTime:app.Session.ScheduledLowDraft) with{Mp3Path=path,Track=LibrarySound.Default};
+                        var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new TimerState();
+                        var options=PreviewSession.ReadLow(data.GetProperty("options"),target=="timer"?countdown.LowTime:app.Session.ScheduledLowDraft) with{Mp3Path=path,Track=LibrarySound.Default};
                         if(target=="timer")engine.SetLowTime(options);
                         else app.Session.ScheduledLowDraft=options;
                     }
@@ -127,22 +129,22 @@ internal sealed partial class PreviewWindow
                 message="Display, schedule policy, and diagnostics preferences saved."; break;
             case "volume": engine.SetAppVolume(ReadInt(data,"volume",0,100)); message="App volume saved."; break;
             case "saveSound":
-                var kind = (SoundEvent)ReadInt(data,"kind",0,3); var previous = AudioSettings.From(state).For(kind);
+                var kind = (SoundEvent)ReadInt(data,"kind",0,4); var previous = AudioSettings.From(state).For(kind);
                 engine.SetSound(kind,new() { Track = (LibrarySound)ReadInt(data,"track",0,9),
                     Mp3Path = ReadFlag(data,"keepCustom") ? previous.Mp3Path : "", Behavior = (SoundBehavior)ReadInt(data,"behavior",0,2),
                     Volume = ReadInt(data,"volume",0,100), FadeOutEnabled = ReadFlag(data,"fade"), FadeOutAfterSeconds = ReadInt(data,"fadeSeconds",1,TimerEngine.MaxDuration),
-                    FadeOutAfterMessageSent = kind==SoundEvent.LowTime && ReadFlag(data,"fadeAfterMessageSent"),
-                    MessageSentFadeSeconds = kind==SoundEvent.LowTime && ReadFlag(data,"fadeAfterMessageSent") ? ReadInt(data,"messageSentFadeSeconds",1,TimerEngine.MaxDuration) : previous.MessageSentFadeSeconds });
+                    FadeOutAfterMessageSent = (kind is SoundEvent.LowTime or SoundEvent.TimeReached) && ReadFlag(data,"fadeAfterMessageSent"),
+                    MessageSentFadeSeconds = (kind is SoundEvent.LowTime or SoundEvent.TimeReached) && ReadFlag(data,"fadeAfterMessageSent") ? ReadInt(data,"messageSentFadeSeconds",1,TimerEngine.MaxDuration) : previous.MessageSentFadeSeconds });
                 message="Audio settings saved."; break;
             case "browseSound":
                 using (var picker = new OpenFileDialog { Title="Choose a custom MP3", Filter="MP3 audio (*.mp3)|*.mp3", CheckFileExists=true }) {
                     if(picker.ShowDialog(this)==DialogResult.OK) {
                         var path = Mp3AudioBackend.ValidateCustomFile(picker.FileName);
-                        var sound = (SoundEvent)ReadInt(data,"kind",0,3);
+                        var sound = (SoundEvent)ReadInt(data,"kind",0,4);
                         engine.SetSound(sound,AudioSettings.From(state).For(sound) with { Mp3Path=path,Track=LibrarySound.Default }); message="Custom MP3 saved.";
                     }
                 } break;
-            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,3),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview for up to five seconds."; break;
+            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,4),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview for up to five seconds."; break;
             case "stopSound": services.StopAudio(); message="App audio stopped."; break;
             case "markIssue": services.Log.Record("issue.marked"); message="Issue marked in local diagnostics."; break;
             case "diagnostics": Post(new { type="diagnostics", report=services.Log.Report(state) }); break;
@@ -153,7 +155,7 @@ internal sealed partial class PreviewWindow
             case "sendPending": _ = services.Sync(true); break;
             case "setCutoff":
                 long? cutoff = ReadString(data,"cutoff",40) is { Length: >0 } whenText ? PreviewSession.ParseLocalTime(whenText) : null;
-                engine.SetPreferences(cutoff.HasValue||state.Timer.AutoRestart,state.Timer.Volume,cutoff); message="Auto-start cutoff saved."; break;
+                engine.SetPreferences(cutoff.HasValue||(state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new TimerState()).AutoRestart,state.Timer.Volume,cutoff); message="Auto-start cutoff saved."; break;
         }
         Post(new { type="settings", settings=services.Settings() });
         Post(new{type="scheduledLow",low=PreviewSession.LowView(app.Session.ScheduledLowDraft,AudioSettings.From(engine.Snapshot).LowTimeThresholdSeconds)});

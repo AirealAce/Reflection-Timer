@@ -23,6 +23,7 @@ public sealed class PreviewServices : IDisposable
         foreach (var prompt in engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn)) sounded.Add(prompt.Id);
         engine.ActivityRecorded += Record;
         engine.LowTimeReached += LowTime;
+        engine.TimeReached += TimeReached;
         engine.Changed += Changed;
     }
     private void Record(Activity activity)
@@ -30,6 +31,7 @@ public sealed class PreviewServices : IDisposable
         Log.Record(activity);
         // Activity is raised only after the skipped prompt is saved to disk.
         if(activity.Event=="prompt.skipped") _ = Play(SoundEvent.Success);
+        if(activity.Event=="stopwatch.reviewOpened") _ = Play(SoundEvent.SessionEnd);
         // End-and-send already used the session's reflection window. It leaves
         // no pending prompt and must not replay the completion alert. Delivery
         // still provides its usual success/failure feedback through Sync().
@@ -39,6 +41,9 @@ public sealed class PreviewServices : IDisposable
         var completed=state.Prompts.Any(p=>!p.IsCheckIn&&!sounded.Contains(p.Id));
         if (!completed&&(activity.Event is "timer.paused" or "timer.reset" or "timer.started" ||
             activity.Event=="timer.lowTimeOptions"&&!state.Timer.LowTime.Enabled)) sounds.Stop(SoundEvent.LowTime);
+        if(activity.Event is "timer.paused" or "timer.reset" or "stopwatch.started" or "session.modeChanged")sounds.Stop(SoundEvent.TimeReached);
+        if(activity.Event=="session.modeChanged")sounds.Stop(SoundEvent.LowTime);
+        if(activity.Event=="stopwatch.alertChanged"&&!AudioSettings.From(state).TimeReachedEnabled)sounds.Stop(SoundEvent.TimeReached);
     }
     internal void ReflectionSendStarted(Guid promptId)
     {
@@ -46,11 +51,13 @@ public sealed class PreviewServices : IDisposable
         var state=engine.Snapshot;
         var prompt=state.Prompts.SingleOrDefault(p=>p.Id==promptId);
         if(prompt is null||prompt.IsTest)return;
-        var low=AudioSettings.From(state).LowTime;
+        var kind=prompt.Mode==SessionMode.Stopwatch?SoundEvent.TimeReached:SoundEvent.LowTime;
+        var low=AudioSettings.From(state).For(kind);
         if(low.FadeOutAfterMessageSent&&(prompt.SessionId??prompt.CheckInSessionId) is {} sessionId)
-            sounds.FadeOut(SoundEvent.LowTime,sessionId,low.MessageSentFadeSeconds);
+            sounds.FadeOut(kind,sessionId,low.MessageSentFadeSeconds);
     }
     private void LowTime(TimerState timer) => _ = Play(SoundEvent.LowTime, false, AudioSettings.From(engine.Snapshot).ForLowTime(timer.LowTime),sessionId:timer.SessionId);
+    private void TimeReached(TimerState timer) => _ = Play(SoundEvent.TimeReached,sessionId:timer.SessionId);
     private void Changed()
     {
         var state = engine.Snapshot; Log.Enabled = state.LoggingEnabled;
@@ -66,6 +73,7 @@ public sealed class PreviewServices : IDisposable
             hasToken = s.Connection.ApiToken.Length > 0, hasDraft = s.SetupDraft is not null, s.ExtensionDisabledConfirmed, s.LoggingEnabled, s.StartAtLogin,
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
+            audio.TimeReachedEnabled,audio.TimeReachedSeconds,
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.AutoSendIncompleteReflections,
             reflectionSeparator = (int)s.ReflectionSeparator,
             placement = (int)s.FloatingPlacement, popup = (int)s.PopupPosition, theme = (int)s.Theme, overlap = (int)s.ScheduleOverlap,
@@ -147,7 +155,7 @@ public sealed class PreviewServices : IDisposable
     public void Dispose()
     {
         if(disposed) return; disposed=true;
-        engine.ActivityRecorded -= Record; engine.LowTimeReached -= LowTime; engine.Changed -= Changed;
+        engine.ActivityRecorded -= Record; engine.LowTimeReached -= LowTime; engine.TimeReached -= TimeReached; engine.Changed -= Changed;
         stop.Cancel(); sounds.Dispose(); sheets.Dispose(); stop.Dispose();
     }
 }

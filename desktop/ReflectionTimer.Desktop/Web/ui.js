@@ -106,6 +106,7 @@ export function formatClock(seconds) {
 // Completed sessions preview the duration in the controls. The engine's zero
 // remaining time (or a late countdown frame) must not become the idle display.
 export function displayClock(clock, values, edited=false) {
+  if(clock.stopwatch)return clock;
   if(clock.status!=='Finished'&&!(edited&&clock.status!=='Running'))return clock;
   const seconds=durationPreviewSeconds(values),parts=[];
   const hours=Math.floor(seconds/3600),minutes=Math.floor(seconds/60)%60,remainder=seconds%60;

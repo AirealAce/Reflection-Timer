@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace ReflectionTimer.Core;
 
 public record SheetReply(bool Success, string ErrorKind, string DisplayMessage, string Tab = "", string Target = "",
-    bool SupportsSafeRetry = false, bool Retryable = false, bool SupportsCheckIns = false, bool SupportsAutoSent = false);
+    bool SupportsSafeRetry = false, bool Retryable = false, bool SupportsCheckIns = false, bool SupportsAutoSent = false, bool SupportsStopwatch = false);
 
 public sealed class SheetsClient : IDisposable
 {
@@ -48,6 +48,14 @@ public sealed class SheetsClient : IDisposable
             if (!receiver.Success) return receiver;
             if (!receiver.SupportsCheckIns) return new(false, "receiver_update_required", "Update the Apps Script deployment to support check-ins, then retry this saved entry from the Outbox.");
         }
+        if (item?.Mode == SessionMode.Stopwatch) {
+            // Never let an old receiver invent allotted time or reject elapsed
+            // stopwatch time after already modifying a user's sheet.
+            var receiver = await Ping(settings, cancellation);
+            if (!receiver.Success) return receiver;
+            if (!receiver.SupportsStopwatch) return new(false,"receiver_update_required",
+                "Update the Apps Script deployment to 2.9.0 or newer for stopwatch entries, then retry from Outbox. Your reflection is saved locally.");
+        }
         if(item?.AutoSent==true && item.Message.Length>4988) {
             var receiver=await Ping(settings,cancellation);
             if(!receiver.Success)return receiver;
@@ -58,7 +66,8 @@ public sealed class SheetsClient : IDisposable
             action = item is null ? "ping" : "appendReflection", token = settings.ApiToken.Trim(),
             sheetUrl = item?.SheetUrl ?? settings.SheetUrl, sheetMode = item?.SheetMode ?? settings.SheetMode,
             sheetName = item?.SheetName ?? settings.SheetName, submittedAt = submitted.UtcDateTime.ToString("O"),
-            timezoneOffsetMinutes = -(int)submitted.Offset.TotalMinutes, durationSeconds = item?.DurationSeconds ?? 0,
+            timezoneOffsetMinutes = -(int)submitted.Offset.TotalMinutes, durationSeconds = item?.Mode==SessionMode.Stopwatch ? (int?)null : item?.DurationSeconds ?? 0,
+            sessionMode = item?.Mode==SessionMode.Stopwatch ? "stopwatch" : "timer",
             actualDurationSeconds = item?.ActualDurationSeconds, endedEarly = item?.EndedEarly ?? false, isCheckIn = item?.IsCheckIn ?? false,
             earlyEndReason = item?.EarlyEndReason ?? "",
             autoSent = item?.AutoSent ?? false,
@@ -120,7 +129,8 @@ public sealed class SheetsClient : IDisposable
                         return new(false, "invalid_response", "The receiver did not confirm this entry's destination and delivery protocol. Check the Sheet and deployment before retrying; the entry is kept in the Outbox.");
                     return new(true, "", "Connected.", Read(root, "sheet"), Read(root, "target"), Read(root, "deliveryProtocol") == DeliveryProtocol,
                         SupportsCheckIns: root.TryGetProperty("supportsCheckIns", out var checkIns) && checkIns.ValueKind == JsonValueKind.True,
-                        SupportsAutoSent: root.TryGetProperty("supportsAutoSent", out var autoSent) && autoSent.ValueKind == JsonValueKind.True);
+                        SupportsAutoSent: root.TryGetProperty("supportsAutoSent", out var autoSent) && autoSent.ValueKind == JsonValueKind.True,
+                        SupportsStopwatch: root.TryGetProperty("supportsStopwatch",out var stopwatch)&&stopwatch.ValueKind==JsonValueKind.True);
                 }
                 // Raw server responses can contain arbitrary reflection text or
                 // credentials. Never send them to diagnostics or persisted errors.

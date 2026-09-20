@@ -79,3 +79,13 @@ body[data-view=reflection] #reason-group,body[data-view=reflection] .reflection-
   body[data-view=reflection] .reflection-actions button{font-size:14px;padding:6px 7px}
   .reflection-navigation,.reflection-save-actions{gap:4px}
 }
+:root body[data-stopwatch=true] #timer-editor fieldset,
+body[data-stopwatch=true] #playback-repeat,
+body[data-stopwatch=true] #repeat,
+body[data-stopwatch=true] #cutoff-form,
+body[data-stopwatch=true] #quick-schedule-form,
+body[data-stopwatch=true] #quick-schedule-help,
+body[data-stopwatch=true] #timer .low-time-options{display:none}
+.session-mode-switch{display:block;margin:8px auto}
+.time-reached-options>.option-row>input{width:140px}
+.time-reached-options>p{font-size:14px;color:var(--muted)}

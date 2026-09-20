@@ -39,6 +39,7 @@ public sealed class PreviewSession
         }
         Engine = new(store, clock);
         Engine.LowTimeReached += timer => Announcement?.Invoke($"Low time. {SpeakTime(TimerEngine.Remaining(timer, Engine.Now))} remaining.");
+        Engine.TimeReached += timer => Announcement?.Invoke($"Time reached. {SpeakTime(TimerEngine.ActualSeconds(timer, Engine.Now))} elapsed.");
     }
     public static AppState SampleState(DateTimeOffset now) => new() {
         ExtensionDisabledConfirmed = false,
@@ -54,6 +55,10 @@ public sealed class PreviewSession
     {
         var timer = Engine.Snapshot.Timer;
         var status = Status(timer);
+        if(timer.Mode==SessionMode.Stopwatch) {
+            var elapsed=TimerEngine.ActualSeconds(timer,Engine.Now);
+            return new { seconds=elapsed,text=SpeakTime(elapsed),status,stopwatch=true };
+        }
         // Keep completion and reflection accounting in the engine, but show the
         // duration ready for the next session once the countdown has ended.
         var seconds = status == "Finished" ? timer.DurationSeconds : TimerEngine.Remaining(timer, Engine.Now);
@@ -69,11 +74,14 @@ public sealed class PreviewSession
         }
         return new { seconds, text = SpeakTime(seconds), status };
     }
-    public static string Status(TimerState timer) => timer.IsRunning ? "Running" : TimerEngine.IsPaused(timer) ? "Paused" : timer.RemainingSeconds == 0 ? "Finished" : "Ready";
+    public static string Status(TimerState timer) => timer.IsRunning ? "Running" : TimerEngine.IsPaused(timer) ? "Paused"
+        : timer.Mode==SessionMode.Stopwatch ? timer.StopwatchCompleted?"Finished":"Ready" : timer.RemainingSeconds == 0 ? "Finished" : "Ready";
     internal bool AutoSendReflection(Guid id) => Engine.AutoSendReflection(id, isolatedProfile && SheetsClient.Validate(Engine.Snapshot.Connection) is not null);
-    internal Guid? ReflectionForShortcut()
+    internal Guid? ReflectionForShortcut(long? requestedAt = null)
     {
+        requestedAt ??= Engine.Now;
         var state=Engine.Snapshot;
+        if(state.Timer.Mode==SessionMode.Stopwatch&&(state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer)))return Engine.ReviewStopwatch(requestedAt);
         if(state.Prompts.LastOrDefault() is {} pending)return pending.Id;
         return (state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer))&&TimerEngine.Remaining(state.Timer,Engine.Now)>0
             ? Engine.CheckIn() : null;
@@ -90,14 +98,16 @@ public sealed class PreviewSession
     public object View()
     {
         var state = Engine.Snapshot;
+        var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
             clock = Clock(), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
-            timer = new { state.Timer.DurationSeconds, state.Timer.AutoRestart, state.Timer.LowTime.Enabled, state.Timer.AutoRestartUntil, state.Timer.EndTime,
-                threshold = state.Timer.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,
-                low=LowView(state.Timer.LowTime,AudioSettings.From(state).LowTimeThresholdSeconds) },
-            prompts = state.Prompts.Select(p => new { p.Id, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
+            timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil, state.Timer.EndTime,
+                threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,
+                low=LowView(countdown.LowTime,AudioSettings.From(state).LowTimeThresholdSeconds) },
+            prompts = state.Prompts.Select(p => new { p.Id, mode=(int)p.Mode, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
+                resumeOnSave=p.Mode==SessionMode.Stopwatch&&p.ResumeStopwatchOnSave&&p.CheckInSessionId==state.Timer.SessionId&&TimerEngine.IsPaused(state.Timer),
                 showEarlyEndReason=TimerEngine.ShowEarlyEndReason(p,state.Timer,Engine.Now),
-                allotted = SpeakTime(p.DurationSeconds), actual = p.ActualDurationSeconds is { } actual ? SpeakTime(actual) : "Unavailable",
+                allotted = p.Mode==SessionMode.Stopwatch?"Not applicable":SpeakTime(p.DurationSeconds), actual = p.ActualDurationSeconds is { } actual ? SpeakTime(actual) : "Unavailable",
                 completed = DateTimeOffset.FromUnixTimeMilliseconds(p.CompletedAt).ToLocalTime().ToString("g") }),
             schedules = state.Schedules.Select(s => new { s.Id, start = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("g"),
                 duration = SpeakTime(s.DurationSeconds), repeat = s.AutoRestart ? "On" : "Off", lowTime = s.LowTime.Enabled ? s.LowTime.ThresholdSeconds is {} threshold ? $"{threshold/60}:{threshold%60:00}" : "Default" : "Off",
@@ -107,7 +117,7 @@ public sealed class PreviewSession
                 localOnly = o.LocalOnly,
                 destination = o.LocalOnly ? "Local preview only" : o.IsTest ? "test" : o.SheetMode == "fixed" ? o.SheetName : o.SubmittedAt.ToString("MM/dd/yyyy"),
                 status = o.Status == DeliveryStatus.Sent && o.LocalOnly ? "Simulated success" : o.Status.ToString(),
-                o.Attempts, o.Message, o.DurationSeconds, o.ActualDurationSeconds, o.EndedEarly, o.EarlyEndReason, o.IsCheckIn, o.AutoSent, o.NextAttemptAt, duration = SpeakTime(o.DurationSeconds), error = o.ErrorKind.Length == 0 ? "" : TimerEngine.SafeError(o.ErrorKind) })
+                mode=(int)o.Mode,o.Attempts, o.Message, o.DurationSeconds, o.ActualDurationSeconds, o.EndedEarly, o.EarlyEndReason, o.IsCheckIn, o.AutoSent, o.NextAttemptAt, duration = SpeakTime(o.DurationSeconds), error = o.ErrorKind.Length == 0 ? "" : TimerEngine.SafeError(o.ErrorKind) })
         };
     }
     public void Tick()
@@ -119,14 +129,29 @@ public sealed class PreviewSession
             Announcement?.Invoke("Session finished. A reflection is available under Pending reflections.");
         else if (!before.Timer.IsRunning && after.Timer.IsRunning) Announcement?.Invoke("Scheduled timer started.");
     }
-    public CommandResult Execute(string action, JsonElement data)
+    public CommandResult Execute(string action, JsonElement data, long? requestedAt = null)
     {
+        requestedAt ??= Engine.Now;
         var state = Engine.Snapshot;
+        var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new TimerState();
         switch (action)
         {
+            case "switchMode":
+                Engine.SwitchMode((SessionMode)Number(data,"mode",0,1),requestedAt);
+                var completedOnSwitch=Engine.Snapshot.Prompts.FirstOrDefault(p=>!p.IsCheckIn&&state.Prompts.All(old=>old.IsCheckIn||old.Id!=p.Id));
+                return new(Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch?"Stopwatch selected. Previous session paused.":"Timer selected. Previous session paused.",completedOnSwitch?.Id,SessionCompleted:completedOnSwitch is not null);
+            case "timeReached":
+                Engine.SetTimeReached(Flag(data,"enabled"),Number(data,"seconds",1,TimerEngine.MaxDuration));
+                return new("Time-reached alert saved.");
             case "startOrEnd":
-                return state.Timer.IsRunning ? Execute("end",data) : ToggleTimerFromShortcut();
+                return state.Timer.IsRunning ? Execute("end",data,requestedAt) : ToggleTimerFromShortcut(requestedAt);
             case "toggle":
+                if(state.Timer.Mode==SessionMode.Stopwatch) {
+                    if(state.Timer.IsRunning)Engine.Pause(requestedAt);
+                    else if(TimerEngine.IsPaused(state.Timer))Engine.Resume();
+                    else Engine.StartStopwatch();
+                    return new(Engine.Snapshot.Timer.IsRunning?"Stopwatch running.":"Stopwatch paused.");
+                }
                 if (state.Timer.IsRunning) {
                     Engine.Pause();
                     var completed=Engine.Snapshot.Prompts.FirstOrDefault(p=>!p.IsCheckIn&&state.Prompts.All(old=>old.IsCheckIn||old.Id!=p.Id));
@@ -138,18 +163,20 @@ public sealed class PreviewSession
                 SetDurationDraft(null);
                 return new("Timer running.");
             case "reset":
+                if(state.Timer.Mode==SessionMode.Stopwatch){Engine.Reset();return new("Stopwatch reset.");}
                 Engine.Reset(Number(data, "seconds", 1, TimerEngine.MaxDuration));SetDurationDraft(null);return new("Timer reset.");
             case "repeat":
-                Engine.SetPreferences(Flag(data, "enabled"), state.Timer.Volume, Flag(data,"enabled") ? state.Timer.AutoRestartUntil : null);
+                Engine.SetPreferences(Flag(data, "enabled"), state.Timer.Volume, Flag(data,"enabled") ? countdown.AutoRestartUntil : null);
                 return new(Flag(data, "enabled") ? "Auto-start enabled." : "Auto-start disabled.");
             case "lowTime":
-                Engine.SetLowTime(ReadLow(data,state.Timer.LowTime));
+                Engine.SetLowTime(ReadLow(data,countdown.LowTime));
                 return new("Low-time warning saved.");
             case "end":
+                if(state.Timer.Mode==SessionMode.Stopwatch)return new("Stopwatch paused for reflection.",Engine.ReviewStopwatch(requestedAt));
                 var previous = state.Prompts.Where(p=>!p.IsCheckIn).Select(p => p.Id).ToHashSet();
                 if (!Engine.EndEarly()) throw new ArgumentException("Start or resume the timer before ending it early.");
                 return new("Session ended. Reflection opened.", Engine.Snapshot.Prompts.First(p => !p.IsCheckIn&&!previous.Contains(p.Id)).Id,SessionCompleted:true);
-            case "checkIn": return new("Check-in opened.", Engine.CheckIn());
+            case "checkIn": return new("Check-in opened.", state.Timer.Mode==SessionMode.Stopwatch?Engine.ReviewStopwatch(requestedAt):Engine.CheckIn());
             case "testReflection": return new("Practice reflection opened.", Engine.TestPrompt());
             case "openReflection":
                 var prompt = RequiredPrompt(Id(data)); return new("", prompt.Id);
@@ -182,7 +209,7 @@ public sealed class PreviewSession
                 Engine.SaveSchedule(editId, new DateTimeOffset(start), Number(data, "seconds", 1, TimerEngine.MaxDuration), Flag(data,"repeat"),
                     data.TryGetProperty("volume",out _) ? Number(data,"volume",0,100) : 50,
                     data.TryGetProperty("cutoff",out var endAt) && endAt.ValueKind == JsonValueKind.String && endAt.GetString() is { Length: >0 } cutoffText ? ParseLocalTime(cutoffText) : null,
-                    data.TryGetProperty("lowOptions",out var lowData)?ReadLow(lowData,Flag(data,"fromTimer")?state.Timer.LowTime:ScheduledLowDraft):new LowTimeOptions { Enabled = !data.TryGetProperty("lowTime",out _) || Flag(data,"lowTime") });
+                    data.TryGetProperty("lowOptions",out var lowData)?ReadLow(lowData,Flag(data,"fromTimer")?countdown.LowTime:ScheduledLowDraft):new LowTimeOptions { Enabled = !data.TryGetProperty("lowTime",out _) || Flag(data,"lowTime") });
                 ScheduledLowDraft=new();
                 return new("Session scheduled.");
             case "removeSchedule":
@@ -211,16 +238,25 @@ public sealed class PreviewSession
             default: throw new ArgumentException("Unknown preview command.");
         }
     }
-    internal CommandResult ToggleTimerFromShortcut()
+    internal CommandResult ToggleModeFromShortcut(long? requestedAt = null)
     {
+        requestedAt ??= Engine.Now;
+        return Execute("switchMode", JsonSerializer.SerializeToElement(new {
+            mode = Engine.Snapshot.Timer.Mode == SessionMode.Timer ? (int)SessionMode.Stopwatch : (int)SessionMode.Timer
+        }),requestedAt);
+    }
+    internal CommandResult ToggleTimerFromShortcut(long? requestedAt = null)
+    {
+        requestedAt ??= Engine.Now;
         var timer=Engine.Snapshot.Timer;
         // Pause before parsing edited fields, just like the Compact form. This
         // also preserves normal completion if the key arrives at the deadline.
-        if(timer.IsRunning)return Execute("toggle",JsonSerializer.SerializeToElement(new{}));
+        if(timer.IsRunning||timer.Mode==SessionMode.Stopwatch)return Execute("toggle",JsonSerializer.SerializeToElement(new{}),requestedAt);
         var duration=ShortcutDuration();
-        return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=timer.AutoRestart,lowTime=timer.LowTime.Enabled},Json));
+        return Execute("toggle",JsonSerializer.SerializeToElement(new{seconds=duration,repeat=timer.AutoRestart,lowTime=timer.LowTime.Enabled},Json),requestedAt);
     }
-    internal CommandResult ResetTimerFromShortcut()=>Execute("reset",JsonSerializer.SerializeToElement(new{seconds=ShortcutDuration()},Json));
+    internal CommandResult ResetTimerFromShortcut()=>Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch
+        ? Execute("reset",JsonSerializer.SerializeToElement(new{})) : Execute("reset",JsonSerializer.SerializeToElement(new{seconds=ShortcutDuration()},Json));
     private int ShortcutDuration()
     {
         var duration=Engine.Snapshot.Timer.DurationSeconds;

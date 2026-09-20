@@ -25,15 +25,20 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const uint ReflectionFocusKey = 0xBF; // VK_OEM_2: slash/question mark on a US keyboard.
     internal const int TimerToggleId = 0x5259;
     internal const int TimerToggleAltId = 0x525A;
+    internal const int ModeToggleId = 0x525B;
+    internal const uint ModeToggleKey = 0xDE; // VK_OEM_7: apostrophe/quote on a US keyboard.
     internal const uint TimerToggleKey = 0x20; // VK_SPACE
     internal const uint TimerToggleModifiers = 0x0002 | 0x4000; // Control + NoRepeat
     private readonly IHotKeyRegistration registration;
-    private readonly Action pressed;
+    private readonly Action<TimeSpan> pressed;
     private readonly int hotKeyId;
     private bool disposed;
     public bool IsRegistered { get; private set; }
 
     public GlobalShortcut(Action pressed, IHotKeyRegistration? registration = null, uint key = Key, int id = HotKeyId, uint modifiers = Modifiers)
+        : this(_ => pressed(), registration, key, id, modifiers) { }
+
+    internal GlobalShortcut(Action<TimeSpan> pressed, IHotKeyRegistration? registration = null, uint key = Key, int id = HotKeyId, uint modifiers = Modifiers)
     {
         this.pressed = pressed; this.registration = registration ?? new WindowsHotKeyRegistration(); hotKeyId = id;
         CreateHandle(new CreateParams { Caption = "Reflection Timer shortcut", Parent = new nint(-3) }); // HWND_MESSAGE
@@ -41,16 +46,25 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
         catch { DestroyHandle(); throw; }
     }
 
-    internal bool Dispatch(int message, nint id)
+    internal bool Dispatch(int message, nint id, TimeSpan queueDelay = default)
     {
         if (disposed || !IsRegistered || message != HotKeyMessage || id != hotKeyId) return false;
-        pressed(); return true;
+        pressed(queueDelay); return true;
     }
     protected override void WndProc(ref Message message)
     {
-        if (Dispatch(message.Msg, message.WParam)) { message.Result = 0; return; }
+        // Use the queued key's timestamp, not when a busy UI thread finally
+        // handles it. Windows message ticks wrap; subtraction must allow that.
+        if (message.Msg == HotKeyMessage && Dispatch(message.Msg, message.WParam, MessageDelay(GetMessageTime(), Environment.TickCount))) { message.Result = 0; return; }
         base.WndProc(ref message);
     }
+    internal static TimeSpan MessageDelay(int queuedTick, int currentTick)
+    {
+        var elapsed = unchecked(currentTick - queuedTick);
+        return TimeSpan.FromMilliseconds(Math.Max(0, elapsed));
+    }
+    [DllImport("user32.dll")]
+    private static extern int GetMessageTime();
     public void Dispose()
     {
         if (disposed) return;

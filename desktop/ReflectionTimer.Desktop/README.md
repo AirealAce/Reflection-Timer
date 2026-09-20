@@ -1,4 +1,8 @@
-# Reflection Timer 4.1.38
+# Reflection Timer 4.2.3
+
+Stopwatch: use Ctrl+Alt+' (apostrophe) from any app, S/T beside the Compact or Time-only minus button, or Switch to Stopwatch/Timer in App view. Switching pauses and preserves the other session; resume explicitly. The regular start/pause/reset controls and global start/pause shortcuts act on the selected mode. Stopwatch has no duration inputs or auto-start. Ctrl+Alt+/ pauses it, plays session-end audio, and opens its reflection. Save / Ctrl+S resumes the same selected stopwatch and keeps the response; Save & send finishes it with active elapsed time only. A parked draft never resumes a second clock. Time reached audio sits below Low on time in Settings, inherits that sound until edited, and defaults to one alert at 300 active seconds. Scheduled sessions remain countdowns.
+
+Apps Script receiver 2.9.2+ writes C active duration, D allotted duration (blank for stopwatches), E status, F the reason for ending early, and G exactly `timer` or `stop watch`. This applies to new entries; historical rows are unchanged. Stopwatch delivery requires receiver 2.9.0+, but update to 2.9.2+ for the new column layout. Receivers without stopwatch support leave these entries safely in Outbox for retry after updating the existing deployment. Generate the receiver from Connection setup using your existing sheet/token and deployment, never a public copy of your credentials. Timer entries remain compatible with existing receivers.
 
 App view places the running/end-time status directly below the desktop-active notice. Beneath its clock, Compact-style controls provide Auto-start, Comp (hide the floating viewer, or show full Compact controls when hidden), Reset, Start/Pause/Resume, and End early; the original text controls remain available.
 

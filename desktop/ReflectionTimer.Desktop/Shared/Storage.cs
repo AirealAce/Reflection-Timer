@@ -20,6 +20,7 @@ public sealed class EncryptedStore(string directory) : IStateStore
             // Preserve the unreadable file for recovery, rather than overwriting it.
             File.Copy(path, path + ".unreadable-" + Guid.NewGuid().ToString("N"), false);
             backup.Timer = backup.Timer with { IsRunning = false, EndTime = null,
+                ElapsedMilliseconds = TimerEngine.StopwatchMilliseconds(backup.Timer,DateTimeOffset.Now.ToUnixTimeMilliseconds()), RunningSince=null,
                 RemainingSeconds = TimerEngine.Remaining(backup.Timer, DateTimeOffset.Now.ToUnixTimeMilliseconds()) };
             backup.ExtensionDisabledConfirmed = false;
             backup.Outbox = backup.Outbox.Select(x => x.Status != DeliveryStatus.Sent
@@ -66,7 +67,8 @@ public sealed class DiagnosticLog
         "sound.changed", "sound.preview", "sound.played", "sound.fallback", "sound.muted", "sound.stopped", "sound.failed", "display.changed", "theme.changed", "theme.loaded",
         "shortcut.registered", "shortcut.unavailable", "shortcut.used", "timer.endedEarly", "timer.lowTime", "timer.lowTimeOptions", "sound.thresholdChanged", "sound.requested",
         "schedule.policy", "schedule.resolved", "prompt.checkIn", "webview.processFailed", "webview.failureReason", "webview.exitCode",
-        "webview.recoveryStarted", "webview.recovered", "webview.recoveryFailed"
+        "webview.recoveryStarted", "webview.recovered", "webview.recoveryFailed",
+        "session.modeChanged", "stopwatch.started", "stopwatch.reviewOpened", "stopwatch.timeReached", "stopwatch.alertChanged"
     };
     public bool Enabled { get; set; } = true;
     public bool StorageAvailable { get; private set; } = true;
@@ -103,10 +105,12 @@ public sealed class DiagnosticLog
         Audio = Enum.GetValues<SoundEvent>().Select(kind => new { Event = kind.ToString(), AudioSettings.From(state).For(kind).Behavior,
             AudioSettings.From(state).For(kind).Track, Custom = AudioSettings.From(state).For(kind).Mp3Path.Length > 0 }),
         AudioSettings.From(state).LowTimeThresholdSeconds,
+        AudioSettings.From(state).TimeReachedEnabled,AudioSettings.From(state).TimeReachedSeconds,
         Enabled, StorageAvailable, Events = Recent(), Timer = state.Timer with { LowTime = state.Timer.LowTime with { Mp3Path = "" } },
         TimerLowTimeCustom = state.Timer.LowTime.Mp3Path.Length > 0,
         Schedules = state.Schedules.Select(x => x with { LowTime = x.LowTime with { Mp3Path = "" } }), PendingPrompts = state.Prompts.Count,
-        Outbox = state.Outbox.Select(x => new { x.Id, x.SubmittedAt, x.Status, x.IsTest, x.Attempts, x.RetryProtected,
+        ParkedTimer = state.ParkedTimer is {} parked ? parked with { LowTime=parked.LowTime with { Mp3Path="" } } : null,
+        Outbox = state.Outbox.Select(x => new { x.Id, Mode=x.Mode.ToString(), x.SubmittedAt, x.Status, x.IsTest, x.Attempts, x.RetryProtected,
             x.NextAttemptAt, x.DurationSeconds, x.ActualDurationSeconds, x.EndedEarly, x.IsCheckIn, x.AutoSent, ErrorKind = TimerEngine.SafeError(x.ErrorKind) }),
         state.ExtensionDisabledConfirmed
     };

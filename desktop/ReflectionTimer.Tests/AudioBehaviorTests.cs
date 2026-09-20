@@ -37,6 +37,21 @@ static class AudioBehaviorTests
                 if(Directory.Exists(directory))Directory.Delete(directory);
             }
         }
+        foreach(var behavior in Enum.GetValues<SoundBehavior>()) {
+            var now=DateTimeOffset.Now;var engine=new TimerEngine(new MemoryStore{State=new(){LoggingEnabled=false}},()=>now);
+            engine.SetSound(SoundEvent.TimeReached,new(){Behavior=SoundBehavior.Polite});
+            engine.SetSound(SoundEvent.SessionEnd,new(){Behavior=behavior});
+            engine.SwitchMode(SessionMode.Stopwatch);engine.StartStopwatch();engine.SetTimeReached(true,5);
+            var backend=new HoldingAudio();using var services=new PreviewServices(engine,Path.Combine(Path.GetTempPath(),"ReflectionTimer-StopwatchAudio-"+Guid.NewGuid().ToString("N")),audio:backend);
+            now=now.AddSeconds(5);engine.Advance();var reached=await backend.Next();
+            var id=engine.ReviewStopwatch();var end=await backend.Next();
+            check(!engine.Snapshot.Timer.IsRunning&&end.Level.Gain>0,"Stopwatch review plays the session-end sound after pausing: "+behavior);
+            if(behavior==SoundBehavior.Disruptive)check(reached.Token.IsCancellationRequested,"Disruptive stopwatch completion ends time-reached audio");
+            else check(!reached.Token.IsCancellationRequested&&reached.Level.Gain==(behavior==SoundBehavior.Assertive?end.Level.Gain*.25f:end.Level.Gain),"Stopwatch completion respects "+behavior+" mixing with time-reached audio");
+            engine.SaveReflectionForLater(id,"Continue");
+            check(engine.Snapshot.Timer.IsRunning&&!end.Token.IsCancellationRequested,"Saving resumes Stopwatch without adding a second completion sound: "+behavior);
+            await backend.FinishAll();
+        }
         var audio=new HoldingAudio();using var player=new AlertSoundPlayer(audio);
         var politeTask=player.PlayAsync("polite.mp3",80,SoundBehavior.Polite,SoundEvent.LowTime);var polite=await audio.Next();
         var firstTask=player.PlayAsync("first.mp3",80,SoundBehavior.Assertive,SoundEvent.SessionEnd);var first=await audio.Next();

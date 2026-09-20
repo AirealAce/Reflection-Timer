@@ -3,6 +3,7 @@ import {mountTheme} from './themes.js';
 import {mountSetup} from './setup.js';
 import {mountAudio} from './audio.js';
 import {mountLowTime} from './low-time.js';
+import {mountTimeReached} from './time-reached.js';
 
 export function settingsUI({send, run, bind, view, announce}) {
   const $ = id => document.getElementById(id);
@@ -11,6 +12,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   const setup=mountSetup({send,run});
   const audio=mountAudio({send,run});
   const lowTime=mountLowTime({send,run});
+  const timeReached=mountTimeReached({send,run});
   const dirty = new Set();
   const dirtyFields=new Map();
   const displayRevisions=new Map();
@@ -54,7 +56,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   async function saveSettings(){
     if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
     if(!$('appearance-form').reportValidity())return;
-    await displaySaving;await lowTime.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
+    await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
     if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
     if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
     // One success sound after every part of this explicit save has succeeded.
@@ -111,14 +113,14 @@ export function settingsUI({send, run, bind, view, announce}) {
       if(!dirty.has('appearance-form') && state.showFloatingTimer!==undefined) $('show-compact').checked=state.showFloatingTimer;
       if(!dirty.has('volume-form')&&!dirty.has('settings-volume-form') && state.appVolume!==undefined) setMasterVolume(state.appVolume);
       setText($('delivery-status'),state.connected?'Sheets delivery is enabled. Connected pending entries send automatically.':'Sheets delivery is off. Pending entries stay saved.');
-      setText($('reflection-delivery'),state.connected?'Saving queues this reflection for automatic Sheets delivery. Practice reflections use the receiver’s test tab.':'Saving keeps this reflection in the Outbox. Sheets delivery is off.');
+      setText($('reflection-delivery'),state.connected?'Save & send queues this reflection for automatic Sheets delivery. Practice reflections use the receiver’s test tab.':'Save & send keeps this reflection in the Outbox. Sheets delivery is off.');
       if(!dirty.has('cutoff-form')) {$('cutoff').value=localDateTime(state.timer.autoRestartUntil);$('cutoff-enabled').checked=!!state.timer.autoRestartUntil;$('cutoff').disabled=!state.timer.autoRestartUntil;}
     },
     message(message) {
       if(view!=='main') return;
-      if(message.type==='settings') { settings=message.settings; ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
+      if(message.type==='settings') { settings=message.settings; ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
       else if(message.type==='shortcuts'){
-        const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact input; twice within 0.8 seconds for App input.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small, and hidden windows stay hidden.'];
+        const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact input; twice within 0.8 seconds for App input.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small, and hidden windows stay hidden.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden."];
         $('shortcut-notices').replaceChildren(...descriptions.map((text,i)=>{
           const p=document.createElement('p'),key=document.createElement('kbd'),[shortcut,description]=text.split(' · ');
           key.textContent=shortcut;

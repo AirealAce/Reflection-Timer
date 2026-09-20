@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.1.38</p>
+    <p class="eyebrow">Reflection Timer 4.2.3</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -106,7 +106,7 @@
         <p id="sound-default"></p><label>Track<select id="sound-track" aria-describedby="sound-default"></select></label>
         <label>Playback behavior<select id="sound-behavior"><option value="0">Disruptive</option><option value="1">Assertive</option><option value="2">Polite</option></select></label>
         <label class="volume-control"><span id="sound-volume-caption">Volume (100%)</span><input id="sound-volume" aria-label="Audio volume" type="range" min="0" max="100" value="100" required></label>
-        <div class="option-row"><label class="check"><input id="sound-fade" type="checkbox">Fade out after</label><input id="sound-fade-seconds" aria-label="Fade out after seconds" type="number" min="1" max="31536000" value="10" required disabled><span>seconds, then fade out over 1 second</span></div>
+        <div class="option-row"><label class="check"><input id="sound-fade" type="checkbox">Fade out after</label><input id="sound-fade-seconds" aria-label="Fade out after seconds" type="number" min="1" max="31536000" value="10" required disabled><span>seconds</span></div>
         <div id="sound-message-fade-row" class="option-row"><label class="check"><input id="sound-message-fade" type="checkbox" aria-describedby="sound-message-fade-help">Fade out after message sent</label><div class="message-fade-duration"><input id="sound-message-fade-seconds" aria-label="Low-time message-sent fade duration in seconds" aria-describedby="sound-message-fade-help" type="number" min="1" max="31536000" step="1" value="3" required disabled><span>seconds to fade out</span></div></div>
         <p id="sound-message-fade-help" class="hint">Starts as soon as you send this session's reflection, before validation or delivery, for its playing low-time audio only. Save, Skip, and practice entries do not trigger it. Failed sends do not undo the fade. Disruptive sounds can still stop it immediately; Polite or Assertive allows the fade.</p>
         <div class="actions"><button type="submit">Save sound</button><button id="browse-sound" type="button">Choose MP3…</button><button id="preview-sound" type="button">Preview audio</button><button id="stop-sound" type="button">Stop audio</button></div>
@@ -144,7 +144,7 @@
       <ol><li>Enter a duration, leave the input, and read the surrounding text at your own pace.</li><li>Start the timer. Read this page or another app for a minute. The countdown should not interrupt you.</li><li>Use Read remaining time. You should hear the current time once.</li><li>Open the compact timer and try both views using the keyboard.</li><li>Navigate individual Scheduler and Outbox cells using your reader's table commands.</li><li>Write a practice reflection, choose Save, and reopen it to check that the draft is preserved.</li></ol>
       <p>Settings, audio, connection setup, delivery, and diagnostics use your saved desktop profile. Practice reflections are sent to the test tab when delivery is enabled.</p>
       <p>App, the floating timer, and session-end prompts are separate windows. Compact and Time-only share one floating window. App opens centered, the floating timer bottom left, and session-end prompts bottom right. Closing App hides it in the tray; choose Quit desktop app to exit.</p>
-      <p>Ctrl+Space or Ctrl+Alt+Space starts, resumes, or pauses the timer globally, including while its windows are hidden. The Ctrl+Alt shortcuts are available when another running app has not already registered them: T for App, , to shrink or hide the floating timer, . to focus Compact (twice for App), / for a check-in, and ` to end early. You can also open views from the tray icon.</p>
+      <p>Ctrl+Space or Ctrl+Alt+Space starts, resumes, or pauses the timer globally, including while its windows are hidden. The Ctrl+Alt shortcuts are available when another running app has not already registered them: T for App, , to shrink or hide the floating timer, . to focus Compact (twice for App), / for a check-in, ' (apostrophe) to switch Timer / Stopwatch, and ` to end early. You can also open views from the tray icon.</p>
     </section>
     <section id="reflection" class="reflection-only" aria-labelledby="reflection-heading">
       <h2 id="reflection-heading" tabindex="-1">Session reflection</h2><p id="reflection-context"></p>
@@ -163,6 +163,6 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.1.38</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button">Save settings</button><span class="sr-only">Reflection Timer · 4.2.3</span></footer>
 </body>
 </html>

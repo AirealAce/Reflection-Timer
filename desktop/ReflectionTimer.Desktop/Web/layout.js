@@ -39,12 +39,14 @@ export function arrangeApp(view) {
   playback.innerHTML='<button id="playback-reset" class="timer-transport" type="button" aria-label="Reset timer" title="Reset timer"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="M11 4 5 10l6 6M5 10h10"/></svg></button><button id="playback-toggle" class="timer-transport" type="submit" form="timer-editor" aria-label="Start timer" title="Start timer"><span aria-hidden="true">▶</span></button><button id="playback-end" class="timer-transport" type="button" aria-label="End timer early" title="End timer early" aria-disabled="true"><svg viewBox="0 0 20 20" aria-hidden="true" focusable="false"><path d="m9 4 6 6-6 6M5 10h10"/></svg></button>';
   playback.insertAdjacentHTML('afterbegin','<button id="playback-repeat" type="button" aria-label="Auto-start next session" aria-pressed="false" title="Auto-start next session"><span aria-hidden="true">Auto<br>Start</span></button><button id="playback-compact" type="button" aria-label="Show or hide compact view" aria-pressed="false" aria-describedby="compact-view-status" title="Show compact view">Comp</button><span id="compact-view-status" class="sr-only">Compact view is hidden.</span>');
   $('visual-clock').after(playback);
+  const modeButton=document.createElement('button');modeButton.id='session-mode';modeButton.type='button';modeButton.textContent='Switch to Stopwatch';modeButton.className='session-mode-switch';
+  $('timer-state').after(modeButton);
   $('playback-reset').addEventListener('click',()=>$('reset').click());
   $('playback-end').addEventListener('click',()=>$('end').click());
   editor.after(options);$('repeat').closest('label').after($('cutoff-form'));$('end').hidden=true;$('check-in').classList.add('sr-only');
   const quick=document.createElement('form');quick.id='quick-schedule-form';quick.className='option-row';quick.innerHTML='<label for="quick-start">Start timer at</label><input id="quick-start" type="datetime-local" required><button type="submit">Schedule session</button>';
   const later=new Date(Date.now()+3600000);quick.querySelector('input').value=new Date(later-later.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  editor.after(quick);const help=document.createElement('p');help.textContent='Uses the duration and options on this page. View or cancel it in Scheduler.';quick.after(help);
+  editor.after(quick);const help=document.createElement('p');help.id='quick-schedule-help';help.textContent='Uses the duration and options on this page. View or cancel it in Scheduler.';quick.after(help);
   options.after($('volume-form'));
   const pending=$('pending');pending.querySelector('h2').classList.add('sr-only');pending.querySelectorAll('p')[1].hidden=true;$('pending-list').hidden=true;
   const buttonsRow=document.createElement('div');buttonsRow.className='actions';buttonsRow.append($('practice'));

@@ -8,8 +8,15 @@ public static class DataJson
     public static T Clone<T>(T value) => JsonSerializer.Deserialize<T>(JsonSerializer.Serialize(value, Options), Options)!;
 }
 
+public enum SessionMode { Timer = 0, Stopwatch = 1 }
+
 public record TimerState
 {
+    public SessionMode Mode { get; init; }
+    public long ElapsedMilliseconds { get; init; }
+    public long? RunningSince { get; init; }
+    public bool StopwatchCompleted { get; init; }
+    public bool TimeReachedPlayed { get; init; }
     public const int DefaultDurationSeconds = 15 * 60;
     public Guid? SessionId { get; init; }
     public bool IsRunning { get; init; }
@@ -34,6 +41,8 @@ public enum ScheduleOverlapPolicy { EndWithReflection = 0, Ask = 1, Wait = 2 }
 public enum ScheduleDecision { StartNow = 0, Wait = 1, Skip = 2 }
 public record ReflectionPrompt(Guid Id, long CompletedAt, int DurationSeconds, int Volume, bool IsTest, string Draft = "")
 {
+    public SessionMode Mode { get; init; }
+    public bool ResumeStopwatchOnSave { get; init; }
     public ReflectionSeparator? ContinuationSeparator { get; init; }
     // Retained independently of the active check-in link, for session-scoped audio.
     public Guid? SessionId { get; init; }
@@ -60,6 +69,7 @@ public enum AppColorTheme { Dark = 0, Light = 1, HighContrast = 2, Glamour = 3 }
 public enum FloatingTimerPlacement { Custom = 0, Center = 1, TopLeft = 2, TopRight = 3, BottomLeft = 4, BottomRight = 5, TopCenter = 6, BottomCenter = 7 }
 public record OutboxItem
 {
+    public SessionMode Mode { get; init; }
     public Guid? SessionId { get; init; }
     public bool AutoSent { get; init; }
     // Explicitly local records must never be bound to a receiver or uploaded.
@@ -95,6 +105,8 @@ public record AppState
     } };
     public int FormatVersion { get; init; } = 1;
     public TimerState Timer { get; set; } = new();
+    // Only Timer can be running. The other mode is retained here while paused.
+    public TimerState? ParkedTimer { get; set; }
     public List<ScheduledSession> Schedules { get; set; } = [];
     public ScheduleOverlapPolicy ScheduleOverlap { get; set; } = ScheduleOverlapPolicy.EndWithReflection;
     public List<ReflectionPrompt> Prompts { get; set; } = [];

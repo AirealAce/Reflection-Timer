@@ -11,7 +11,7 @@
  * the request works cleanly from a Manifest V3 service worker.
  */
 
-const APP_VERSION = '2.8.1';
+const APP_VERSION = '2.9.2';
 const DELIVERY_PROTOCOL = 'request-id-v1';
 const RECEIPT_PREFIX = 'RT_RECEIPT_';
 const ROWS_PER_BLOCK = 16;
@@ -54,14 +54,14 @@ function initializeReflectionTimer_(spreadsheetId, apiToken) {
     for (const name of [templateName, 'test']) {
       if (spreadsheet.getSheetByName(name)) continue; // Never clear or restyle an existing tab.
       const sheet = spreadsheet.insertSheet(name);
-      ensureColumns_(sheet, 6);
+      ensureColumns_(sheet, 7);
       const rows = Math.min(ROWS_PER_BLOCK, sheet.getMaxRows());
-      sheet.getRange(1, 1, rows, 6)
-        .setBackgrounds(Array.from({ length: rows }, () => ['#ffffff', '#000000', '#ffffff', '#000000', '#ffffff', '#000000']))
-        .setFontColors(Array.from({ length: rows }, () => ['#000000', '#ffffff', '#000000', '#ffffff', '#000000', '#ffffff']))
+      sheet.getRange(1, 1, rows, 7)
+        .setBackgrounds(Array.from({ length: rows }, () => ['#ffffff', '#000000', '#ffffff', '#000000', '#ffffff', '#000000', '#ffffff']))
+        .setFontColors(Array.from({ length: rows }, () => ['#000000', '#ffffff', '#000000', '#ffffff', '#000000', '#ffffff', '#000000']))
         .setBorder(true, true, true, true, true, true, '#ffffff', SpreadsheetApp.BorderStyle.SOLID)
         .setWrap(true);
-      [95, 440, 220, 220, 135, 300].forEach((width, column) => sheet.setColumnWidth(column + 1, width));
+      [95, 440, 220, 220, 135, 300, 135].forEach((width, column) => sheet.setColumnWidth(column + 1, width));
     }
     props.setProperty('SPREADSHEET_ID', spreadsheetId);
     props.setProperty('REFLECTION_API_TOKEN', apiToken);
@@ -106,6 +106,7 @@ function doPost(event) {
         deliveryProtocol: DELIVERY_PROTOCOL,
         supportsCheckIns: true,
         supportsAutoSent: true,
+        supportsStopwatch: true,
         target: `${spreadsheet.getName()} / ${target.sheet ? target.sheet.getName() : target.name}`,
         willCreate: !target.sheet,
         template: target.templateName || null
@@ -197,6 +198,7 @@ function requestFingerprint_(p) {
     p.actualDurationSeconds ?? null, p.endedEarly === true, String(p.earlyEndReason || '').trim()];
   // Preserve fingerprints for pre-upgrade receipts, including explicit false.
   if (p.isCheckIn === true) fields.push('check-in');
+  if (p.sessionMode === 'stopwatch') fields.push('stopwatch');
   // Text-marker requests keep their pre-upgrade fingerprint and retry receipts.
   if (p.autoSent === true && !String(p.message || '').trim().match(/^\[auto-sent\](?:\n|$)/)) fields.push('auto-sent');
   const text = JSON.stringify(fields);
@@ -407,14 +409,17 @@ function durationNumberFormat_(seconds) {
 }
 
 function validateSession_(payload, allotted) {
+  if(payload.sessionMode!==undefined&&!['timer','stopwatch'].includes(payload.sessionMode))throw new Error('Invalid session mode.');
+  const stopwatch=payload.sessionMode==='stopwatch';
   if (payload.autoSent !== undefined && typeof payload.autoSent !== 'boolean') throw new Error('Invalid auto-send status.');
   const autoSent = payload.autoSent === true || /^\[auto-sent\](?:\n|$)/.test(String(payload.message || '').trim());
   const actualDurationSeconds = validateDuration_(payload.actualDurationSeconds);
-  if (actualDurationSeconds !== null && (allotted === null || actualDurationSeconds > allotted)) {
+  if (!stopwatch && actualDurationSeconds !== null && (allotted === null || actualDurationSeconds > allotted)) {
     throw new Error('Actual time cannot exceed the allotted time.');
   }
   if (payload.endedEarly !== undefined && typeof payload.endedEarly !== 'boolean') throw new Error('Invalid early-finish status.');
   const endedEarly = payload.endedEarly === true;
+  if(stopwatch&&(allotted!==null||actualDurationSeconds===null||endedEarly))throw new Error('A stopwatch requires elapsed time, no allotted duration, and no early-finish flag.');
   if (payload.isCheckIn !== undefined && typeof payload.isCheckIn !== 'boolean') throw new Error('Invalid check-in status.');
   const isCheckIn = payload.isCheckIn === true;
   if (isCheckIn && (endedEarly || actualDurationSeconds === null)) throw new Error('A check-in requires actual time and cannot be an early finish.');
@@ -422,14 +427,14 @@ function validateSession_(payload, allotted) {
   if (payload.earlyEndReason !== undefined && typeof payload.earlyEndReason !== 'string') throw new Error('Invalid early-finish reason.');
   const earlyEndReason = String(payload.earlyEndReason || '').trim();
   if (earlyEndReason.length > 1000) throw new Error('The early-finish reason exceeds 1000 characters.');
-  return { actualDurationSeconds, endedEarly, isCheckIn, autoSent, earlyEndReason: endedEarly ? earlyEndReason : '' };
+  return { actualDurationSeconds, endedEarly, isCheckIn, autoSent, stopwatch, earlyEndReason: endedEarly ? earlyEndReason : '' };
 }
 
 function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds = null,
     session = { actualDurationSeconds: null, endedEarly: false, earlyEndReason: '' }) {
-  ensureColumns_(sheet, 6);
+  ensureColumns_(sheet, 7);
   // Only widen the newly owned fields, never shrink a user-chosen wider column.
-  for (const [column, width] of [[3, 220], [4, 220], [5, 135], [6, 300]]) {
+  for (const [column, width] of [[3, 220], [4, 220], [5, 135], [6, 300], [7, 135]]) {
     if (sheet.getColumnWidth(column) < width) sheet.setColumnWidth(column, width);
   }
   const previous = previousEntry_(sheet, spreadsheet);
@@ -442,7 +447,7 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   // Match column B's white cell outlines across every column.
   sheet.getRange(1, 1, 1, sheet.getMaxColumns())
     .setBorder(true, true, true, true, true, false, '#ffffff', SpreadsheetApp.BorderStyle.SOLID);
-  const entry = sheet.getRange(1, 1, 1, 6);
+  const entry = sheet.getRange(1, 1, 1, 7);
   // Treat reflections as plain text, including messages beginning with '='.
   entry.setNumberFormat('@');
   // Store a real Sheets duration (fraction of a day), not an uncalculable label.
@@ -452,13 +457,16 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   const response = session.autoSent && !message.trim() ? 'N/A' : message;
   entry.setValues([[clockLabel, response.startsWith('=') ? "'" + response : response,
     session.actualDurationSeconds === null ? '' : session.actualDurationSeconds / 86400,
-    durationSeconds === null ? '' : durationSeconds / 86400, [session.isCheckIn ? 'Check-in' : session.endedEarly ? 'ended early' : '', session.autoSent ? 'auto-sent' : ''].filter(Boolean).join(' · '),
-    session.earlyEndReason.startsWith('=') ? "'" + session.earlyEndReason : session.earlyEndReason]])
+    durationSeconds === null ? '' : durationSeconds / 86400,
+    [session.isCheckIn ? 'Check-in' : session.endedEarly ? 'ended early' : '', session.autoSent ? 'auto-sent' : ''].filter(Boolean).join(' · '),
+    session.earlyEndReason.startsWith('=') ? "'" + session.earlyEndReason : session.earlyEndReason,
+    session.stopwatch ? 'stop watch' : 'timer']])
     .setFontWeight('normal').setVerticalAlignment('top').clearNote();
   entry.getCell(1, 1).setBackground(background)
     .setFontColor(textColor_(background)).setNote(NOTE_PREFIX + JSON.stringify({
       kind: 'entry', timestamp: moment.timestamp.toISOString(), hourStart: moment.hourStart, durationSeconds,
       actualDurationSeconds: session.actualDurationSeconds, endedEarly: session.endedEarly, isCheckIn: session.isCheckIn === true, autoSent: session.autoSent === true,
+      sessionMode: session.stopwatch ? 'stopwatch' : 'timer',
       requestId: session.requestId || undefined, requestFingerprint: session.fingerprint || undefined
     }));
   // New rows can inherit an hour band's fill. Restore column stripes explicitly:
@@ -469,13 +477,13 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
     (_unused, index) => index % 2 === 0 ? '#000000' : '#ffffff');
   stripedCells.setBackgrounds([backgrounds])
     .setFontColors([backgrounds.map((color) => color === '#000000' ? '#ffffff' : '#000000')]);
-  sheet.getRange(1, 2, 1, 5).setWrap(true);
+  sheet.getRange(1, 2, 1, 6).setWrap(true);
 
   if (needsHour) {
     const theme = HOUR_THEMES[moment.hour];
     const marker = sheet.getRange(2, 1, 1, sheet.getMaxColumns());
-    sheet.getRange(2, 1, 1, 6).setNumberFormat('@')
-      .setValues([[`${moment.hour % 12 || 12}:00 ${moment.hour < 12 ? 'AM' : 'PM'}`, '', '', '', '', '']]).clearNote();
+    sheet.getRange(2, 1, 1, 7).setNumberFormat('@')
+      .setValues([[`${moment.hour % 12 || 12}:00 ${moment.hour < 12 ? 'AM' : 'PM'}`, '', '', '', '', '', '']]).clearNote();
     marker.setBackground(theme[0]).setFontColor(textColor_(theme[0]))
       .setFontWeight('bold').setWrap(false)
       .setBorder(true, false, true, false, false, false, theme[1], SpreadsheetApp.BorderStyle.SOLID_MEDIUM);

@@ -41,7 +41,9 @@ test('fresh receiver setup creates only missing Temp/test with consistent colors
   assert.deepEqual(f.created, ['Temp', 'test']); assert.equal(f.props.get('SPREADSHEET_ID'), ID); assert.equal(f.props.get('REFLECTION_API_TOKEN'), TOKEN);
   assert.equal(f.props.get('TEMPLATE_SHEET_NAME'), 'Temp'); assert.deepEqual(f.sheets.get('Sheet1').edits, []);
   const colors = f.sheets.get('Temp').edits.find(x => x[0] === 'setBackgrounds')[1][0];
-  assert.deepEqual([...colors], ['#ffffff', '#000000', '#ffffff', '#000000', '#ffffff', '#000000']);
+  assert.deepEqual([...colors], ['#ffffff', '#000000', '#ffffff', '#000000', '#ffffff', '#000000', '#ffffff']);
+  assert.deepEqual(f.sheets.get('Temp').edits.filter(x => x[0] === 'width').map(x => x.slice(1)),
+    [[1, 95], [2, 440], [3, 220], [4, 220], [5, 135], [6, 300], [7, 135]]);
   assert.equal(f.logs.some(x => x.includes(TOKEN)), false); assert.equal(f.lock.locked, false);
 });
 for (const name of ['Temp', 'Template', 'My template']) test('receiver setup preserves existing ' + name + ' and test entirely, including receipts', () => {

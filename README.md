@@ -1,6 +1,22 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.1.38**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.3**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+
+Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app in 4.2.3. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
+
+## Stopwatch mode (4.2.0)
+
+Stopwatch stop-time correction (4.2.2): global pause, mode switch, and reflection shortcuts freeze elapsed time at the queued key's timestamp, before logging or popup work. Slow saving and reflection loading do not inflate actual time sent to Sheets. Shortcut mappings are unchanged.
+
+Click **S**, immediately left of **−** in Compact or Time-only, to switch to Stopwatch; **T** returns to Timer. App view has the same mode switch. Switching pauses and preserves the unfinished session. Switching back does not start it automatically, and only one mode can run at a time. Start/pause/resume and reset controls operate on the selected mode; countdown input values remain intact.
+
+In Stopwatch, **Ctrl+Alt+/** pauses active time, plays your session-end sound, and opens the session's reflection. **Save** (or Ctrl+S) keeps the response and resumes that same selected stopwatch. **Save & send** finishes it without a second completion alert. Saving a parked or superseded reflection never starts another session. Pausing excludes break time; reset starts over from zero. A running stopwatch continues until paused, including across reopening the app.
+
+Settings → Audio → **Time reached · stopwatch** follows Low on time audio. Its editable threshold defaults to **300 seconds (5 minutes)** and plays once per stopwatch session. Initially it inherits your low-time MP3, volume, and playback behavior; editing it makes the selection independent. None, custom MP3s, previews, fades, and the three playback behaviors work as for other sounds. The same threshold control appears on the Timer page. Scheduled sessions remain countdowns; existing overlap rules apply. A scheduled countdown replacing an unfinished paused countdown retains that earlier work as a reflection.
+
+Receiver **2.9.2+** writes new entries as **C = active time, D = allotted time (blank for a stopwatch), E = status, F = reason for ending early, G = `timer` or `stop watch`**. Completed sessions leave E blank unless marked auto-sent; check-ins and early finishes retain their status. Existing rows are not migrated. Stopwatch delivery requires receiver 2.9.0+; update the existing deployment to 2.9.2+ for the new column layout. Outbox and diagnostic exports identify the mode. Receivers without stopwatch support leave those entries safely in Outbox with `receiver_update_required` rather than writing incompatible data.
+
+To upgrade an existing Sheet connection, use Connection setup to generate the current private receiver with your existing sheet/token, replace the code in your existing Apps Script project, save, then **Deploy → Manage deployments → Edit → New version → Deploy**. Keep the same `/exec` deployment URL; do not create a different account or token. Verify the connection, then retry held stopwatch entries in Outbox. Receiver source updates are not deployed automatically. Do not commit your generated private receiver or setup code.
 
 ## Project folders
 

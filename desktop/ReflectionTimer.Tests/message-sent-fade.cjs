@@ -14,8 +14,12 @@ module.exports=async function messageSentFade(context,initial,settings,check){
       };
     },{initial,settings});
     await page.getByRole('tab',{name:'Settings',exact:true}).click();
-    const checkbox=page.getByRole('checkbox',{name:'Fade out after message sent',exact:true}),seconds=page.getByRole('spinbutton',{name:'Low-time message-sent fade duration in seconds',exact:true});
-    check(await checkbox.count()===1&&await checkbox.evaluate(e=>e.closest('form').id==='sound-form-3'),'Only Low on time audio has the message-sent fade option');
+    for(const kind of [3,4]){
+      check(await page.locator(`#sound-fade-seconds-${kind}`).evaluate(input=>input.nextElementSibling.textContent==='seconds'),
+        (kind===3?'Low-time':'Stopwatch time-reached')+' playback fade shows only seconds after its input');
+    }
+    const checkbox=page.locator('#sound-form-3').getByRole('checkbox',{name:'Fade out after message sent',exact:true}),seconds=page.getByRole('spinbutton',{name:'Low-time message-sent fade duration in seconds',exact:true});
+    check(await checkbox.count()===1&&await page.locator('#sound-form-4').getByRole('checkbox',{name:'Fade out after message sent',exact:true}).count()===1,'Low-time and stopwatch time-reached audio each have their own message-sent fade option');
     check(!await checkbox.isChecked()&&await seconds.isDisabled()&&await seconds.inputValue()==='3','Legacy settings default to disabled message-sent fading with three seconds');
     check(await page.locator('#sound-message-fade-help-3').textContent().then(text=>text.includes('before validation or delivery')&&text.includes('Disruptive')),'The option explains immediate Send feedback and the Disruptive audio exception');
     await checkbox.check();
