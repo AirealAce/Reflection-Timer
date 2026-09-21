@@ -53,18 +53,41 @@ export function settingsUI({send, run, bind, view, announce}) {
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
   submit('connection-form','connectionSave',connection);
+  let savePending=false;
   async function saveSettings(){
-    if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
-    if(!$('appearance-form').reportValidity())return;
-    await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
-    if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
-    if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
-    // One success sound after every part of this explicit save has succeeded.
-    await send('settingsSaveComplete');
-    announce('Settings saved.');
+    if(savePending)return;
+    savePending=true;$('save-settings').setAttribute('aria-disabled','true');
+    try{
+      if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
+      if(!$('appearance-form').reportValidity())return;
+      await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
+      if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
+      if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
+      // One success sound after every part of this explicit save has succeeded.
+      await send('settingsSaveComplete');
+      announce('Settings saved.');
+    }finally{savePending=false;$('save-settings').setAttribute('aria-disabled','false');}
   }
   bind('save-settings',saveSettings);
-  if(view==='main')document.addEventListener('keydown',event=>{if(event.ctrlKey&&event.key==='Enter'&&document.body.dataset.tab==='settings'&&!document.querySelector('dialog[open]')){event.preventDefault();run(saveSettings);}});
+  let composing=false,nativeScope=false;
+  const canSaveFromShortcut=()=>view==='main'&&document.body.dataset.tab==='settings'&&!composing&&!document.querySelector('dialog[open]');
+  function syncShortcutScope(){
+    const enabled=canSaveFromShortcut();if(nativeScope===enabled)return;nativeScope=enabled;
+    run(()=>send('settingsShortcutScope',{enabled}));
+  }
+  if(view==='main'){
+    // Capture before a focused control can consume Enter or submit its own form.
+    document.addEventListener('keydown',event=>{
+      if(!canSaveFromShortcut()||event.isComposing||!event.ctrlKey||event.altKey||event.metaKey||event.shiftKey||
+        (event.key!=='Enter'&&event.key.toLowerCase()!=='s'))return;
+      event.preventDefault();event.stopImmediatePropagation();
+      if(!event.repeat)run(saveSettings);
+    },true);
+    document.addEventListener('appTabChanged',syncShortcutScope);
+    document.addEventListener('compositionstart',()=>{composing=true;syncShortcutScope();});
+    document.addEventListener('compositionend',()=>{composing=false;syncShortcutScope();});
+    new MutationObserver(syncShortcutScope).observe(document.body,{subtree:true,attributes:true,attributeFilter:['open']});
+  }
   const cutoffData=()=>({cutoff:$('cutoff-enabled').checked?$('cutoff').value:'',quiet:true});
   submit('cutoff-form','setCutoff',cutoffData);
   $('cutoff-enabled').addEventListener('change',()=>run(async()=>{$('cutoff').disabled=!$('cutoff-enabled').checked;if($('cutoff-enabled').checked)$('repeat').checked=true;if($('cutoff-enabled').checked&&(!$('cutoff').value||new Date($('cutoff').value).getTime()<=Date.now()))$('cutoff').value=localDateTime(Date.now()+3600000);await send('setCutoff',cutoffData());dirty.delete('cutoff-form');dirtyFields.delete('cutoff-form');}));
@@ -118,6 +141,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     },
     message(message) {
       if(view!=='main') return;
+      if(message.type==='settingsSaveShortcut'){if(canSaveFromShortcut())run(saveSettings);return;}
       if(message.type==='settings') { settings=message.settings; ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
       else if(message.type==='shortcuts'){
         const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact input; twice within 0.8 seconds for App input.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small, and hidden windows stay hidden.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden."];

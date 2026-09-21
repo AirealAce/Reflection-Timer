@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.4**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.5**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app in 4.2.3 and later. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
 
@@ -46,6 +46,8 @@ A fresh installation starts at 15 minutes with the compact timer enabled at bott
 Audio previews honor **Fade out after**: they play through the selected delay and the same one-second fade used during a session, unless the track finishes sooner. With timed fading disabled, previews remain limited to five seconds. This applies across Settings, Timer and Scheduler, including automatic previews when selecting a sound. **Stop all app audio** or a new preview can stop a long preview. Previewing does not simulate sending a reflection or trigger message-sent fading.
 
 ## Views and screen readers
+
+In App Settings, **Ctrl+Enter** and **Ctrl+S** both perform **Save settings** from any focused input, dropdown, button, or page text. They save edits without requiring you to leave the current field, keep focus in place, and play the success sound only after all saves finish. An open dialog keeps its own keys; repeated presses while saving cannot duplicate the save.
 
 App, the floating timer, and session-end prompts are separate windows. Compact and Time-only share one floating window. The interface uses headings, labels, real buttons, tables, keyboard focus, and restrained announcements; the countdown does not speak every tick. Use your screen reader's web reading and table commands. Compatibility still benefits from testing with your particular reader and version.
 

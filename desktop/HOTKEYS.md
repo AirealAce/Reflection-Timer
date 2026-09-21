@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.4. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.5. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -38,7 +38,7 @@ The bottom-left Time-only transport button appears on hover or keyboard focus. I
 
 Ctrl+Space or Ctrl+Alt+Space keeps an existing time-only viewer small when starting, pausing, or resuming, and keeps hidden viewers hidden.
 
-Space or Ctrl+Enter performs that same timer action from anywhere in the focused Compact or Time-only viewer, including its clock, page background, duration inputs, and buttons. It does not activate the focused button's other action or insert a space in a duration field. Held-key repeats and repeated requests while saving are ignored; an open dialog keeps its own keys. Space is local to the focused floating viewer, not a global shortcut; it retains normal behavior in App and reflection text boxes. In App Settings, Ctrl+Enter saves settings; reflection behavior is described below.
+Space or Ctrl+Enter performs that same timer action from anywhere in the focused Compact or Time-only viewer, including its clock, page background, duration inputs, and buttons. It does not activate the focused button's other action or insert a space in a duration field. Held-key repeats and repeated requests while saving are ignored; an open dialog keeps its own keys. Space is local to the focused floating viewer, not a global shortcut; it retains normal behavior in App and reflection text boxes. In App Settings, Ctrl+Enter or Ctrl+S saves settings from any focused control or page text; reflection behavior is described below.
 
 In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either control switches to Time-only and focuses the clock. From Time-only, either hides the floating viewer. This works while ready, running, paused, or finished and does not change the timer or other windows. Holding Escape performs only one step.
 
@@ -48,14 +48,14 @@ In a reflection window, Ctrl+Enter or Alt+S sends the response and ends that ref
 
 Finishing near zero also counts as normal completion. The grace period uses the session's low-time threshold when Low on time audio is checked, otherwise 15 seconds, capped at 10% of the allotted duration. A session that follows the Settings default uses its current value; a session override takes precedence. At or within that boundary, the reflection is not marked ended early, while actual elapsed time remains accurate. Paused sessions use their remaining time, excluding time spent paused.
 
-These shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter, Alt+S, and Alt+Enter skip if both fields are completely empty, with success audio, whether the session is running, paused, or ended. Sending requires response text; a reason-only response remains editable for completion or Ctrl+S. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+slash from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter saves settings.
+These shortcuts work anywhere in the reflection window, including buttons and page text. Ctrl+Enter, Alt+S, and Alt+Enter skip if both fields are completely empty, with success audio, whether the session is running, paused, or ended. Sending requires response text; a reason-only response remains editable for completion or Ctrl+S. Escape also skips when both boxes are empty; otherwise it saves the draft locally and closes, like Save or Ctrl+Alt+slash from a text box. Spaces and line breaks count as text. Held-key repeats, competing shortcuts while saving, and shortcuts behind a dialog cannot duplicate a reflection action. In App Settings, Ctrl+Enter or Ctrl+S saves settings from any focused control or page text.
 
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.4 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.5 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.4. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.5. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

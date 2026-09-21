@@ -70,12 +70,22 @@ internal sealed partial class PreviewWindow
     private TextBox? recoveryText;
     private Button? retryInterface;
     private Action? retryRecovery;
+    private bool settingsShortcutsActive;
     private WebView2 CreateBrowser()
     {
         var control=new WebView2 {Dock=DockStyle.Fill,AccessibleName=View=="main"?"Reflection Timer App view":View=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt"};
-        var resetPressed=false;
+        var resetPressed=false;var savePressed=false;
         // Preserve the native accelerator workaround on replacement controls too.
         control.KeyDown+=(_,e)=>{
+            if(View=="main"&&ready&&settingsShortcutsActive&&e.Modifiers==Keys.Control&&e.KeyCode is Keys.Enter or Keys.S){
+                // Native controls/browser accelerators can consume these keys
+                // before the page sees them. Use the same save as the DOM route.
+                e.Handled=true;
+                if(savePressed)return;
+                savePressed=true;
+                BeginInvoke(()=>{if(!IsDisposed&&ReferenceEquals(browser,control))Post(new{type="settingsSaveShortcut"});});
+                return;
+            }
             if(e.KeyCode==Keys.R&&e.Modifiers==Keys.Control){
                 // WebView handles Ctrl+R before DOM listeners. Defer browser
                 // work until its synchronous accelerator callback has returned.
@@ -89,8 +99,8 @@ internal sealed partial class PreviewWindow
             var backward=e.Shift;e.Handled=true;e.SuppressKeyPress=true;
             BeginInvoke(()=>Post(new{type="cycleAppTab",backward}));
         };
-        control.KeyUp+=(_,e)=>{if(e.KeyCode is Keys.R or Keys.ControlKey)resetPressed=false;};
-        control.LostFocus+=(_,_)=>resetPressed=false;
+        control.KeyUp+=(_,e)=>{if(e.KeyCode is Keys.R or Keys.ControlKey)resetPressed=false;if(e.KeyCode is Keys.Enter or Keys.S or Keys.ControlKey)savePressed=false;};
+        control.LostFocus+=(_,_)=>{resetPressed=false;savePressed=false;};
         return control;
     }
     private bool resetAndReloadInProgress;
@@ -140,7 +150,7 @@ internal sealed partial class PreviewWindow
     }
     private void ResetReadiness()
     {
-        ready=false;reflectionLoadError=null;
+        ready=false;settingsShortcutsActive=false;reflectionLoadError=null;
         reflectionReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
         interfaceReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
