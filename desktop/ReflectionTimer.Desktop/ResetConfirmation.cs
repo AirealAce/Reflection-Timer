@@ -82,11 +82,14 @@ internal sealed partial class PreviewWindow
     internal Task<bool> ConfirmResetAsync(ResetWarning warning)
     {
         var decision=new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
-        // A native modal must open after WebView's message callback returns.
-        // Windows exposes its text/buttons to screen readers even from Time-only.
+        // Open outside WebView's message callback. This dialog has its own
+        // taskbar/Alt+Tab entry and focus, including for a hidden/tool owner.
         BeginInvoke(()=>{
-            try {decision.TrySetResult(!IsDisposed&&MessageBox.Show(this,warning.Message,warning.Title,
-                MessageBoxButtons.OKCancel,MessageBoxIcon.Question,MessageBoxDefaultButton.Button2)==DialogResult.OK);}
+            try {
+                if(IsDisposed){decision.TrySetResult(false);return;}
+                using var dialog = new ResetConfirmationDialog(warning, app.Session.Engine.Snapshot.Theme);
+                decision.TrySetResult(dialog.ShowDialog(this)==DialogResult.OK);
+            }
             catch(Exception error){decision.TrySetException(error);}
         });
         return decision.Task;
