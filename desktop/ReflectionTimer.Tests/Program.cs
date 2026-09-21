@@ -9,6 +9,7 @@ if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
+if(args.Contains("--native-stopwatch-focus")){NativeStopwatchSmoke.RunInteractive();return;}
 if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return;}
 if(args.Contains("--native-reset-confirmation")){NativeResetConfirmationSmoke.Run();return;}
 if(args.Contains("--native-reset-dialog")){NativeResetDialogSmoke.Run();return;}

@@ -45,5 +45,42 @@ static class ClockDisplayTests
         session.Tick();
         now = now.AddSeconds(2);
         check(Seconds(session) == 298 && session.Engine.Snapshot.Timer.DurationSeconds == 300, "Scheduled handoff shows the new session countdown");
+        StopwatchDisplay(check);
+    }
+
+    private static void StopwatchDisplay(Action<bool, string> check)
+    {
+        var now = new DateTimeOffset(2026, 9, 21, 12, 0, 0, TimeSpan.Zero);
+        var store = new MemoryStore();
+        var session = new PreviewSession(store, () => now);
+        var engine = session.Engine;
+        JsonElement Clock(PreviewSession value) => JsonSerializer.SerializeToElement(value.Clock(), PreviewSession.Json);
+        int Seconds(PreviewSession value) => Clock(value).GetProperty("seconds").GetInt32();
+        engine.SwitchMode(SessionMode.Stopwatch);
+        engine.StartStopwatch();
+        now = now.AddSeconds(125);
+        var prompt = engine.ReviewStopwatch();
+        now = now.AddMinutes(2);
+        check(Seconds(session) == 125 && Clock(session).GetProperty("status").GetString() == "Paused", "An unsent stopwatch reflection keeps its paused elapsed display");
+        store.Fail = true;
+        try { engine.QueueReflection(prompt, "Finished work", localOnly: true); throw new Exception("Failed send accepted"); } catch (IOException) { }
+        store.Fail = false;
+        check(Seconds(session) == 125 && !engine.Snapshot.Timer.StopwatchCompleted && engine.Snapshot.Prompts.Count == 1, "A failed stopwatch send preserves the displayed elapsed time and reflection");
+        engine.SaveReflectionForLater(prompt, "Continue working");
+        now = now.AddSeconds(5);
+        check(Seconds(session) == 130 && engine.Snapshot.Timer.IsRunning, "Saving a stopwatch draft resumes its elapsed display instead of clearing it");
+        engine.ReviewStopwatch();
+        engine.QueueReflection(prompt, "Finished work", localOnly: true);
+        check(Seconds(session) == 0 && Clock(session).GetProperty("text").GetString() == "0 seconds" && Clock(session).GetProperty("status").GetString() == "Finished", "Sending a stopwatch response resets both visual and spoken clocks to zero");
+        check(engine.Snapshot.Timer.ElapsedMilliseconds == 130000 && engine.Snapshot.Outbox.Single().ActualDurationSeconds == 130, "The stopwatch display reset preserves the recorded work duration");
+        now = now.AddMinutes(10);
+        session.Tick();
+        check(Seconds(session) == 0 && Seconds(new PreviewSession(store, () => now)) == 0, "Later ticks and reopening retain the completed stopwatch's zero display");
+        engine.SwitchMode(SessionMode.Timer);
+        engine.SwitchMode(SessionMode.Stopwatch);
+        check(Seconds(session) == 0, "Returning from Timer keeps a completed stopwatch at zero");
+        engine.StartStopwatch();
+        now = now.AddSeconds(2);
+        check(Seconds(session) == 2, "Starting again counts a fresh stopwatch up from zero");
     }
 }

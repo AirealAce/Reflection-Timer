@@ -112,7 +112,12 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private void ToggleModeFromGlobalShortcut(long requestedAt)
     {
         compactPresses.Reset();
+        // Keep focus in the viewer where the user switched modes. Capture it
+        // before the state update can resize Compact or hide a duration field.
+        var viewer=windows.FirstOrDefault(w=>WindowActivation.IsForeground(w)
+            && (w.View=="main" || w.View=="compact"&&!w.IsTimeOnly));
         var result=KeepingTimeOnly(()=>Session.ToggleModeFromShortcut(requestedAt));Announce(result.Message);
+        if(viewer is not null)Open(viewer.View,timerPage:true);
         if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
     }
     internal void SetStartup(bool enabled)

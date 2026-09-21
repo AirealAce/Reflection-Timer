@@ -56,7 +56,9 @@ public sealed class PreviewSession
         var timer = Engine.Snapshot.Timer;
         var status = Status(timer);
         if(timer.Mode==SessionMode.Stopwatch) {
-            var elapsed=TimerEngine.ActualSeconds(timer,Engine.Now);
+            // Preview the next stopwatch at zero after sending, while retaining
+            // the finished session's elapsed time for reflection accounting.
+            var elapsed=status=="Finished"?0:TimerEngine.ActualSeconds(timer,Engine.Now);
             return new { seconds=elapsed,text=SpeakTime(elapsed),status,stopwatch=true };
         }
         // Keep completion and reflection accounting in the engine, but show the

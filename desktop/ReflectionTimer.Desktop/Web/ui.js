@@ -104,6 +104,15 @@ export function formatClock(seconds) {
   const h = Math.floor(seconds / 3600), m = Math.floor(seconds / 60) % 60, s = seconds % 60;
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 }
+// Both focus shortcuts use the visible play control for Stopwatch, or select
+// the same first nonzero duration unit for Timer in either viewer.
+export function focusTimerControl(stopwatch, doc=document) {
+  if(doc.querySelector('dialog[open]'))return;
+  if(stopwatch){(doc.getElementById('playback-toggle')??doc.getElementById('toggle')).focus();return;}
+  const fields=['hours','minutes','seconds'].map(id=>doc.getElementById(id));
+  const field=fields.find(input=>Number(input.value)>0)??fields[0];
+  field.focus();field.select();
+}
 // Completed sessions preview the duration in the controls. The engine's zero
 // remaining time (or a late countdown frame) must not become the idle display.
 export function displayClock(clock, values, edited=false) {

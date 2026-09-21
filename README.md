@@ -1,8 +1,10 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.10**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.11**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
-Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app in 4.2.3 and later. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
+Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app. In the focused App or Compact view, that same press focuses the Stopwatch play button or selects the Timer duration field. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
+
+Sending a stopwatch reflection returns the App, Compact, and Time-only clocks to 0:00, while retaining the actual work duration in the saved response. Saving a draft continues the same stopwatch; a failed send retains its elapsed display.
 
 ## Stopwatch mode (4.2.0)
 

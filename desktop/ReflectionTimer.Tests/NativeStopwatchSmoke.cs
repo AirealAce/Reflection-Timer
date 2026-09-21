@@ -9,7 +9,21 @@ using ReflectionTimer.Desktop;
 // fake hotkey registration, disposable browser profile, no connected Sheet.
 static class NativeStopwatchSmoke
 {
-    internal static void Run()
+    internal static void RunInteractive()
+    {
+        Exception? failure=null;
+        var thread=new Thread(()=>{
+            Application.EnableVisualStyles();
+            using var launcher=new Form{Text="Synthetic stopwatch shortcut checks",Size=new(420,140),StartPosition=FormStartPosition.CenterScreen};
+            launcher.Shown+=(_,_)=>launcher.BeginInvoke(()=>WindowActivation.Focus(launcher));
+            var run=new Button{Text="Run stopwatch focus checks",Dock=DockStyle.Fill};
+            run.Click+=(_,_)=>{try{Run(focusShortcuts:true);}catch(Exception error){failure=error;}finally{launcher.Close();}};
+            launcher.Controls.Add(run);Application.Run(launcher);
+        });
+        thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
+        if(failure is not null)throw new Exception("Interactive stopwatch shortcut checks failed",failure);
+    }
+    internal static void Run(bool focusShortcuts=false)
     {
         Exception? failure=null;var passed=0;
         void Check(bool value,string message){if(!value)throw new Exception(message);passed++;Console.WriteLine("PASS "+message);}
@@ -73,9 +87,40 @@ static class NativeStopwatchSmoke
                         await Script(prompt,"document.querySelector('#reflection-form button[type=submit]').click()");
                         await Until(()=>Task.FromResult(session.Engine.Snapshot.Outbox.Count==1));
                         Check(session.Engine.Snapshot.Timer.StopwatchCompleted&&session.Engine.Snapshot.Outbox.Single() is{Mode:SessionMode.Stopwatch,ActualDurationSeconds:70,DurationSeconds:0,LocalOnly:true},"Send finishes the native stopwatch with exactly seventy active seconds and no allotted duration");
+                        await Until(async()=>await Text(main,"#visual-clock")=="0:00"&&await Text(compact,"#visual-clock")=="0:00");
+                        Check(true,"Sending a stopwatch reflection resets App and Compact displays to 0:00");
+                        await Script(compact,"if(document.body.dataset.tiny!=='true')document.querySelector('#shrink').click()");
+                        await Until(()=>Task.FromResult(compact.IsTimeOnly));
+                        now=now.AddMinutes(1);app.Broadcast(new{type="clock",clock=session.Clock()});
+                        await Script(compact,"document.querySelector('#read-time').click()");
+                        await Until(async()=>(await Text(compact,"#time-snapshot"))!.Contains("0 seconds elapsed. Finished."));
+                        Check(await Text(main,"#visual-clock")=="0:00"&&await Text(compact,"#visual-clock")=="0:00"
+                            &&session.Engine.Snapshot.Timer.ElapsedMilliseconds==70000,"Time-only display and accessible read-time remain at zero while recorded elapsed time is retained");
                         await Script(main,"document.querySelector('#session-mode').click()");
                         await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.Mode==SessionMode.Timer));
                         Check(TimerEngine.IsPaused(session.Engine.Snapshot.Timer)&&session.Engine.Snapshot.Timer.RemainingSeconds==110,"T restores the original paused countdown after stopwatch completion");
+                        if(focusShortcuts){
+                            session.SetDurationDraft(["0","2","10"]);
+                            foreach(var viewer in new[]{main,compact}){
+                                app.Open(viewer.View,timerPage:true);
+                                await Until(()=>Task.FromResult(WindowActivation.IsForeground(viewer)));
+                                await Until(async()=>await Script(viewer,"document.activeElement.id")=="\"minutes\"");
+                                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId);
+                                var button=viewer.View=="main"?"playback-toggle":"toggle";
+                                await Until(async()=>await Script(viewer,"document.activeElement.id")==JsonSerializer.Serialize(button));
+                                Check(session.Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch&&WindowActivation.IsForeground(viewer),viewer.View+": one apostrophe switches to Stopwatch and focuses its visible play button");
+                                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId);
+                                await Until(async()=>await Script(viewer,"document.activeElement.id")=="\"minutes\"");
+                                Check(session.Engine.Snapshot.Timer.Mode==SessionMode.Timer&&WindowActivation.IsForeground(viewer),viewer.View+": one apostrophe switches back and selects the usual Timer duration field");
+                            }
+                            keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId);
+                            foreach(var viewer in new[]{compact,main}){
+                                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactFocusId);
+                                var button=viewer.View=="main"?"playback-toggle":"toggle";
+                                await Until(async()=>WindowActivation.IsForeground(viewer)&&await Script(viewer,"document.activeElement.id")==JsonSerializer.Serialize(button));
+                                Check(session.Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch,viewer.View+": period focuses the Stopwatch play button without changing its mode");
+                            }
+                        }
                         Check(session.Engine.Snapshot.Connection.WebAppUrl=="","Native stopwatch checks never connect to a real spreadsheet");
                     }catch(Exception error){failure=error;}
                     finally{await app.CloseMainAsync();}

@@ -1,4 +1,4 @@
-import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload} from './ui.js';
+import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,focusTimerControl} from './ui.js';
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
@@ -25,8 +25,7 @@ function renderDuration(clock=state?.clock){
 }
 function resize(){if(state)send('compactSize',{width:Math.ceil(document.body.getBoundingClientRect().width),height:Math.ceil(document.body.getBoundingClientRect().height),tiny}).catch(e=>setText($('error'),e.message));}
 function mode(value){tiny=value;document.body.dataset.tiny=String(value);$('shrink').setAttribute('aria-label',value?'Hide compact timer':'Shrink to time-only view');$('expand').setAttribute('aria-label',value?'Expand compact view':'Open main timer page');['shrink','expand'].forEach(id=>$(id).title=$(id).getAttribute('aria-label'));}
-function focusDuration(){if(state?.timer.mode===1){$('toggle').focus();return;}const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
-function expand(){revealed=true;mode(false);focusDuration();}
+function expand(){revealed=true;mode(false);focusTimerControl(state?.timer.mode===1);}
 function shrink(){revealed=false;mode(true);$('read-time').focus();}
 function snapshot(clock,speak=false){try{clock=displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),dirty);}catch{}const text=`${clock.text} ${clock.stopwatch?'elapsed':clock.status==='Finished'?'set':'remaining'}. ${clock.status}.`;setText($('time-snapshot'),`Time checked: ${text}`);if(speak)announce(text);}
 function render(next,keepTimeOnly=false){const previous=state;state=next;document.documentElement.dataset.theme=String(state.theme??0);const running=state.clock.status==='Running';

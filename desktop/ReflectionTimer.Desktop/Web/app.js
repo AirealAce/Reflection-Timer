@@ -1,4 +1,4 @@
-import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload} from './ui.js';
+import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, focusTimerControl} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
 
@@ -265,7 +265,7 @@ bridge?.addEventListener('message', event => {
     else $('reflection-text').focus();
   }
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
-  else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;if(state?.timer.mode===1){$('toggle').focus();return;}const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
+  else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;focusTimerControl(state?.timer.mode===1);}
   else if (message.type === 'cycleAppTab') layout.cycle(message.backward);
   else if (message.type === 'flush') {
     if(message.freeze)setReflectionBusy(true);
