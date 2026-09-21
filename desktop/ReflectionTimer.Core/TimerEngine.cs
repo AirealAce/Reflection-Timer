@@ -500,6 +500,7 @@ public sealed partial class TimerEngine
         s.Outbox = s.Outbox.Select(x => x.Id == id && x.Status == DeliveryStatus.NeedsReview ? x with { Status = DeliveryStatus.Sent, ErrorKind = "" } : x).ToList(), id);
     public void SetFloatingTimer(bool visible) => Change("display.changed", s => s.ShowFloatingTimer = visible);
     public void SetAutoSendIncompleteReflections(bool enabled) => Change("settings.saved", s => s.AutoSendIncompleteReflections = enabled);
+    public void SetConfirmBeforeReset(bool enabled) => Change("settings.saved", s => s.ConfirmBeforeReset = enabled);
     public void SetReflectionSeparator(ReflectionSeparator separator)
     {
         if (!Enum.IsDefined(separator)) throw new ArgumentException("Choose a saved reflection separator from the list.");

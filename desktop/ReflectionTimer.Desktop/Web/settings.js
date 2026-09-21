@@ -34,7 +34,7 @@ export function settingsUI({send, run, bind, view, announce}) {
       ['theme','placement','popup','overlap'].forEach(id=>setValue($(id),settings[id]));
       setValue($('reflectionSeparator'),settings.reflectionSeparator??3);
       $('show-compact').checked=settings.showFloatingTimer; $('logging').checked=settings.loggingEnabled;$('start-at-login').checked=!!settings.startAtLogin;
-      ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections'].forEach(id=>$(id).checked=settings[id]!==false);
+      ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).checked=settings[id]!==false);
     } else if(form==='volume-form'&&!dirty.has('settings-volume-form')) setMasterVolume(settings.volume);
     else if(form==='connection-form') {
       populateConnection(settings); $('connection-token').value=''; $('connection-enabled').checked=settings.connected;$('extension-off').checked=!!settings.extensionDisabledConfirmed;
@@ -49,7 +49,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   }
   const appearance=()=>({theme:Number($('theme').value),placement:Number($('placement').value),popup:Number($('popup').value),
     overlap:Number($('overlap').value),reflectionSeparator:Number($('reflectionSeparator').value),logging:$('logging').checked,showCompact:$('show-compact').checked,startAtLogin:$('start-at-login').checked,
-    compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,quiet:true});
+    compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,confirmBeforeReset:$('confirmBeforeReset').checked,quiet:true});
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
   submit('connection-form','connectionSave',connection);
@@ -102,7 +102,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   }
   ['theme','placement','popup','overlap','reflectionSeparator'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,Number($(id).value))));
   $('show-compact').addEventListener('change',()=>saveDisplay('show-compact','showCompact',$('show-compact').checked?1:0));
-  ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
+  ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
   function setMasterVolume(value){for(const id of ['app-volume','settings-volume']){$(id).value=value;setText($(id+'-caption'),'App sound ('+value+'%)');}}
   for(const id of ['app-volume','settings-volume'])$(id).addEventListener('input',()=>{
     const value=Number($(id).value),revision=++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');

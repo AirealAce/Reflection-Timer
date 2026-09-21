@@ -1,4 +1,4 @@
-# Reflection Timer 4.2.5
+# Reflection Timer 4.2.6
 
 Stopwatch: use Ctrl+Alt+' (apostrophe) from any app, S/T beside the Compact or Time-only minus button, or Switch to Stopwatch/Timer in App view. Switching pauses and preserves the other session; resume explicitly. The regular start/pause/reset controls and global start/pause shortcuts act on the selected mode. Stopwatch has no duration inputs or auto-start. Ctrl+Alt+/ pauses it, plays session-end audio, and opens its reflection. Save / Ctrl+S resumes the same selected stopwatch and keeps the response; Save & send finishes it with active elapsed time only. A parked draft never resumes a second clock. Time reached audio sits below Low on time in Settings, inherits that sound until edited, and defaults to one alert at 300 active seconds. Scheduled sessions remain countdowns.
 

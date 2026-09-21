@@ -36,7 +36,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser=CreateBrowser();
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information;
         browser.AccessibleName=view=="main"?"Reflection Timer App view":view=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt";
-        Text = view == "main" ? "Reflection Timer — App view · 4.2.5" : view == "compact" ? "Reflection Timer — Compact view · 4.2.5" : "Reflection Timer — Session end · 4.2.5";
+        Text = view == "main" ? "Reflection Timer — App view · 4.2.6" : view == "compact" ? "Reflection Timer — Compact view · 4.2.6" : "Reflection Timer — Session end · 4.2.6";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
         Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.Now))?525:440);
@@ -218,6 +218,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 settingsShortcutsActive=ReadFlag(data,"enabled");Reply(requestId);return;
             }
             if (action == "resetAndReload") { await ResetAndReloadAsync(requestId); return; }
+            if (action == "reset") { await ResetFromButtonAsync(data,requestId,requestedAt); return; }
             if (action == "reflectionReady") {
                 if(View!="reflection")throw new ArgumentException("Only a reflection can finish loading its editor.");
                 if(!data.TryGetProperty("id",out var loaded)||!loaded.TryGetGuid(out var loadedId)||loadedId!=PromptId)throw new ArgumentException("This reflection load is no longer current.");
@@ -246,7 +247,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 IsTimeOnly=ReadFlag(data,"tiny");
                 ApplyTopMost();
-                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.2.5";
+                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.2.6";
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);return;
             }
@@ -282,7 +283,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (requestId is not null&&IsCurrent(sender)) Post(new { type = "reply", requestId, error = message });
         }
     }
-    private void Reply(string requestId) => Post(new { type = "reply", requestId });
+    private void Reply(string requestId,bool cancelled=false) => Post(new { type = "reply", requestId, cancelled });
     internal void Post(object message)
     {
         if (!ready||IsDisposed||browser.IsDisposed)return;

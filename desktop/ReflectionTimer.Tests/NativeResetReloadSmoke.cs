@@ -17,7 +17,8 @@ static class NativeResetReloadSmoke
             try{
                 Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);Application.EnableVisualStyles();
                 var now=DateTimeOffset.Now;
-                var store=new MemoryStore{State=new AppState{LoggingEnabled=false,AutoSendIncompleteReflections=false,Timer=new(){Volume=0}}};
+                // Exercise the opt-out route here; NativeResetConfirmationSmoke covers confirmation.
+                var store=new MemoryStore{State=new AppState{LoggingEnabled=false,AutoSendIncompleteReflections=false,ConfirmBeforeReset=false,Timer=new(){Volume=0}}};
                 var session=new PreviewSession(store,()=>now,isolatedProfile:true);
                 app=new(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-ResetSmoke-"+Guid.NewGuid().ToString("N")),startInTray:true,profileName:"reset-smoke",shortcutRegistration:new Registration());
                 ((System.Windows.Forms.Timer)typeof(PreviewApplication).GetField("pulse",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!).Stop();

@@ -11,7 +11,8 @@ export function bindResetAndReload({bridge,send,run,canReset,selectTab=()=>{}}) 
       try{
         const active=document.activeElement;
         sessionStorage.setItem(key,JSON.stringify({tab:document.body.dataset.tab,scroll:document.getElementById('main')?.scrollTop||0,focus:active?.id}));
-        await send('resetAndReload');
+        const reply=await send('resetAndReload');
+        if(reply?.cancelled){pending=false;sessionStorage.removeItem(key);}
       }catch(error){pending=false;sessionStorage.removeItem(key);throw error;}
     });
   }

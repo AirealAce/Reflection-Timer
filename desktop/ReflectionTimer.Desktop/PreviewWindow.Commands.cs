@@ -63,6 +63,7 @@ internal sealed partial class PreviewWindow
                     case "timeOnlyAlwaysOnTop":engine.SetAlwaysOnTop(state.CompactAlwaysOnTop,ReadInt(data,"value",0,1)==1,state.PromptAlwaysOnTop);break;
                     case "promptAlwaysOnTop":engine.SetAlwaysOnTop(state.CompactAlwaysOnTop,state.TimeOnlyAlwaysOnTop,ReadInt(data,"value",0,1)==1);break;
                     case "autoSendIncompleteReflections":engine.SetAutoSendIncompleteReflections(ReadInt(data,"value",0,1)==1);break;
+                    case "confirmBeforeReset":engine.SetConfirmBeforeReset(ReadInt(data,"value",0,1)==1);break;
                     case "reflectionSeparator":engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"value",0,3));break;
                     default:throw new ArgumentException("Choose an available display preference.");
                 }break;
@@ -124,6 +125,7 @@ internal sealed partial class PreviewWindow
                 engine.SetFloatingTimer(ReadFlag(data,"showCompact"));
                 engine.SetAlwaysOnTop(ReadFlag(data,"compactAlwaysOnTop"),ReadFlag(data,"timeOnlyAlwaysOnTop"),ReadFlag(data,"promptAlwaysOnTop"));
                 engine.SetAutoSendIncompleteReflections(ReadFlag(data,"autoSendIncompleteReflections"));
+                engine.SetConfirmBeforeReset(ReadFlag(data,"confirmBeforeReset"));
                 engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"reflectionSeparator",0,3));
                 app.ApplyDisplayPreferences();
                 message="Display, schedule policy, and diagnostics preferences saved."; break;

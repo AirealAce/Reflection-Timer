@@ -3,7 +3,7 @@ announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
 let sequence=0,state,dirty=false,tiny=false,revealed=false,lastRunning=false,lastDeadline,repeatPending=false;
-function send(action,data={}){return new Promise((resolve,reject)=>{const requestId=`${requestPrefix}:${++sequence}`;if(!bridge)return reject(new Error('Open the compact timer through Reflection Timer.'));const timeout=setTimeout(()=>{requests.delete(requestId);reject(new Error('The app did not respond.'));},35000);requests.set(requestId,{resolve,reject,timeout});bridge.postMessage({requestId,action,data});});}
+function send(action,data={}){return new Promise((resolve,reject)=>{const requestId=`${requestPrefix}:${++sequence}`;if(!bridge)return reject(new Error('Open the compact timer through Reflection Timer.'));const timeout=['reset','resetAndReload'].includes(action)?undefined:setTimeout(()=>{requests.delete(requestId);reject(new Error('The app did not respond.'));},35000);requests.set(requestId,{resolve,reject,timeout});bridge.postMessage({requestId,action,data});});}
 function run(action){setText($('error'),'');Promise.resolve().then(action).catch(e=>setText($('error'),e.message));}
 function bind(id,action){$(id).addEventListener('click',()=>{if($(id).getAttribute('aria-disabled')!=='true')run(action);});}
 function announce(text){setText($('status'),'');setTimeout(()=>setText($('status'),text),50);}
@@ -50,7 +50,7 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(stopwatch?state.clock.seconds:state.timer.durationSeconds).length*15+16)}px`);
   if(tiny&&['hours','minutes','seconds','repeat','app','reset','end'].includes(document.activeElement.id))$('read-time').focus();
 }
-bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve();}
+bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve(m);}
   else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>setText($('error'),e.message));}
   else if(m.type==='appViewVisibility')setAppVisibility(m.visible);
   else if(m.type==='state')render(m.state,m.keepTimeOnly===true);
@@ -81,7 +81,7 @@ bind('repeat',async()=>{
   finally{repeatPending=false;$('repeat').removeAttribute('aria-disabled');}
 });
 bind('read-time',()=>send('readTime'));bind('app',()=>send('main'));bind('end',()=>send('end'));
-bind('reset',async()=>{await send('reset',state?.timer.mode===1?{}:{seconds:duration()});if(state?.timer.mode!==1){dirty=false;fill(state.timer.durationSeconds);}});
+bind('reset',async()=>{const reply=await send('reset',state?.timer.mode===1?{}:{seconds:duration()});if(reply?.cancelled)return;if(state?.timer.mode!==1){dirty=false;fill(state.timer.durationSeconds);}});
 bind('session-mode',()=>send('switchMode',{mode:state?.timer.mode===1?0:1}));
 bind('close',()=>send('close'));bind('shrink',()=>tiny?send('close'):shrink());bind('expand',()=>tiny?expand():send('main'));
 document.addEventListener('keydown',event=>{

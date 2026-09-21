@@ -12,7 +12,10 @@ module.exports=async function resetReload(context,initial,settings,check){
         window.previewDispatch({type:'settings',settings});
         const original=window.chrome.webview.postMessage;
         window.chrome.webview.postMessage=message=>{
-          if(message.action==='resetAndReload'&&window.rejectReset){
+          if(['reset','resetAndReload'].includes(message.action)&&window.cancelReset){
+            window.previewMessages.push(message);
+            queueMicrotask(()=>window.previewDispatch({type:'reply',requestId:message.requestId,cancelled:true}));
+          }else if(message.action==='resetAndReload'&&window.rejectReset){
             window.previewMessages.push(message);
             queueMicrotask(()=>window.previewDispatch({type:'reply',requestId:message.requestId,error:'Cannot save yet.'}));
           }else original(message);
@@ -35,11 +38,20 @@ module.exports=async function resetReload(context,initial,settings,check){
       await page.waitForFunction(()=>document.querySelector('#error').textContent==='Cannot save yet.');
       check(await requests()===1,view+' routes real Ctrl+R from the focused control to the native reset-and-reload command');
       check(await page.evaluate(()=>sessionStorage.getItem('timer-reset-reload-view')===null),view+' failed reset clears stale reload metadata');
+      await page.evaluate(()=>{window.rejectReset=false;window.cancelReset=true;window.previewDispatch({type:'resetAndReloadShortcut'});});
+      await page.waitForFunction(()=>window.previewMessages.filter(m=>m.action==='resetAndReload').length===2&&sessionStorage.getItem('timer-reset-reload-view')===null);
+      check(await page.locator('#error').textContent()==='',view+' cancelled reset clears reload state without reporting an error');
+      if(view==='main'||view==='compact'){
+        await page.locator('#minutes').fill('2');await page.locator('#seconds').fill('3');
+        await page.locator('#reset').click();await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='reset'));
+        check(await page.locator('#minutes').inputValue()==='2'&&await page.locator('#seconds').inputValue()==='3',view+' cancelled Reset button preserves duration edits');
+      }
+      await page.evaluate(()=>window.cancelReset=false);
       await page.evaluate(()=>{window.rejectReset=false;window.previewDispatch({type:'resetAndReloadShortcut'});});
-      await page.waitForFunction(()=>window.previewMessages.filter(m=>m.action==='resetAndReload').length===2);
+      await page.waitForFunction(()=>window.previewMessages.filter(m=>m.action==='resetAndReload').length===3);
       await page.keyboard.press('Control+r');
       await page.evaluate(()=>window.previewDispatch({type:'resetAndReloadShortcut'}));
-      check(await requests()===2,view+' native accelerator can retry once and duplicate keys stay blocked until reload');
+      check(await requests()===3,view+' native accelerator can retry after Cancel and duplicate keys stay blocked until reload');
       if(view==='reflection')check(await page.locator('#reflection-text').inputValue()==='Keep this response'&&await page.locator('#early-reason').inputValue()==='Keep this reason',
         'Reset shortcut never submits or clears either reflection field in the browser');
       check(await page.evaluate(()=>!window.previewMessages.some(m=>['queue','skip','saveForLater','saveOrSendReflection'].includes(m.action))),view+' reset shortcut never sends or skips a reflection');

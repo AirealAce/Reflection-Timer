@@ -74,7 +74,7 @@ public sealed class PreviewServices : IDisposable
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
             audio.TimeReachedEnabled,audio.TimeReachedSeconds,
-            s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.AutoSendIncompleteReflections,
+            s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,
             placement = (int)s.FloatingPlacement, popup = (int)s.PopupPosition, theme = (int)s.Theme, overlap = (int)s.ScheduleOverlap,
             tracks = new[] { LibrarySound.Default, LibrarySound.None }.Concat(SoundLibrary.Tracks).Select(t => new { id = (int)t, name = SoundLibrary.Name(t) }),

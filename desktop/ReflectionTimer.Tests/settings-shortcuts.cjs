@@ -9,6 +9,13 @@ module.exports=async function settingsShortcuts(context,initial,settings,check){
     },{initial,settings});
     await page.locator('#tab-settings').click();
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='settingsShortcutScope'&&m.data.enabled));
+    check(await page.locator('#confirmBeforeReset').isChecked(),'Reset confirmation starts enabled when old Settings omit the preference');
+    await page.locator('#confirmBeforeReset').uncheck();
+    await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='displayOption'&&m.data.option==='confirmBeforeReset'&&m.data.value===0));
+    await page.keyboard.press('Control+s');
+    await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='settingsSaveComplete'));
+    check(await page.evaluate(()=>window.previewMessages.findLast(m=>m.action==='saveAppearance').data.confirmBeforeReset===false),'Ctrl+S retains the unchecked reset confirmation preference');
+    await page.locator('#confirmBeforeReset').check();
     const count=()=>page.evaluate(()=>window.previewMessages.filter(m=>m.action==='settingsSaveComplete').length);
     for(const shortcut of ['Control+Enter','Control+s']){
       for(const selector of ['#theme','#show-compact','#settings-volume','#sound-track-0','#sound-behavior-0','#preview-sound-0','#default-threshold','#settings-time-reached-seconds','#sheet-url','#sheet-name','#save-settings','#tab-settings','#page-title']){

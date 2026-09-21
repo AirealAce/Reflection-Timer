@@ -28,7 +28,7 @@ function send(action, data = {}) {
   return new Promise((resolve, reject) => {
     if (!bridge) { reject(new Error('Open this interface through the Reflection Timer app.')); return; }
     const requestId = `${requestPrefix}:${++requestSequence}`;
-    const nativeDialog=['browseSound','browseLowSound','setupScript','exportDiagnostics','importSchedules'].includes(action);
+    const nativeDialog=['browseSound','browseLowSound','setupScript','exportDiagnostics','importSchedules','reset','resetAndReload'].includes(action);
     const timeout = nativeDialog ? undefined : setTimeout(() => { requests.delete(requestId); reject(new Error('The app did not respond. Check its status before trying again.')); }, 35000);
     requests.set(requestId, {resolve, reject, timeout});
     bridge.postMessage({requestId, action, data});
@@ -231,7 +231,7 @@ bridge?.addEventListener('message', event => {
   if (message.type === 'reply') {
     const pending=requests.get(message.requestId); if (!pending) return;
     clearTimeout(pending.timeout); requests.delete(message.requestId);
-    if (message.error) pending.reject(new Error(message.error)); else pending.resolve();
+    if (message.error) pending.reject(new Error(message.error)); else pending.resolve(message);
   } else if (message.type === 'init') {
     promptId=message.promptId; render(message.state);
     if(view!=='reflection'&&message.state.durationDraft)sharedDuration(message.state.durationDraft);
@@ -291,7 +291,7 @@ bindTimerEditor($('timer-editor'),['hours','minutes','seconds'].map($),run,async
   await send('toggle',{seconds,threshold,repeat:$('repeat').checked,lowTime:$('low-time').checked}); durationDirty=false; applyDuration(state.timer.durationSeconds); render(state);
 });
 bind('read-time',()=>send('readTime'));
-bind('reset',async()=>{ await send('reset',state?.timer.mode===1?{}:{seconds:readDuration()}); if(state?.timer.mode!==1){durationDirty=false; applyDuration(state.timer.durationSeconds);} render(state); });
+bind('reset',async()=>{ const reply=await send('reset',state?.timer.mode===1?{}:{seconds:readDuration()}); if(reply?.cancelled)return; if(state?.timer.mode!==1){durationDirty=false; applyDuration(state.timer.durationSeconds);} render(state); });
 bind('end',()=>send('end')); bind('check-in',()=>send('checkIn')); bind('practice',()=>send('testReflection'));
 $('repeat').addEventListener('change',()=>{
   if(repeatPending){renderRepeat(repeatDraft);return;}

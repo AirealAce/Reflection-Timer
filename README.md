@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.5**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.6**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app in 4.2.3 and later. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
 
@@ -11,6 +11,8 @@ Stopwatch stop-time correction (4.2.2): global pause, mode switch, and reflectio
 Click **S**, immediately left of **−** in Compact or Time-only, to switch to Stopwatch; **T** returns to Timer. App view has the same mode switch. Switching pauses and preserves the unfinished session. Switching back does not start it automatically, and only one mode can run at a time. Start/pause/resume and reset controls operate on the selected mode; countdown input values remain intact.
 
 In Stopwatch, **Ctrl+Alt+/** pauses active time, plays your session-end sound, and opens the session's reflection. **Save** (or Ctrl+S) keeps the response and resumes that same selected stopwatch. **Save & send** finishes it without a second completion alert. Saving a parked or superseded reflection never starts another session. Pausing excludes break time; reset starts over from zero. A running stopwatch continues until paused, including across reopening the app.
+
+**Reset** and **Ctrl+R** ask for confirmation when the selected timer or stopwatch is running, or an unsent reflection has text in either box, including saved or closed drafts. Cancel is selected by default and keeps the session and page open. Confirming retains reflection text; Ctrl+R then refreshes the focused view. Turn this off under **Settings → Timer and stopwatch → Confirm before resetting**. The setting starts enabled for new and existing installations.
 
 Settings → Audio → **Time reached · stopwatch** follows Low on time audio. Its editable threshold defaults to **300 seconds (5 minutes)** and plays once per stopwatch session. Initially it inherits your low-time MP3, volume, and playback behavior; editing it makes the selection independent. None, custom MP3s, previews, fades, and the three playback behaviors work as for other sounds. The same threshold control appears on the Timer page. Scheduled sessions remain countdowns; existing overlap rules apply. A scheduled countdown replacing an unfinished paused countdown retains that earlier work as a reflection.
 

@@ -10,6 +10,7 @@ if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
 if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return;}
+if(args.Contains("--native-reset-confirmation")){NativeResetConfirmationSmoke.Run();return;}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); passed++; Console.WriteLine("PASS " + name); }
@@ -18,6 +19,7 @@ var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
 TimerToggleShortcutTests.Run(Check);
 ResetShortcutTests.Run(Check);
+ResetConfirmationTests.Run(Check);
 ClockDisplayTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);

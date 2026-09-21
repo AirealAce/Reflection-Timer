@@ -122,6 +122,7 @@ public record AppState
     public bool TimeOnlyAlwaysOnTop { get; set; } = true;
     public bool PromptAlwaysOnTop { get; set; } = true;
     public bool AutoSendIncompleteReflections { get; set; } = true;
+    public bool ConfirmBeforeReset { get; set; } = true;
     public ReflectionSeparator ReflectionSeparator { get; set; } = ReflectionSeparator.Newline;
     public int? FloatingTimerLeft { get; set; }
     public int? FloatingTimerTop { get; set; }

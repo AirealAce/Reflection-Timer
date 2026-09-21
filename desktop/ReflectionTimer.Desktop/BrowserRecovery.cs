@@ -110,12 +110,10 @@ internal sealed partial class PreviewWindow
         resetAndReloadInProgress=true;
         var reloading=false;
         try {
-            await app.WithPromptLock(async()=>{
-                if(!ready||recoveringInterface||handoffInProgress||requestingClose||(View=="reflection"&&!ReflectionOpen))
+            var completed=await app.WithResetConfirmationAsync(this,async()=>{
+                if(!ready||recoveringInterface||requestingClose||(View=="reflection"&&!ReflectionOpen))
                     throw new InvalidOperationException("Wait for this view to finish opening or saving before resetting the timer.");
-                // Finish the current draft before navigation destroys its DOM.
-                // The prompt lock also keeps Prev/Next and handoffs out of this gap.
-                await FlushDraftAsync(freeze:true);
+                // The shared reset gate has durably saved and frozen all editors.
                 var result=app.KeepingTimeOnly(app.Session.ResetTimerFromShortcut);
                 Reply(requestId);
                 recoveringInterface=true;ResetReadiness();reloading=true;
@@ -124,6 +122,7 @@ internal sealed partial class PreviewWindow
                 recoveringInterface=false;
                 Post(new{type="announcement",message=result.Message+" Page refreshed."});
             });
+            if(!completed)Reply(requestId,cancelled:true);
         } catch {
             if(reloading)ShowFailure("The timer was reset, but this page could not be refreshed. Close and reopen this view. Saved drafts are retained.");
             else if(View=="reflection")Post(new{type="resumeReflection"});

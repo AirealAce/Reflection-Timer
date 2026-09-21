@@ -24,9 +24,10 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly PreviewShortcuts shortcuts;
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
-    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null)
+    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice;
+        confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         Services = new(session.Engine, directory); Services.Announcement += Announce;
         Services.Log.Record("app.started");
         Services.Log.Record("theme.loaded",value:(int)session.Engine.Snapshot.Theme);
