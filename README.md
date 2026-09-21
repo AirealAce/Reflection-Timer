@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.9**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.10**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app in 4.2.3 and later. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
 
@@ -12,7 +12,7 @@ Click **S**, immediately left of **−** in Compact or Time-only, to switch to S
 
 In Stopwatch, **Ctrl+Alt+/** pauses active time, plays your session-end sound, and opens the session's reflection. **Save** (or Ctrl+S) keeps the response and resumes that same selected stopwatch. **Save & send** finishes it without a second completion alert. Saving a parked or superseded reflection never starts another session. Pausing excludes break time; reset starts over from zero. A running stopwatch continues until paused, including across reopening the app.
 
-**Reset**, **Ctrl+R**, and **Ctrl+Alt+R** ask for confirmation when the selected timer or stopwatch is running, or an unsent reflection has text in either box, including saved or closed drafts. The accessible confirmation takes focus on **OK** and appears in Alt+Tab, even with the timer's other windows hidden. Tab moves between OK, Cancel, and the read-only warning text. Enter activates the focused button; Escape, Cancel, or closing the dialog keeps the session and page open. Confirming retains reflection text; Ctrl+R then refreshes the focused view. Turn this off under **Settings → Timer and stopwatch → Confirm before resetting**. The setting starts enabled for new and existing installations.
+**Reset**, **Ctrl+R**, and **Ctrl+Alt+R** ask for confirmation when the selected timer or stopwatch is running, or an unsent reflection has text in either box, including saved or closed drafts. The accessible confirmation takes focus on **OK** and appears in Alt+Tab, even with the timer's other windows hidden. The focused button has a thick accent-colored outline. Tab moves between OK, Cancel, and the read-only warning text. Enter activates the focused button; Escape, Cancel, or closing the dialog keeps the session and page open. Confirming retains reflection text; Ctrl+R then refreshes the focused view. Turn this off under **Settings → Timer and stopwatch → Confirm before resetting**. The setting starts enabled for new and existing installations.
 
 **Ctrl+Alt+R** resets the selected timer or stopwatch from any app, including with every timer window hidden. Timer returns to the shared duration inputs; Stopwatch returns to zero. This global shortcut preserves the current pages and viewer visibility. The ChatGPT App Hotkeys reader no longer assigns Ctrl+Alt+R.
 

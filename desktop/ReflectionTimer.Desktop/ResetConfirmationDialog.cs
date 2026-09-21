@@ -1,5 +1,6 @@
 using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
+using System.Runtime.InteropServices;
 
 namespace ReflectionTimer.Accessible;
 
@@ -52,6 +53,9 @@ internal sealed class ResetConfirmationDialog : Form
             DialogResult = DialogResult.Cancel, AutoSize = true, MinimumSize = new(88, 32), TabIndex = 1,
             BackColor = palette.Raised, ForeColor = palette.Text, UseVisualStyleBackColor = false
         };
+        var focusColor = FocusColor(palette, theme);
+        ApplyFocusOutline(confirm, palette, focusColor);
+        ApplyFocusOutline(cancel, palette, focusColor);
         var buttons = new FlowLayoutPanel {
             AutoSize = true, AutoSizeMode = AutoSizeMode.GrowAndShrink, WrapContents = false,
             Anchor = AnchorStyles.Right, TabIndex = 0, Margin = Padding.Empty
@@ -69,6 +73,41 @@ internal sealed class ResetConfirmationDialog : Form
         CancelButton = cancel;
         ActiveControl = confirm;
     }
+
+    private static void ApplyFocusOutline(Button button, PreviewPalette palette, Color color)
+    {
+        button.FlatStyle = FlatStyle.Flat;
+        button.FlatAppearance.BorderColor = palette.Border;
+        button.FlatAppearance.MouseOverBackColor = palette.Raised;
+        button.GotFocus += (_, _) => button.Invalidate();
+        button.LostFocus += (_, _) => button.Invalidate();
+        button.Paint += (_, e) => {
+            if(!button.Focused)return;
+            // Paint inside the existing bounds: focus never changes button size.
+            using var pen = new Pen(color, Math.Max(2, button.LogicalToDeviceUnits(3))) {
+                Alignment = System.Drawing.Drawing2D.PenAlignment.Inset
+            };
+            e.Graphics.DrawRectangle(pen, 0, 0, button.ClientSize.Width - 1, button.ClientSize.Height - 1);
+        };
+    }
+
+    private static Color FocusColor(PreviewPalette palette, AppColorTheme theme)
+    {
+        // Match the Windows title-bar accent when it is clearly visible against
+        // the button. Respect contrast themes and fall back to the app's accent.
+        if(SystemInformation.HighContrast || theme == AppColorTheme.HighContrast)return palette.Accent;
+        if(DwmGetColorizationColor(out var argb, out _) != 0)return palette.Accent;
+        var accent = Color.FromArgb(255, (int)(argb >> 16 & 255), (int)(argb >> 8 & 255), (int)(argb & 255));
+        static double Light(Color c) {
+            static double Channel(byte b) { var v = b / 255d; return v <= .04045 ? v / 12.92 : Math.Pow((v + .055) / 1.055, 2.4); }
+            return .2126 * Channel(c.R) + .7152 * Channel(c.G) + .0722 * Channel(c.B);
+        }
+        var a = Light(accent); var b = Light(palette.Raised);
+        return (Math.Max(a, b) + .05) / (Math.Min(a, b) + .05) >= 3 ? accent : palette.Accent;
+    }
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmGetColorizationColor(out uint color, [MarshalAs(UnmanagedType.Bool)] out bool opaque);
 
     protected override CreateParams CreateParams
     {
