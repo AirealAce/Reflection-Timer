@@ -144,7 +144,7 @@ internal sealed partial class PreviewWindow
                         engine.SetSound(sound,AudioSettings.From(state).For(sound) with { Mp3Path=path,Track=LibrarySound.Default }); message="Custom MP3 saved.";
                     }
                 } break;
-            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,4),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview for up to five seconds."; break;
+            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,4),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview using your sound and fade settings."; break;
             case "stopSound": services.StopAudio(); message="App audio stopped."; break;
             case "markIssue": services.Log.Record("issue.marked"); message="Issue marked in local diagnostics."; break;
             case "diagnostics": Post(new { type="diagnostics", report=services.Log.Report(state) }); break;

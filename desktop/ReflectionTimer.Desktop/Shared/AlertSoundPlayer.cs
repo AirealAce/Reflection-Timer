@@ -161,7 +161,11 @@ public sealed class AlertSoundPlayer : IDisposable
 
     private async Task<AlertSoundResult> RunAsync(string path, string fallback, Voice request, Task waitForStops)
     {
-        using var limit = request.Preview ? new CancellationTokenSource(Timeout.InfiniteTimeSpan, timeProvider) : null;
+        // A timed fade ends playback through LiveGainProvider's audio-frame
+        // envelope. Let it finish even when its delay exceeds five seconds;
+        // decoding/device setup must not consume the delay or truncate the fade.
+        using var limit = request.Preview && request.Level.FadeOutAfterSeconds is null
+            ? new CancellationTokenSource(Timeout.InfiniteTimeSpan, timeProvider) : null;
         using var linked = limit is null ? null : CancellationTokenSource.CreateLinkedTokenSource(request.Cancellation.Token, limit.Token);
         var token = linked?.Token ?? request.Cancellation.Token;
         try {

@@ -111,6 +111,7 @@ await PromptPolicyTests.Run(Check);
 await ServiceTests.Run(Check);
 await SuccessAudioTests.Run(Check);
 await AudioBehaviorTests.Run(Check);
+await AudioPreviewTests.Run(Check);
 await MessageSentFadeTests.Run(Check);
 await ReflectionSendModeTests.Run(Check);
 await QuietCompletionTests.Run(Check);
