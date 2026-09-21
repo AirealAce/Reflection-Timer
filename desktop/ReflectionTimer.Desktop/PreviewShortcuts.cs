@@ -33,7 +33,8 @@ internal sealed class PreviewShortcuts : IDisposable
         (GlobalShortcut.ReflectionFocusKey, GlobalShortcut.ReflectionFocusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleModifiers),
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleAltId, GlobalShortcut.Modifiers),
-        (GlobalShortcut.ModeToggleKey, GlobalShortcut.ModeToggleId, GlobalShortcut.Modifiers)
+        (GlobalShortcut.ModeToggleKey, GlobalShortcut.ModeToggleId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.ResetTimerKey, GlobalShortcut.ResetTimerId, GlobalShortcut.Modifiers)
     ];
     private readonly GlobalShortcut?[] registrations = new GlobalShortcut?[Chords.Length];
     private readonly Action<TimeSpan>[] actions;

@@ -26,22 +26,31 @@ static class NativeResetConfirmationSmoke
                 _=app.MainForm!.Handle;
                 app.MainForm.BeginInvoke(async()=>{
                     try {
+                        app.MainForm.Hide();
+                        session.Engine.Start(900,false,0);var coldSession=session.Engine.Snapshot.Timer.SessionId;
+                        GlobalReset(app);await Until(()=>Task.FromResult(asked==1));
+                        Check(!app.MainForm.Visible&&session.Engine.Snapshot.Timer.SessionId==coldSession,"Global reset can ask from a cold tray launch without opening App view");
+                        decision!.SetResult(false);await Idle(app);
+                        Check(session.Engine.Snapshot.Timer.IsRunning&&!app.MainForm.Visible,"Cancelling a global reset retains the running session and hidden views");
+                        GlobalReset(app);await Until(()=>Task.FromResult(asked==2));decision!.SetResult(true);await Idle(app);
+                        Check(session.Engine.Snapshot.Timer.SessionId is null&&!app.MainForm.Visible,"Confirmed global reset works with App view hidden during startup");
                         app.Open("main");app.Open("compact");
                         var windows=(List<PreviewWindow>)typeof(PreviewApplication).GetField("windows",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
                         var main=windows.Single(w=>w.View=="main");var compact=windows.Single(w=>w.View=="compact");
                         await Ready(main);await Ready(compact);
                         foreach(var mode in new[]{SessionMode.Timer,SessionMode.Stopwatch}) {
                             session.Engine.SwitchMode(mode);
-                            foreach(var route in new[]{"App button","App playback","Compact button","App Ctrl+R","Time-only Ctrl+R"}) {
+                            foreach(var route in new[]{"App button","App playback","Compact button","App Ctrl+R","Time-only Ctrl+R","Global Ctrl+Alt+R"}) {
                                 if(mode==SessionMode.Timer)session.Engine.Start(900,false,0);else session.Engine.StartStopwatch();
                                 now=now.AddSeconds(25);
-                                compact.Post(new{type=route=="Time-only Ctrl+R"?"shrinkCompact":"expandCompact"});
-                                await Until(()=>Task.FromResult(compact.IsTimeOnly==(route=="Time-only Ctrl+R")));
+                                var tiny=route is "Time-only Ctrl+R" or "Global Ctrl+Alt+R";
+                                compact.Post(new{type=tiny?"shrinkCompact":"expandCompact"});
+                                await Until(()=>Task.FromResult(compact.IsTimeOnly==tiny));
                                 var target=route.StartsWith("App")?main:compact;
                                 var reload=route.Contains("Ctrl+R");
                                 var before=JsonSerializer.Serialize(session.Engine.Snapshot.Timer);var prior=asked;
                                 await Script(target,"window.resetConfirmMarker=true");
-                                async Task Invoke(){if(reload)NativeReset(target);else await Script(target,"document.querySelector('"+(route=="App playback"?"#playback-reset":"#reset")+"').click()");}
+                                async Task Invoke(){if(route=="Global Ctrl+Alt+R")GlobalReset(app);else if(reload)NativeReset(target);else await Script(target,"document.querySelector('"+(route=="App playback"?"#playback-reset":"#reset")+"').click()");}
                                 await Invoke();await Until(()=>Task.FromResult(asked>prior));
                                 Check(warning is {Running:true,HasDraft:false}&&warning.Mode==mode&&JsonSerializer.Serialize(session.Engine.Snapshot.Timer)==before,route+" asks before changing a running "+mode);
                                 // Neither another window nor another shortcut may stack decisions.
@@ -55,7 +64,7 @@ static class NativeResetConfirmationSmoke
                                 Check(!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.SessionId is null&&
                                     (mode==SessionMode.Stopwatch?session.Engine.Snapshot.Timer.ElapsedMilliseconds==0:session.Engine.Snapshot.Timer.RemainingSeconds==900),route+" confirmation performs the normal "+mode+" reset");
                                 Check(await Bool(target,"window.resetConfirmMarker"+(reload?"===undefined":"===true")),route+" reloads only when requested");
-                                if(route=="Time-only Ctrl+R")Check(compact.IsTimeOnly,"Confirmed reset retains Time-only view");
+                                if(tiny)Check(compact.IsTimeOnly,"Confirmed reset retains Time-only view");
                             }
                         }
                         session.Engine.SwitchMode(SessionMode.Timer);session.Engine.Start(900,false,0);
@@ -94,6 +103,9 @@ static class NativeResetConfirmationSmoke
                         count=asked;await Script(main,"window.resetConfirmMarker=true");NativeReset(main);await IdleAfterRequest(app,main);
                         Check(asked==count&&!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Prompts.Single(p=>p.Id==id).Draft=="Saved closed draft","Disabled confirmation resets running sessions with drafts without asking or losing text");
                         Check(await Bool(main,"document.body.dataset.tab==='settings'&&!document.querySelector('#confirmBeforeReset').checked"),"Opt-out and current Settings tab survive Ctrl+R reload");
+                        session.Engine.Start(300,false,0);session.SetDurationDraft(["0","2","3"]);main.Hide();compact.Hide();
+                        count=asked;GlobalReset(app);await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.SessionId is null));await Idle(app);
+                        Check(asked==count&&session.Engine.Snapshot.Timer.RemainingSeconds==123&&!main.Visible&&!compact.Visible,"Global reset uses shared duration inputs and keeps hidden windows hidden");
                         Check(session.Engine.Snapshot.Outbox.Count==0&&session.Engine.Snapshot.Connection.WebAppUrl=="","Reset confirmation tests never send reflections or connect to Sheets");
                     }catch(Exception error){failure=error;decision?.TrySetResult(false);}
                     finally{await app.CloseMainAsync();}
@@ -107,6 +119,7 @@ static class NativeResetConfirmationSmoke
         Console.WriteLine($"{passed} native reset confirmation checks passed.");
     }
     private static void NativeReset(PreviewWindow window){var key=new KeyEventArgs(Keys.Control|Keys.R);typeof(Control).GetMethod("OnKeyDown",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Browser(window),[key]);if(!key.Handled)throw new Exception("Ctrl+R was not intercepted");typeof(Control).GetMethod("OnKeyUp",BindingFlags.Instance|BindingFlags.NonPublic)!.Invoke(Browser(window),[new KeyEventArgs(Keys.R)]);}
+    private static void GlobalReset(PreviewApplication app){var keys=(PreviewShortcuts)typeof(PreviewApplication).GetField("shortcuts",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;if(!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ResetTimerId))throw new Exception("Global Ctrl+Alt+R was not registered");}
     private static Task Idle(PreviewApplication app)=>Until(()=>Task.FromResult(!(bool)typeof(PreviewApplication).GetField("resetInProgress",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!));
     private static async Task IdleAfterRequest(PreviewApplication app,PreviewWindow window){await Until(async()=>await Bool(window,"window.resetConfirmMarker===undefined&&sessionStorage.getItem('timer-reset-reload-view')===null"));await Idle(app);await Ready(window);}
     private static WebView2 Browser(PreviewWindow window)=>(WebView2)typeof(PreviewWindow).GetField("browser",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!;

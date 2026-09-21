@@ -22,7 +22,26 @@ internal sealed partial class PreviewApplication
 {
     private bool resetInProgress;
     private readonly Func<PreviewWindow,ResetWarning,Task<bool>> confirmReset;
-    internal async Task<bool> WithResetConfirmationAsync(PreviewWindow owner,Func<Task> reset)
+    private void ResetFromGlobalShortcut()
+    {
+        compactPresses.Reset();
+        if(closing||resetInProgress||MainForm is null||MainForm.IsDisposed)return;
+        // Leave the registered-hotkey callback before any modal/browser work.
+        MainForm.BeginInvoke(async()=>{
+            if(closing||resetInProgress)return;
+            var owner=windows.FirstOrDefault(w=>!w.IsDisposed&&ReflectionTimer.Desktop.WindowActivation.IsForeground(w))
+                ??windows.FirstOrDefault(w=>!w.IsDisposed&&w.Visible&&w.View=="compact")??(PreviewWindow)MainForm;
+            try {
+                await WithResetConfirmationAsync(owner,()=>{
+                    var result=KeepingTimeOnly(Session.ResetTimerFromShortcut);
+                    Announce(result.Message);return Task.CompletedTask;
+                },requireReady:false);
+            } catch(Exception error) {
+                Announce(error is ArgumentException or InvalidOperationException?error.Message:"The timer could not be reset. Your saved session and drafts are retained.");
+            }
+        });
+    }
+    internal async Task<bool> WithResetConfirmationAsync(PreviewWindow owner,Func<Task> reset,bool requireReady=true)
     {
         // One decision across all windows; repeated buttons/shortcuts cannot
         // queue another reset behind the first confirmation.
@@ -30,7 +49,7 @@ internal sealed partial class PreviewApplication
         resetInProgress=true;var completed=false;
         try {
             await WithPromptLock(async()=>{
-                owner.EnsureResetAvailable();
+                if(requireReady)owner.EnsureResetAvailable();
                 var prepared=new List<IReflectionPromptWindow>();
                 try {
                     foreach(var window in windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed).ToArray()) {

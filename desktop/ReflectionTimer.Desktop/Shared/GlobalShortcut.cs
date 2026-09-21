@@ -26,6 +26,8 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const int TimerToggleId = 0x5259;
     internal const int TimerToggleAltId = 0x525A;
     internal const int ModeToggleId = 0x525B;
+    internal const int ResetTimerId = 0x525C;
+    internal const uint ResetTimerKey = 0x52; // R
     internal const uint ModeToggleKey = 0xDE; // VK_OEM_7: apostrophe/quote on a US keyboard.
     internal const uint TimerToggleKey = 0x20; // VK_SPACE
     internal const uint TimerToggleModifiers = 0x0002 | 0x4000; // Control + NoRepeat

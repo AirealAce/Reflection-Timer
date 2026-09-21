@@ -59,7 +59,8 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(4, ReflectionHotkey),
             Shortcut(5, ToggleTimerFromGlobalShortcut),
             Shortcut(6, ToggleTimerFromGlobalShortcut),
-            Shortcut(7, ToggleModeFromGlobalShortcut)
+            Shortcut(7, ToggleModeFromGlobalShortcut),
+            Shortcut(8, _=>ResetFromGlobalShortcut())
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(!startInTray)MainForm.Show(); ApplyDisplayPreferences();
     }

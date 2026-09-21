@@ -9,6 +9,8 @@ module.exports=async function settingsShortcuts(context,initial,settings,check){
     },{initial,settings});
     await page.locator('#tab-settings').click();
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='settingsShortcutScope'&&m.data.enabled));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:9},(_,id)=>({id,available:id!==8}))}));
+    check(await page.locator('#shortcut-notices kbd').last().textContent()==='Ctrl+Alt+R'&&await page.locator('#shortcut-notices p').last().textContent().then(t=>t.includes('Unavailable:')),'Settings identifies global reset and reports its registration conflict');
     check(await page.locator('#confirmBeforeReset').isChecked(),'Reset confirmation starts enabled when old Settings omit the preference');
     await page.locator('#confirmBeforeReset').uncheck();
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='displayOption'&&m.data.option==='confirmBeforeReset'&&m.data.value===0));

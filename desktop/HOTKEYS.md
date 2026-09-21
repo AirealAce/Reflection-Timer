@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.6. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.7. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -10,7 +10,7 @@ Escape hides the focused App view, like Ctrl+Alt+T or its X button. It works on 
 
 Ctrl+R resets the timer to the shared duration inputs, like Reset, and refreshes the focused App, Compact, Time-only, or session-end page. It works while running, paused, or stopped and leaves the timer ready to start. The current App tab and floating view mode are retained. Reflection text is saved locally before refreshing and is not sent. Invalid duration or a failed draft save leaves the page open for correction. An open dialog keeps focus. Save unfinished settings before refreshing.
 
-Reset and Ctrl+R ask first when the selected timer/stopwatch is running or an unsent reflection contains text in either box, including closed drafts. Cancel is the default and prevents both reset and reload. The session keeps running while the confirmation is open. Settings → Timer and stopwatch → Confirm before resetting controls this behavior and is enabled by default.
+Reset, Ctrl+R, and Ctrl+Alt+R ask first when the selected timer/stopwatch is running or an unsent reflection contains text in either box, including closed drafts. Cancel is the default and prevents both reset and reload. The session keeps running while the confirmation is open. Settings → Timer and stopwatch → Confirm before resetting controls this behavior and is enabled by default.
 
 ## Current mappings
 
@@ -24,6 +24,7 @@ Stopwatch pauses use the queued shortcut's timestamp. Waiting for a busy UI thre
 
 | Shortcut | Action |
 | --- | --- |
+| Ctrl+Alt+R | Reset the selected timer to its shared duration inputs, or Stopwatch to zero, from any app. Uses the reset confirmation setting. Does not reload pages, reveal hidden windows, or expand Time-only. |
 | Ctrl+Alt+' (apostrophe) | Switch Timer ↔ Stopwatch, pausing and preserving the current session. Resume the selected mode explicitly. This is separate from the backtick start/end shortcut. |
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
 | Ctrl+Alt+T | If the main window is focused, hide it exactly like its X button. Otherwise bring it forward, preserving the selected tab; on Timer, select the first positive duration field. The timer and compact view continue unchanged. |
@@ -55,9 +56,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.6 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.7 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.6. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.7. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.
