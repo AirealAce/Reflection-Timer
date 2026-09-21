@@ -12,17 +12,26 @@ static class DefaultsThemeShortcutTests
         var state=session.Engine.Snapshot;
         check(state.Timer.DurationSeconds==900&&state.Timer.RemainingSeconds==900&&!state.Timer.IsRunning&&!state.Timer.AutoRestart&&state.Timer.AutoRestartUntil is null,"New profile starts ready at 15 minutes with repeat and cutoff off");
         check(state.ShowFloatingTimer&&state.FloatingPlacement==FloatingTimerPlacement.BottomLeft&&state.PopupPosition==ReflectionPopupPosition.BottomRight,"New profile enables Compact at bottom left and reflections at bottom right");
-        check(state.Timer.LowTime.Enabled&&state.Timer.LowTime.ThresholdSeconds is null&&AudioSettings.From(state).LowTimeThresholdSeconds==15,"New profile enables the inherited 15-second low-time warning");
+        check(!state.Timer.LowTime.Enabled&&state.Timer.LowTime.ThresholdSeconds==13&&AudioSettings.From(state).LowTimeThresholdSeconds==15,"New profile leaves low-time unchecked at 13 seconds, retaining the Scheduler's inherited 15 seconds");
         check(state.Timer.Volume==50&&state.Theme==AppColorTheme.Dark&&state.LoggingEnabled&&!state.StartAtLogin,"New profile keeps the original volume, Dark theme, diagnostics, and startup defaults");
         check(state.ScheduleOverlap==ScheduleOverlapPolicy.EndWithReflection&&state.Schedules.Count==0&&state.Outbox.Count==0&&state.Prompts.Count==0,"New profile has the original overlap policy and no demonstration entries");
-        foreach(var (kind,file) in new[]{(SoundEvent.SessionEnd,"popup.mp3"),(SoundEvent.Success,"pokemon-level-up.mp3"),(SoundEvent.Failure,"kirby-out-of-health.mp3"),(SoundEvent.LowTime,"pokemon-battle-trainer.mp3")}){
+        foreach(var (kind,track,file,fade,seconds,messageFade,messageSeconds) in new[]{
+            (SoundEvent.SessionEnd,LibrarySound.SessionEnd,"popup.mp3",false,10,false,3),
+            (SoundEvent.Success,LibrarySound.LevelUp,"pokemon-level-up.mp3",false,10,false,3),
+            (SoundEvent.Failure,LibrarySound.OutOfHealth,"kirby-out-of-health.mp3",false,10,false,3),
+            (SoundEvent.LowTime,LibrarySound.TrainerBattle,"pokemon-battle-trainer.mp3",true,25,true,5),
+            (SoundEvent.TimeReached,LibrarySound.ChampionBattle,"pokemon-battle-champion.mp3",true,6,true,5)}){
             var sound=AudioSettings.From(state).For(kind);
             var path=SoundLibrary.Resolve(kind,sound)!;
-            var behavior=kind==SoundEvent.SessionEnd?SoundBehavior.Assertive:kind==SoundEvent.LowTime?SoundBehavior.Polite:SoundBehavior.Disruptive;
-            check(Path.GetFileName(path)==file&&File.Exists(path)&&sound.Behavior==behavior&&sound.Volume==100&&!sound.FadeOutEnabled&&sound.FadeOutAfterSeconds==10,"Bundled MP3 and requested new-user playback defaults for "+kind);
+            var behavior=kind==SoundEvent.SessionEnd?SoundBehavior.Assertive:SoundBehavior.Disruptive;
+            check(sound.Track==track&&sound.Mp3Path==""&&Path.GetFileName(path)==file&&File.Exists(path)&&sound.Behavior==behavior&&sound.Volume==100,
+                "Portable selected MP3, behavior and volume match the requested installation preset for "+kind);
+            check(sound.FadeOutEnabled==fade&&sound.FadeOutAfterSeconds==seconds&&sound.FadeOutAfterMessageSent==messageFade&&sound.MessageSentFadeSeconds==messageSeconds,
+                "Every audio checkbox and fade value matches the requested installation preset for "+kind);
         }
         var newProfile=new EncryptedStore(Path.Combine(Path.GetTempPath(),"ReflectionTimer-Uncreated-"+Guid.NewGuid().ToString("N"))).Load();
-        check(AudioSettings.From(newProfile).SessionEnd.Behavior==SoundBehavior.Assertive&&AudioSettings.From(newProfile).LowTime.Behavior==SoundBehavior.Polite,"A new encrypted profile receives the requested audio behaviors");
+        check(JsonSerializer.Serialize(newProfile.Audio)==JsonSerializer.Serialize(state.Audio)&&newProfile.Timer.LowTime==state.Timer.LowTime,"A new encrypted profile receives the complete audio preset");
+        check(newProfile.Audio is {TimeReachedEnabled:true,TimeReachedSeconds:300}&&newProfile.Timer.Volume==50,"New profile enables the 300-second stopwatch alert with App sound at 50 percent");
         var legacy=JsonSerializer.Deserialize<AppState>("{}",DataJson.Options)!;
         check(Enum.GetValues<SoundEvent>().All(kind=>AudioSettings.From(legacy).For(kind).Behavior==SoundBehavior.Disruptive),"Existing profiles without audio settings retain their legacy playback behaviors");
         var chosen=legacy with{Audio=new(){SessionEnd=new(){Behavior=SoundBehavior.Polite},LowTime=new(){Behavior=SoundBehavior.Assertive}}};

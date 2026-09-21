@@ -99,10 +99,10 @@ public record AppState
 {
     // Only brand-new profiles use these defaults; deserialized legacy audio
     // remains null and retains its original migration behavior.
-    public static AppState CreateDefault() => new() { Audio = new() {
-        SessionEnd = new() { Behavior = SoundBehavior.Assertive },
-        LowTime = new() { Behavior = SoundBehavior.Polite }
-    } };
+    public static AppState CreateDefault() => new() {
+        Timer = new() { LowTime = new() { Enabled = false, ThresholdSeconds = 13 } },
+        Audio = AudioSettings.CreateDefault()
+    };
     public int FormatVersion { get; init; } = 1;
     public TimerState Timer { get; set; } = new();
     // Only Timer can be running. The other mode is retained here while paused.

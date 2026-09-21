@@ -27,6 +27,17 @@ public record LowTimeOptions
 
 public record AudioSettings
 {
+    // Apply the installation preset only to a new profile. Record initializers
+    // below also deserialize older profiles, so their legacy fallbacks stay put.
+    public static AudioSettings CreateDefault() => new() {
+        SessionEnd = new() { Track = LibrarySound.SessionEnd, Behavior = SoundBehavior.Assertive },
+        Success = new() { Track = LibrarySound.LevelUp, Behavior = SoundBehavior.Disruptive },
+        Failure = new() { Track = LibrarySound.OutOfHealth, Behavior = SoundBehavior.Disruptive },
+        LowTime = new() { Track = LibrarySound.TrainerBattle, Behavior = SoundBehavior.Disruptive,
+            FadeOutEnabled = true, FadeOutAfterSeconds = 25, FadeOutAfterMessageSent = true, MessageSentFadeSeconds = 5 },
+        TimeReached = new() { Track = LibrarySound.ChampionBattle, Behavior = SoundBehavior.Disruptive,
+            FadeOutEnabled = true, FadeOutAfterSeconds = 6, FadeOutAfterMessageSent = true, MessageSentFadeSeconds = 5 }
+    };
     public const int DefaultLowTimeThresholdSeconds = 15;
     public SoundSetting SessionEnd { get; init; } = new();
     public SoundSetting Success { get; init; } = new();
