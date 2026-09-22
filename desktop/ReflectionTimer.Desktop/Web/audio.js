@@ -26,9 +26,18 @@ export function mountAudio({send,run}) {
     const data=()=>({kind,track:field('sound-track').value==='custom'?0:Number(field('sound-track').value),keepCustom:field('sound-track').value==='custom',
       behavior:Number(field('sound-behavior').value),volume:Number(field('sound-volume').value),fade:field('sound-fade').checked,fadeSeconds:Number(field('sound-fade-seconds').value),quiet:true,
       ...([3,4].includes(kind)?{fadeAfterMessageSent:field('sound-message-fade').checked,messageSentFadeSeconds:Number(field('sound-message-fade-seconds').value)}:{})});
-    function saveSound(){const value=data(),revision=editor.revision;editor.saving=editor.saving.catch(()=>{}).then(()=>send('saveSound',value)).then(()=>{if(editor.revision===revision)editor.dirty=false;});return editor.saving;}
+    let volumeTimer;
+    function saveSound(){
+      clearTimeout(volumeTimer);volumeTimer=undefined;
+      if(editor.pending)return editor.saving;
+      editor.pending=true;
+      editor.saving=(async()=>{
+        while(editor.dirty){const value=data(),revision=editor.revision;await send('saveSound',value);if(editor.revision===revision)editor.dirty=false;}
+      })().finally(()=>{editor.pending=false;});
+      return editor.saving;
+    }
     editor.save=saveSound;
-    form.addEventListener('input',event=>{if(event.target.closest('#settings-low-options,.time-reached-options'))return;editor.dirty=true;editor.revision++;if(event.target===field('sound-volume')){setText(field('sound-volume-caption'),`Volume (${event.target.value}%)`);run(saveSound);}});
+    form.addEventListener('input',event=>{if(event.target.closest('#settings-low-options,.time-reached-options'))return;editor.dirty=true;editor.revision++;if(event.target===field('sound-volume')){setText(field('sound-volume-caption'),`Volume (${event.target.value}%)`);volumeTimer??=setTimeout(()=>{volumeTimer=undefined;run(saveSound);},150);}});
     form.addEventListener('change',event=>{if(event.target.closest('#settings-low-options,.time-reached-options'))return;editor.dirty=true;editor.revision++;field('sound-fade-seconds').disabled=!field('sound-fade').checked;if([3,4].includes(kind))field('sound-message-fade-seconds').disabled=!field('sound-message-fade').checked;run(async()=>{await saveSound();if(event.target===field('sound-track'))await send('previewSound',{kind,quiet:true});});});
     form.addEventListener('submit',event=>{event.preventDefault();run(saveSound);});
     field('browse-sound').addEventListener('click',()=>run(async()=>{if(editor.dirty)await saveSound();await send('browseSound',{kind});renderEditor(editor);}));

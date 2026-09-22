@@ -1,10 +1,10 @@
-// Scan tracked files without printing matched secrets or private URLs.
+// Scan tracked and non-ignored new source without printing private values.
 const fs = require('node:fs');
 const path = require('node:path');
 const { execFileSync } = require('node:child_process');
 const {approvedTracks, validateBundledAudio} = require('./bundled-audio.cjs');
 const root = path.join(__dirname, '..');
-const files = execFileSync('git', ['ls-files', '-z'], {cwd:root}).toString().split('\0').filter(Boolean);
+const files = [...new Set(execFileSync('git', ['ls-files', '--cached', '--others', '--exclude-standard', '-z'], {cwd:root}).toString().split('\0').filter(Boolean))];
 const rules = [
   ['private key', /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/],
   ['GitHub token', /\b(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{40,})\b/],
@@ -38,4 +38,4 @@ for (const file of files) {
 if (findings.length) {
   console.error(JSON.stringify({findings}, null, 2));
   process.exitCode = 1;
-} else console.log(`Public-source scan passed for ${files.length} tracked files (pattern scan; not a security guarantee).`);
+} else console.log(`Public-source scan passed for ${files.length} source files (pattern scan; not a security guarantee).`);

@@ -14,6 +14,21 @@ if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return
 if(args.Contains("--native-reset-confirmation")){NativeResetConfirmationSmoke.Run();return;}
 if(args.Contains("--native-reset-dialog")){NativeResetDialogSmoke.Run();return;}
 if(args.Contains("--native-reset-dialog-interactive")){NativeResetDialogSmoke.RunInteractive();return;}
+if(args.Contains("--upload-recovery")){
+    var recoveryPassed=0;
+    await UploadRecoveryTests.Run((condition,name)=>{if(!condition)throw new Exception(name);recoveryPassed++;Console.WriteLine("PASS "+name);});
+    Console.WriteLine($"{recoveryPassed} upload recovery checks passed.");return;
+}
+if(args.Contains("--delivery-preflight")){
+    var preflightPassed=0;
+    await DeliveryPreflightTests.Run((condition,name)=>{if(!condition)throw new Exception(name);preflightPassed++;Console.WriteLine("PASS "+name);});
+    Console.WriteLine($"{preflightPassed} delivery preflight checks passed.");return;
+}
+if(args.Contains("--clock-accuracy")){
+    var clockPassed=0;
+    ClockAccuracyTests.Run((condition,name)=>{if(!condition)throw new Exception(name);clockPassed++;Console.WriteLine("PASS "+name);});
+    Console.WriteLine($"{clockPassed} clock accuracy checks passed.");return;
+}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); passed++; Console.WriteLine("PASS " + name); }
@@ -24,6 +39,8 @@ TimerToggleShortcutTests.Run(Check);
 ResetShortcutTests.Run(Check);
 ResetConfirmationTests.Run(Check);
 ClockDisplayTests.Run(Check);
+ClockAccuracyTests.Run(Check);
+PerformanceTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);
 ProfileStorageTests.Run(Check);
@@ -115,6 +132,8 @@ Check(!shortcutSession.Engine.Snapshot.Timer.IsRunning&&shortcutEnd.OpenReflecti
 await PromotionTests.Run(Check);
 await PromptPolicyTests.Run(Check);
 await ServiceTests.Run(Check);
+await UploadRecoveryTests.Run(Check);
+await DeliveryPreflightTests.Run(Check);
 await SuccessAudioTests.Run(Check);
 await AudioBehaviorTests.Run(Check);
 await AudioPreviewTests.Run(Check);

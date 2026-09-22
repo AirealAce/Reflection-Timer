@@ -19,7 +19,7 @@ static class ProfileStorageTests
                 Prompts = [new(Guid.NewGuid(), 1, 90, 36, false, "Synthetic private draft")],
                 Audio = new() { LowTime = new() { Behavior = SoundBehavior.Polite, Volume = 24, FadeOutAfterMessageSent = true } } };
             var store = new EncryptedStore(legacy); store.Save(state); store.Save(state);
-            new DiagnosticLog(legacy).Record("theme.changed", value: 3);
+            using(var log=new DiagnosticLog(legacy)){log.Record("theme.changed", value: 3);}
             var original = File.ReadAllBytes(Path.Combine(legacy, "state.dat"));
             ProfileStorage.MigrateLegacy(shared, legacy);
             check(JsonSerializer.Serialize(new EncryptedStore(shared).Load(), DataJson.Options) == JsonSerializer.Serialize(state, DataJson.Options),

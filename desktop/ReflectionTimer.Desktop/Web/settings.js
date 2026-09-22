@@ -7,7 +7,14 @@ import {mountTimeReached} from './time-reached.js';
 
 export function settingsUI({send, run, bind, view, announce}) {
   const $ = id => document.getElementById(id);
-  let settings, volumeRevision=0, volumeSaving=Promise.resolve();
+  let settings, volumeRevision=0, volumeSaving=Promise.resolve(), volumeTimer, volumePending=false;
+  let deliveryIssue=null, deliveryEnabled=false;
+  function renderDelivery() {
+    const message=deliveryIssue
+      ? deliveryIssue.message+(deliveryIssue.nextRetryAt ? ` Automatic retry after ${new Date(deliveryIssue.nextRetryAt).toLocaleString()}.` : '')
+      : deliveryEnabled?'Sheets delivery is enabled. Connected pending entries send automatically.':'Sheets delivery is off. Pending entries stay saved.';
+    setText($('delivery-status'),message);
+  }
   const updateTheme=mountTheme(view);
   const setup=mountSetup({send,run});
   const audio=mountAudio({send,run});
@@ -60,7 +67,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     try{
       if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
       if(!$('appearance-form').reportValidity())return;
-      await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await volumeSaving;await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
+      await flushAutosaves();await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
       if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
       if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
       // One success sound after every part of this explicit save has succeeded.
@@ -104,11 +111,29 @@ export function settingsUI({send, run, bind, view, announce}) {
   $('show-compact').addEventListener('change',()=>saveDisplay('show-compact','showCompact',$('show-compact').checked?1:0));
   ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
   function setMasterVolume(value){for(const id of ['app-volume','settings-volume']){$(id).value=value;setText($(id+'-caption'),'App sound ('+value+'%)');}}
-  for(const id of ['app-volume','settings-volume'])$(id).addEventListener('input',()=>{
-    const value=Number($(id).value),revision=++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');
-    volumeSaving=volumeSaving.catch(()=>{}).then(()=>send('volume',{volume:value,quiet:true})).then(()=>{if(revision===volumeRevision){dirty.delete('volume-form');dirty.delete('settings-volume-form');}});
-    run(()=>volumeSaving);
-  });
+  function flushVolume(){
+    clearTimeout(volumeTimer);volumeTimer=undefined;
+    if(volumePending||(!dirty.has('volume-form')&&!dirty.has('settings-volume-form')))return volumeSaving;
+    volumePending=true;
+    volumeSaving=(async()=>{
+      while(dirty.has('volume-form')||dirty.has('settings-volume-form')){
+        const value=Number($('app-volume').value),revision=volumeRevision;
+        await send('volume',{volume:value,quiet:true});
+        if(revision===volumeRevision){dirty.delete('volume-form');dirty.delete('settings-volume-form');}
+      }
+    })().finally(()=>{volumePending=false;});
+    return volumeSaving;
+  }
+  async function flushAutosaves(){await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await flushVolume();}
+  for(const id of ['app-volume','settings-volume']){
+    $(id).addEventListener('input',()=>{
+      const value=Number($(id).value);++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');
+      // Sample a continuous drag at most every 150 ms, retaining the last value.
+      // This bounds durable writes while keeping audible volume feedback prompt.
+      volumeTimer??=setTimeout(()=>{volumeTimer=undefined;run(flushVolume);},150);
+    });
+    $(id).addEventListener('change',()=>run(flushVolume));
+  }
   $('settings-volume-form').addEventListener('submit',event=>event.preventDefault());
   $('default-threshold').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.isComposing){event.preventDefault();$('settings-low-time').focus();}});
   $('sheet-mode').addEventListener('change',()=>{$('sheet-name').disabled=$('sheet-mode').value!=='fixed';});
@@ -128,6 +153,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   bind('clear-diagnostics',()=>{$('clear-log-dialog').showModal();$('clear-log-title').focus();});
   bind('clear-log-confirm',async()=>{await send('clearDiagnostics',{confirmed:true});$('clear-log-dialog').close();$('clear-diagnostics').focus();});
   return {
+    flush:flushAutosaves,
     scheduleLow:()=>lowTime.scheduleData(),timerLow:()=>lowTime.timerData(),resetScheduleLow:()=>lowTime.resetSchedule(),
     load() { return view==='main'?send('settingsLoad'):Promise.resolve(); },
     state(state) {
@@ -135,14 +161,15 @@ export function settingsUI({send, run, bind, view, announce}) {
       updateTheme(state.theme??0);
       if(!dirty.has('appearance-form') && state.showFloatingTimer!==undefined) $('show-compact').checked=state.showFloatingTimer;
       if(!dirty.has('volume-form')&&!dirty.has('settings-volume-form') && state.appVolume!==undefined) setMasterVolume(state.appVolume);
-      setText($('delivery-status'),state.connected?'Sheets delivery is enabled. Connected pending entries send automatically.':'Sheets delivery is off. Pending entries stay saved.');
+      deliveryEnabled=!!state.connected;renderDelivery();
       setText($('reflection-delivery'),state.connected?'Save & send queues this reflection for automatic Sheets delivery. Practice reflections use the receiver’s test tab.':'Save & send keeps this reflection in the Outbox. Sheets delivery is off.');
       if(!dirty.has('cutoff-form')) {$('cutoff').value=localDateTime(state.timer.autoRestartUntil);$('cutoff-enabled').checked=!!state.timer.autoRestartUntil;$('cutoff').disabled=!state.timer.autoRestartUntil;}
     },
     message(message) {
       if(view!=='main') return;
       if(message.type==='settingsSaveShortcut'){if(canSaveFromShortcut())run(saveSettings);return;}
-      if(message.type==='settings') { settings=message.settings; ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
+      if(message.type==='deliveryIssue') { deliveryIssue=message.issue;renderDelivery(); }
+      else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
       else if(message.type==='shortcuts'){
         const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact; twice within 0.8 seconds for App. Selects the Timer duration or focuses the Stopwatch play button.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small, and hidden windows stay hidden.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. In the focused App or Compact view, the same press focuses the Stopwatch play button or selects the Timer duration. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden.",'Ctrl+Alt+R · reset the selected timer or stopwatch from any app. Uses the reset confirmation setting. Keeps hidden windows hidden and Time-only small.'];
         $('shortcut-notices').replaceChildren(...descriptions.map((text,i)=>{

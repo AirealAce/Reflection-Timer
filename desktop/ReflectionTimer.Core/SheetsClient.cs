@@ -7,6 +7,21 @@ namespace ReflectionTimer.Core;
 public record SheetReply(bool Success, string ErrorKind, string DisplayMessage, string Tab = "", string Target = "",
     bool SupportsSafeRetry = false, bool Retryable = false, bool SupportsCheckIns = false, bool SupportsAutoSent = false, bool SupportsStopwatch = false);
 
+/// <summary>A single send batch, bound to the connection verified when it began.
+/// Create a fresh batch for each sync; never retain it as a capability cache.</summary>
+public sealed class SheetUploadBatch
+{
+    public SheetReply Capability { get; }
+    private readonly Func<OutboxItem, CancellationToken, Task<SheetReply>> upload;
+    internal SheetUploadBatch(SheetReply capability, Func<OutboxItem, CancellationToken, Task<SheetReply>> upload)
+    {
+        Capability = capability;
+        this.upload = upload;
+    }
+    public Task<SheetReply> Upload(OutboxItem item, CancellationToken cancellation = default)
+        => Capability.Success ? upload(item, cancellation) : Task.FromResult(Capability);
+}
+
 public sealed class SheetsClient : IDisposable
 {
     public const string DeliveryProtocol = "request-id-v1";
@@ -34,32 +49,39 @@ public sealed class SheetsClient : IDisposable
     }
     public Task<SheetReply> Ping(ConnectionSettings settings, CancellationToken cancellation = default, bool isTest = false) => Send(settings, null, cancellation, isTest);
     public Task<SheetReply> Upload(ConnectionSettings settings, OutboxItem item, CancellationToken cancellation = default) => Send(settings, item, cancellation);
-    private async Task<SheetReply> Send(ConnectionSettings settings, OutboxItem? item, CancellationToken cancellation, bool pingTest = false)
+    public async Task<SheetUploadBatch> BeginBatch(ConnectionSettings settings, CancellationToken cancellation = default)
+    {
+        var capability = await Ping(settings, cancellation);
+        return new(capability, (item, token) => Send(settings, item, token, verified: capability));
+    }
+    private async Task<SheetReply> Send(ConnectionSettings settings, OutboxItem? item, CancellationToken cancellation, bool pingTest = false, SheetReply? verified = null)
     {
         if (item?.LocalOnly == true) return new(false, "settings_required", "This entry is local only and cannot be uploaded.");
         var invalid = Validate(settings);
         if (invalid is not null) return new(false, "settings_required", invalid);
         if (item is not null && item.ReceiverUrl.Length > 0 && !ConnectionSetup.SameReceiver(item.ReceiverUrl, settings.WebAppUrl))
             return new(false, "receiver_changed", "This entry belongs to a different receiver. Restore its original connection before retrying.");
+        // Independent uploads still verify all needed capabilities. In a batch,
+        // one authenticated check covers them all for this exact connection.
+        var needsCapability = item is not null && (item.IsCheckIn || item.Mode == SessionMode.Stopwatch || (item.AutoSent && item.Message.Length > 4988));
+        var receiver = verified;
+        if (needsCapability) {
+            receiver ??= await Ping(settings, cancellation);
+            if (!receiver.Success) return receiver;
+        }
         if (item?.IsCheckIn == true) {
             // Older receivers ignore unknown fields and would silently leave E
             // blank. Check capability before sending any check-in data.
-            var receiver = await Ping(settings, cancellation);
-            if (!receiver.Success) return receiver;
-            if (!receiver.SupportsCheckIns) return new(false, "receiver_update_required", "Update the Apps Script deployment to support check-ins, then retry this saved entry from the Outbox.");
+            if (!receiver!.SupportsCheckIns) return new(false, "receiver_update_required", "Update the Apps Script deployment to support check-ins, then retry this saved entry from the Outbox.");
         }
         if (item?.Mode == SessionMode.Stopwatch) {
             // Never let an old receiver invent allotted time or reject elapsed
             // stopwatch time after already modifying a user's sheet.
-            var receiver = await Ping(settings, cancellation);
-            if (!receiver.Success) return receiver;
-            if (!receiver.SupportsStopwatch) return new(false,"receiver_update_required",
+            if (!receiver!.SupportsStopwatch) return new(false,"receiver_update_required",
                 "Update the Apps Script deployment to 2.9.0 or newer for stopwatch entries, then retry from Outbox. Your reflection is saved locally.");
         }
         if(item?.AutoSent==true && item.Message.Length>4988) {
-            var receiver=await Ping(settings,cancellation);
-            if(!receiver.Success)return receiver;
-            if(!receiver.SupportsAutoSent)return new(false,"receiver_update_required","Update the Apps Script deployment to send this full-length reflection with its auto-sent marker. The complete entry is retained in Outbox.");
+            if(!receiver!.SupportsAutoSent)return new(false,"receiver_update_required","Update the Apps Script deployment to send this full-length reflection with its auto-sent marker. The complete entry is retained in Outbox.");
         }
         var submitted = item?.SubmittedAt ?? DateTimeOffset.Now;
         var body = JsonSerializer.Serialize(new {

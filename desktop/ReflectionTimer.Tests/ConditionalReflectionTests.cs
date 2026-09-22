@@ -23,7 +23,7 @@ static class ConditionalReflectionTests
             check(blank ? saved.Prompts.Count==0 : saved.Prompts.Single() is { IsCheckIn: true, EndedEarly: false } prompt && prompt.Id == id
                 && prompt.Draft == "Latest response" && prompt.EarlyEndReason == "Provisional reason",
                 "Conditional command skips both-empty drafts and retains both fields when either has content");
-            check(JsonSerializer.Serialize(new PreviewSession(store).Engine.Snapshot) == JsonSerializer.Serialize(saved), "Conditional saved draft survives reopening");
+            check(JsonSerializer.Serialize(new PreviewSession(store, () => now).Engine.Snapshot) == JsonSerializer.Serialize(saved), "Conditional saved draft survives reopening at the same test-clock time");
         }
         foreach (var early in new[] { false, true }) {
             var now = DateTimeOffset.Now; var session = new PreviewSession(new MemoryStore(), () => now, true);

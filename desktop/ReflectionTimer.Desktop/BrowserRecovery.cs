@@ -114,6 +114,8 @@ internal sealed partial class PreviewWindow
                 if(!ready||recoveringInterface||requestingClose||(View=="reflection"&&!ReflectionOpen))
                     throw new InvalidOperationException("Wait for this view to finish opening or saving before resetting the timer.");
                 // The shared reset gate has durably saved and frozen all editors.
+                // App settings can have a coalesced slider save still pending.
+                if(View=="main")await FlushDraftAsync();
                 var result=app.KeepingTimeOnly(app.Session.ResetTimerFromShortcut);
                 Reply(requestId);
                 recoveringInterface=true;ResetReadiness();reloading=true;

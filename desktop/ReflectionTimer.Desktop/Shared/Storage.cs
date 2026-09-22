@@ -19,9 +19,9 @@ public sealed class EncryptedStore(string directory) : IStateStore
             RecoveryNotice = "A backup was recovered. Timers are paused and unsent entries need review to avoid duplicate alerts or uploads. Review your timer, schedules, and Outbox, then confirm the switch in Settings again.";
             // Preserve the unreadable file for recovery, rather than overwriting it.
             File.Copy(path, path + ".unreadable-" + Guid.NewGuid().ToString("N"), false);
-            backup.Timer = backup.Timer with { IsRunning = false, EndTime = null,
-                ElapsedMilliseconds = TimerEngine.StopwatchMilliseconds(backup.Timer,DateTimeOffset.Now.ToUnixTimeMilliseconds()), RunningSince=null,
-                RemainingSeconds = TimerEngine.Remaining(backup.Timer, DateTimeOffset.Now.ToUnixTimeMilliseconds()) };
+            var recoveredAt = DateTimeOffset.Now;
+            backup.Timer = TimerEngine.PauseRecoveredTimer(backup.Timer, recoveredAt);
+            if (backup.ParkedTimer is { } parked) backup.ParkedTimer = TimerEngine.PauseRecoveredTimer(parked, recoveredAt);
             backup.ExtensionDisabledConfirmed = false;
             backup.Outbox = backup.Outbox.Select(x => x.Status != DeliveryStatus.Sent
                 ? x with { Status = DeliveryStatus.NeedsReview, ErrorKind = "interrupted" } : x).ToList();
@@ -53,14 +53,19 @@ public sealed class EncryptedStore(string directory) : IStateStore
     }
 }
 
-public sealed class DiagnosticLog
+public sealed class DiagnosticLog : IDisposable
 {
     private readonly string path;
     private readonly object gate = new();
+    private readonly object writeGate = new();
+    private readonly Action<string, IReadOnlyList<Activity>> persist;
+    private readonly System.Threading.Timer? writer;
+    private long revision, savedRevision;
+    private bool disposed;
     private List<Activity> events = [];
     private static readonly HashSet<string> Allowed = new(StringComparer.Ordinal) {
         "app.started", "app.exiting", "app.activated", "app.deactivated", "app.hidden", "system.resume", "system.session",
-        "timer.started", "timer.paused", "timer.resumed", "timer.reset", "timer.preferences", "timer.deadline", "timer.autoRestartDisabled",
+        "timer.started", "timer.paused", "timer.resumed", "timer.reset", "timer.preferences", "timer.deadline", "timer.autoRestartDisabled", "timer.checkpoint", "timer.clockAdjusted",
         "schedule.saved", "schedule.removed", "prompt.test", "prompt.shown", "prompt.later", "prompt.draftSaved", "prompt.skipped",
         "reflection.queued", "reflection.endedAndQueued", "reflection.autoSent", "upload.started", "upload.sent", "upload.needsReview", "upload.recovered", "upload.retryRequested",
         "upload.confirmedByUser", "settings.saved", "connection.checked", "issue.marked", "error.storage", "error.unexpected",
@@ -71,15 +76,19 @@ public sealed class DiagnosticLog
         "session.modeChanged", "stopwatch.started", "stopwatch.reviewOpened", "stopwatch.timeReached", "stopwatch.alertChanged"
     };
     public bool Enabled { get; set; } = true;
-    public bool StorageAvailable { get; private set; } = true;
-    public DiagnosticLog(string directory)
+    private volatile bool storageAvailable = true;
+    public bool StorageAvailable { get => storageAvailable; private set => storageAvailable=value; }
+    public DiagnosticLog(string directory) : this(directory, (file, entries) => EncryptedStore.Write(file, entries), true) { }
+    internal DiagnosticLog(string directory, Action<string, IReadOnlyList<Activity>> persist, bool background)
     {
+        this.persist = persist;
         path = Path.Combine(directory, "diagnostics.dat");
         if (File.Exists(path))
         {
             try { events = EncryptedStore.Read<List<Activity>>(path).Where(x => Allowed.Contains(x.Event)).ToList(); }
             catch { StorageAvailable = false; }
         }
+        if(background)writer = new(_ => Flush(), null, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(1));
     }
     public void Record(string name, Guid? item = null, long? value = null) => Record(new(DateTimeOffset.Now.ToUnixTimeMilliseconds(), name, item, value));
     public void Record(Activity entry)
@@ -87,16 +96,47 @@ public sealed class DiagnosticLog
         if (!Enabled || !Allowed.Contains(entry.Event)) return;
         lock (gate)
         {
+            if(disposed)return;
             events.Add(entry); Prune();
-            try { EncryptedStore.Write(path, events); StorageAvailable = true; }
-            catch { StorageAvailable = false; } // Never interrupt a timer to write diagnostics.
+            revision++;
         }
     }
-    private void Prune() => events = events.Where(x => x.At >= DateTimeOffset.Now.AddDays(-7).ToUnixTimeMilliseconds()).TakeLast(1200).ToList();
+    private void Prune() {
+        var cutoff=DateTimeOffset.Now.AddDays(-7).ToUnixTimeMilliseconds();
+        events.RemoveAll(x=>x.At<cutoff);
+        if(events.Count>1200)events.RemoveRange(0,events.Count-1200);
+    }
     public IReadOnlyList<Activity> Recent() { lock (gate) { Prune(); return events.ToArray(); } }
-    public void Clear() { lock (gate) { EncryptedStore.Write(path, new List<Activity>()); events = []; StorageAvailable = true; } }
-    public object Report(AppState state) => new {
+    // Disk I/O is serialized separately from Record, so a slow diagnostic disk
+    // write never holds the timer/UI path. Only diagnostic events are buffered.
+    public void Flush() => FlushCore(false);
+    private void FlushCore(bool final) {
+        lock(writeGate) {
+            Activity[] batch; long captured;
+            lock(gate) {
+                if(disposed&&!final)return;
+                if(revision==savedRevision)return;
+                Prune(); batch=events.ToArray(); captured=revision;
+            }
+            try { persist(path,batch);lock(gate){savedRevision=captured;StorageAvailable=true;} }
+            catch { lock(gate)StorageAvailable=false; } // Keep the batch dirty for retry.
+        }
+    }
+    public void Clear() {
+        lock(writeGate)lock(gate) {
+            ObjectDisposedException.ThrowIf(disposed,this);
+            try {persist(path,Array.Empty<Activity>());events.Clear();savedRevision=++revision;StorageAvailable=true;}
+            catch {StorageAvailable=false;throw;}
+        }
+    }
+    public void Dispose() {
+        lock(gate){if(disposed)return;disposed=true;}
+        writer?.Dispose();FlushCore(true);
+    }
+    public object Report(AppState state, long? elapsedAt = null, long? calendarAt = null) => new {
         FormatVersion = 1, AppVersion = typeof(DiagnosticLog).Assembly.GetName().Version?.ToString(3), ExportedAt = DateTimeOffset.Now,
+        TimerClock = new { ElapsedAt = elapsedAt, CalendarAt = calendarAt,
+            Note = "Runtime Timer/ParkedTimer EndTime and RunningSince use ElapsedAt, not calendar time. Event, schedule, cutoff and submission dates use calendar time." },
         Privacy = "No reflection text, drafts, connection credentials, browsing URLs, window titles, audio filenames/paths, or other-app activity.",
         CustomAlertSound = !string.IsNullOrEmpty(state.AlertSoundPath),
         PopupPosition = state.PopupPosition.ToString(),

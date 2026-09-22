@@ -1,4 +1,5 @@
 using System.Text.Json;
+using ReflectionTimer.Core;
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
 using System.Runtime.InteropServices;
@@ -36,10 +37,10 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser=CreateBrowser();
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information;
         browser.AccessibleName=view=="main"?"Reflection Timer App view":view=="compact"?"Reflection Timer Compact and Time-only view":"Reflection Timer Session end prompt";
-        Text = view == "main" ? "Reflection Timer — App view · 4.2.11" : view == "compact" ? "Reflection Timer — Compact view · 4.2.11" : "Reflection Timer — Session end · 4.2.11";
+        Text = $"Reflection Timer — {(view == "main" ? "App view" : view == "compact" ? "Compact view" : "Session end")} · {typeof(PreviewWindow).Assembly.GetName().Version?.ToString(3)}";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
-        Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.Now))?525:440);
+        Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.ElapsedNow))?525:440);
         MinimumSize = view == "main" ? new(420, 400) : view == "compact" ? new(80,32) : new(420,360);
         if(view=="compact") { FormBorderStyle=FormBorderStyle.None; ShowInTaskbar=false; MaximizeBox=false; MinimizeBox=false; }
         if(view=="reflection") { ShowInTaskbar=false; MinimizeBox=false; }
@@ -74,9 +75,9 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     }
     protected override bool ShowWithoutActivation => View is "compact" or "reflection";
     protected override CreateParams CreateParams {get{var value=base.CreateParams;if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;return value;}}
-    internal void ApplyTopMost()
+    internal void ApplyTopMost(AppState? preferences = null)
     {
-        var state=app.Session.Engine.Snapshot;
+        var state=preferences??app.Session.Engine.SettingsSnapshot;
         var top=View=="reflection"?state.PromptAlwaysOnTop:View=="compact"&&(IsTimeOnly?state.TimeOnlyAlwaysOnTop:state.CompactAlwaysOnTop);
         if(TopMost!=top)TopMost=top;
     }
@@ -114,9 +115,9 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             throw;
         }
     }
-    internal void ApplyWindowTheme()
+    internal void ApplyWindowTheme(AppState? preferences = null)
     {
-        if(!IsHandleCreated)return;var theme=app.Session.Engine.Snapshot.Theme;var contrast=SystemInformation.HighContrast;
+        if(!IsHandleCreated)return;var theme=(preferences??app.Session.Engine.SettingsSnapshot).Theme;var contrast=SystemInformation.HighContrast;
         if(appliedTheme==(theme,contrast))return;appliedTheme=(theme,contrast);
         var colors=PreviewTheme.Palette(theme,contrast);
         BackColor=colors.Background;browser.DefaultBackgroundColor=BackColor;
@@ -189,7 +190,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     }
     private async void Receive(object? sender, CoreWebView2WebMessageReceivedEventArgs e)
     {
-        var requestedAt=app.Session.Engine.Now;
+        var requestedAt=app.Session.Engine.ElapsedNow;
         if (!IsCurrent(sender)||!Allowed(e.Source)) return;
         string? requestId = null;
         try {
@@ -247,7 +248,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 IsTimeOnly=ReadFlag(data,"tiny");
                 ApplyTopMost();
-                Text="Reflection Timer — "+(IsTimeOnly?"Time-only":"Compact")+" view · 4.2.11";
+                Text=$"Reflection Timer — {(IsTimeOnly?"Time-only":"Compact")} view · {typeof(PreviewWindow).Assembly.GetName().Version?.ToString(3)}";
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);return;
             }
@@ -285,19 +286,21 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     }
     private void Reply(string requestId,bool cancelled=false) => Post(new { type = "reply", requestId, cancelled });
     internal void Post(object message)
+        => PostJson(JsonSerializer.Serialize(message, PreviewSession.Json));
+    internal void PostJson(string json)
     {
         if (!ready||IsDisposed||browser.IsDisposed)return;
-        try {browser.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(message, PreviewSession.Json));}
+        try {browser.CoreWebView2.PostWebMessageAsJson(json);}
         catch(Exception error) when(error is InvalidOperationException or COMException) {RecoverRenderer();}
     }
     internal async Task FlushDraftAsync(bool freeze=false)
     {
         if(freeze&&reflectionLoadError is not null)throw new InvalidOperationException("This editor is unavailable, so its reflection was not sent or replaced. Close and reopen it to recover the saved draft.");
         if(flush is {} pending)await pending.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        if (View != "reflection" || !ReflectionOpen || !ready || IsDisposed) return;
+        if ((View != "main" && (View != "reflection" || !ReflectionOpen)) || !ready || IsDisposed) return;
         var request = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         flush = request;
-        Post(new { type = "flush",freeze });
+        Post(new { type = View=="main"?"flushSettings":"flush",freeze });
         try { await request.Task.WaitAsync(TimeSpan.FromSeconds(10)); }
         finally { if(ReferenceEquals(flush,request))flush = null; }
     }

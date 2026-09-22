@@ -49,6 +49,16 @@ static class NativeSettingsSaveSmoke
                         await Script(main,"document.querySelector('#tab-timer').click()");await Until(()=>Task.FromResult(!Scope(main)));
                         Check(!NativeKey(main,Keys.Control|Keys.S),"Leaving Settings removes its native save interception");
                         Check(store.State.Connection.WebAppUrl==""&&store.State.Outbox.Count==0&&store.State.Timer.DurationSeconds==900,"Settings shortcut tests do not send reflections or alter the timer");
+                        await Script(main,"document.querySelector('#settings-volume').value='42';document.querySelector('#settings-volume').dispatchEvent(new Event('input',{bubbles:true}))");
+                        await main.FlushDraftAsync();
+                        Check(store.State.Timer.Volume==42,"Native quit handshake durably flushes a pending master-volume drag");
+                        store.Fail=true;
+                        await Script(main,"document.querySelector('#settings-volume').value='63';document.querySelector('#settings-volume').dispatchEvent(new Event('input',{bubbles:true}))");
+                        try {await main.FlushDraftAsync();Check(false,"Expected failed quit handshake");}catch(IOException){}
+                        Check(store.State.Timer.Volume==42,"Failed native settings flush leaves the last durable volume intact");
+                        await Until(async()=>await Bool(main,"!document.body.inert"));
+                        store.Fail=false;await main.FlushDraftAsync();
+                        Check(store.State.Timer.Volume==63,"Native settings flush retries the retained dirty value after storage recovers");
                     }catch(Exception error){failure=error;}
                     finally{await app.CloseMainAsync();}
                 });

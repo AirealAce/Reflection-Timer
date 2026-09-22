@@ -7,20 +7,26 @@ public sealed partial class TimerEngine
     public const int MaxDuration = 365 * 24 * 3600;
     private readonly object gate = new();
     private readonly IStateStore store;
-    private readonly Func<DateTimeOffset> clock;
     private AppState state;
     public event Action? Changed;
     public event Action<Activity>? ActivityRecorded;
     public event Action<TimerState>? LowTimeReached;
-    public AppState Snapshot { get { lock (gate) return DataJson.Clone(state); } }
-    public long Now => clock().ToUnixTimeMilliseconds();
-
-    public TimerEngine(IStateStore store, Func<DateTimeOffset>? clock = null)
+    public AppState Snapshot { get { lock (gate) return state.Detached(); } }
+    // Lightweight reads for clocks, themes and audio; no reflection/history copies.
+    public TimerState CurrentTimer { get { lock (gate) return state.Timer; } }
+    public AppState SettingsSnapshot { get { lock (gate) return state with { Schedules = [], Prompts = [], Outbox = [] }; } }
+    public TimerEngine(IStateStore store, Func<DateTimeOffset>? clock = null, TimeProvider? timeProvider = null)
     {
         this.store = store;
-        this.clock = clock ?? (() => DateTimeOffset.Now);
+        // Calendar-only injection is retained for older deterministic harnesses.
+        // Production and clock-correction tests use independent elapsed time.
+        elapsedClock = timeProvider ?? (clock is null ? TimeProvider.System : null);
+        calendarClock = clock ?? (() => (timeProvider ?? TimeProvider.System).GetLocalNow());
+        timestampOrigin = elapsedClock?.GetTimestamp() ?? 0;
+        elapsedOrigin = calendarClock().ToUnixTimeMilliseconds();
         state = store.Load();
         if (state.FormatVersion != 1) throw new InvalidDataException("Unsupported local data version. Data was not changed.");
+        RestoreClocks();
         // Only requests already protected by the receiver's ID protocol may be retried.
         if (state.Outbox.Any(x => x.Status == DeliveryStatus.Sending))
             Change("upload.recovered", s => s.Outbox = s.Outbox.Select(x => x.Status == DeliveryStatus.Sending
@@ -54,13 +60,13 @@ public sealed partial class TimerEngine
         // unchecked. The 10% cap stays precise even for sub-ten-second timers.
         Math.Min((timer.LowTime.Enabled ? timer.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds : 15) * 1000L,
             timer.DurationSeconds * 100L);
-    private static void CompletePrompt(AppState state, long now, TimerState? source = null)
+    private void CompletePrompt(AppState state, long now, TimerState? source = null)
     {
         var timer=source??state.Timer;
         var draft=state.Prompts.LastOrDefault(p=>p.IsCheckIn&&p.CheckInSessionId is {} sessionId&&sessionId==timer.SessionId);
         // Promote the same session's unsent draft in place. Keeping its ID lets
         // an already-open editor keep even keystrokes still awaiting autosave.
-        var completed=new ReflectionPrompt(draft?.Id??Guid.NewGuid(),Math.Min(timer.EndTime??now,now),timer.Mode==SessionMode.Stopwatch?0:timer.DurationSeconds,timer.Volume,false,draft?.Draft??"") {
+        var completed=new ReflectionPrompt(draft?.Id??Guid.NewGuid(),CalendarTimestamp(Math.Min(timer.EndTime??now,now)),timer.Mode==SessionMode.Stopwatch?0:timer.DurationSeconds,timer.Volume,false,draft?.Draft??"") {
             Mode=timer.Mode,ActualDurationSeconds=ActualSeconds(timer,now),EndedEarly=timer.Mode==SessionMode.Timer&&RemainingMilliseconds(timer,now)>EarlyEndGraceMilliseconds(state,timer),
             EarlyEndReason=draft?.EarlyEndReason??"",ContinuationSeparator=draft?.ContinuationSeparator,SessionId=timer.SessionId
         };
@@ -74,17 +80,21 @@ public sealed partial class TimerEngine
     {
         lock (gate)
         {
-            var next = DataJson.Clone(state);
-            mutation(next);
-            // A check-in draft belongs to one session, including across restarts.
-            // Freeze its elapsed time when that session ends or is replaced, so
-            // a delayed submission never borrows time from the next session.
-            foreach (var previous in new[] { state.Timer, state.ParkedTimer }.OfType<TimerState>())
-                if (previous.SessionId is { } sessionId && SessionTimer(next, sessionId) is null)
-                    next.Prompts = next.Prompts.Select(p => p.IsCheckIn && p.CheckInSessionId == sessionId
-                        ? p with { ActualDurationSeconds = ActualSeconds(previous, Now), CheckInSessionId = null, ResumeStopwatchOnSave = false } : p).ToList();
-            store.Save(next); // A failed disk write leaves the current state untouched.
-            state = next;
+            var previousClock = operationClock;
+            operationClock ??= ReadClock();
+            try {
+                var next = state.Detached();
+                mutation(next);
+                // A check-in draft belongs to one session, including across restarts.
+                // Freeze its elapsed time when that session ends or is replaced, so
+                // a delayed submission never borrows time from the next session.
+                foreach (var previous in new[] { state.Timer, state.ParkedTimer }.OfType<TimerState>())
+                    if (previous.SessionId is { } sessionId && SessionTimer(next, sessionId) is null)
+                        next.Prompts = next.Prompts.Select(p => p.IsCheckIn && p.CheckInSessionId == sessionId
+                            ? p with { ActualDurationSeconds = ActualSeconds(previous, ElapsedNow), CheckInSessionId = null, ResumeStopwatchOnSave = false } : p).ToList();
+                SavePortable(next, operationClock.Value); // A failed disk write leaves the current state untouched.
+                state = next;
+            } finally { operationClock = previousClock; }
         }
         ActivityRecorded?.Invoke(new Activity(Now, name, id, value));
         Changed?.Invoke();
@@ -100,16 +110,16 @@ public sealed partial class TimerEngine
         if (until <= after) throw new ArgumentException("Choose an auto-start cutoff after the session start (and in the future for the regular timer).");
         _ = DateTimeOffset.FromUnixTimeMilliseconds(until.Value);
     }
-    private static bool CutoffDue(TimerState timer, long now) => timer.AutoRestartUntil <= now;
-    private static void ExpireAutoRestart(AppState state, long now)
+    private bool CutoffDue(TimerState timer, long now) => timer.AutoRestartUntil <= CalendarTimestamp(now);
+    private void ExpireAutoRestart(AppState state, long now)
     {
         if (CutoffDue(state.Timer, now)) state.Timer = state.Timer with { AutoRestart = false, AutoRestartUntil = null };
     }
-    private static TimerState Started(int seconds, bool repeat, int volume, long now, long? until = null, LowTimeOptions? lowTime = null) => new()
+    private TimerState Started(int seconds, bool repeat, int volume, long now, long? until = null, LowTimeOptions? lowTime = null) => new()
     {
-        SessionId = Guid.NewGuid(), IsRunning = true, DurationSeconds = seconds, RemainingSeconds = seconds,
-        EndTime = now + seconds * 1000L, AutoRestart = (repeat || until.HasValue) && !(until <= now),
-        AutoRestartUntil = until > now ? until : null, Volume = Math.Clamp(volume, 0, 100), LowTime = lowTime ?? new()
+        SessionId = Guid.NewGuid(), IsRunning = true, DurationSeconds = seconds, RemainingSeconds = seconds, RunningSince = now,
+        EndTime = now + seconds * 1000L, AutoRestart = (repeat || until.HasValue) && !(until <= CalendarTimestamp(now)),
+        AutoRestartUntil = until > CalendarTimestamp(now) ? until : null, Volume = Math.Clamp(volume, 0, 100), LowTime = lowTime ?? new()
     };
 
     public void Start(int seconds, bool repeat, int volume, long? autoRestartUntil = null, LowTimeOptions? lowTime = null)
@@ -117,35 +127,36 @@ public sealed partial class TimerEngine
         if (Snapshot.Timer.Mode == SessionMode.Stopwatch) { StartStopwatch(); return; }
         ValidateDuration(seconds);
         Change("timer.started", s => {
-            var now = Now;
-            ValidateCutoff(autoRestartUntil, now);
+            var now = ElapsedNow;
+            ValidateCutoff(autoRestartUntil, Now);
             var options = lowTime ?? s.Timer.LowTime; AudioSettings.Validate(options);
             s.Timer = Started(seconds, repeat, volume, now, autoRestartUntil, options);
         }, value: seconds);
     }
     public void Pause(long? requestedAt = null)
     {
-        requestedAt ??= Now;
+        requestedAt ??= ElapsedNow;
         Change("timer.paused", s => {
-            var now = Now;
+            var now = ElapsedNow;
             if (s.Timer.Mode == SessionMode.Stopwatch) { ClearStopwatchResume(s); s.Timer = PauseStopwatch(s.Timer, StopwatchStopTime(s.Timer, requestedAt.Value, now)); return; }
             ExpireAutoRestart(s, now);
+            var stoppedAt = SessionStopTime(s.Timer, requestedAt.Value, now);
             // A click can arrive after the deadline but before the one-second UI tick.
             // Pausing must not silently discard that completed session's reflection.
-            if (s.Timer.IsRunning && s.Timer.EndTime <= now)
-                CompletePrompt(s, now);
-            s.Timer = s.Timer with { IsRunning = false, RemainingSeconds = Remaining(s.Timer, now),
-                PausedRemainingMilliseconds = RemainingMilliseconds(s.Timer, now), EndTime = null };
+            if (s.Timer.IsRunning && s.Timer.EndTime <= stoppedAt)
+                CompletePrompt(s, stoppedAt);
+            s.Timer = s.Timer with { IsRunning = false, RemainingSeconds = Remaining(s.Timer, stoppedAt),
+                PausedRemainingMilliseconds = RemainingMilliseconds(s.Timer, stoppedAt), EndTime = null, RunningSince = null };
         });
     }
     public void Resume()
     {
         Change("timer.resumed", s => {
-            ExpireAutoRestart(s, Now);
+            ExpireAutoRestart(s, ElapsedNow);
             if (s.Timer.IsRunning) return;
-            if (s.Timer.Mode == SessionMode.Stopwatch) { ClearStopwatchResume(s); s.Timer = ResumeStopwatch(s.Timer, Now); return; }
+            if (s.Timer.Mode == SessionMode.Stopwatch) { ClearStopwatchResume(s); s.Timer = ResumeStopwatch(s.Timer, ElapsedNow); return; }
             ValidateDuration(s.Timer.RemainingSeconds);
-            s.Timer = s.Timer with { IsRunning = true, EndTime = Now + RemainingMilliseconds(s.Timer, Now), PausedRemainingMilliseconds = null };
+            s.Timer = s.Timer with { IsRunning = true, EndTime = ElapsedNow + RemainingMilliseconds(s.Timer, ElapsedNow), RunningSince = ElapsedNow, PausedRemainingMilliseconds = null };
         });
     }
     public void Reset(int? duration = null) => Change("timer.reset", s => {
@@ -153,10 +164,10 @@ public sealed partial class TimerEngine
             s.Timer = s.Timer with { IsRunning=false, SessionId=null, ElapsedMilliseconds=0, RunningSince=null, StopwatchCompleted=false, TimeReachedPlayed=false };
             return;
         }
-        ExpireAutoRestart(s, Now);
+        ExpireAutoRestart(s, ElapsedNow);
         var seconds = duration ?? s.Timer.DurationSeconds;
         ValidateDuration(seconds);
-        s.Timer = s.Timer with { SessionId = null, IsRunning = false, DurationSeconds = seconds, RemainingSeconds = seconds, PausedRemainingMilliseconds = null, EndTime = null, LowTimePlayed = false };
+        s.Timer = s.Timer with { SessionId = null, IsRunning = false, DurationSeconds = seconds, RemainingSeconds = seconds, PausedRemainingMilliseconds = null, EndTime = null, RunningSince = null, LowTimePlayed = false };
     });
     public void SetPreferences(bool repeat, int volume, long? autoRestartUntil = null) => Change("timer.preferences", s => {
         ValidateCutoff(autoRestartUntil, Now);
@@ -173,7 +184,7 @@ public sealed partial class TimerEngine
         s.Timer = s.Timer with { Volume = volume };
     });
 
-    private static void RestartOrStop(AppState state, long now)
+    private void RestartOrStop(AppState state, long now)
     {
         var timer = state.Timer;
         if (timer.Mode == SessionMode.Stopwatch) {
@@ -182,25 +193,27 @@ public sealed partial class TimerEngine
         }
         state.Timer = timer.AutoRestart
             ? Started(timer.DurationSeconds, true, timer.Volume, now, timer.AutoRestartUntil, timer.LowTime)
-            : timer with { IsRunning = false, RemainingSeconds = 0, PausedRemainingMilliseconds = 0, EndTime = null };
+            : timer with { IsRunning = false, RemainingSeconds = 0, PausedRemainingMilliseconds = 0, EndTime = null, RunningSince = null };
     }
 
-    public bool EndEarly()
+    public bool EndEarly(long? requestedAt = null)
     {
+        requestedAt ??= ElapsedNow;
         lock (gate) {
             if (state.Timer.Mode == SessionMode.Stopwatch) {
                 if (!HasUnfinishedSession(state.Timer)) return false;
-                ReviewStopwatch(); return true;
+                ReviewStopwatch(requestedAt); return true;
             }
             if (!state.Timer.IsRunning) return false;
-            var now = Now;
+            var now = ElapsedNow;
+            var stoppedAt = SessionStopTime(state.Timer, requestedAt.Value, now);
             Change("timer.endedEarly", s => {
                 ExpireAutoRestart(s, now);
                 // Commit the reflection and the next timer state together. A failed
                 // save must not stop the timer or create an unpersisted popup.
-                CompletePrompt(s, now);
+                CompletePrompt(s, stoppedAt);
                 ApplyScheduleHandoff(s, now, completed: true);
-            }, value: Remaining(state.Timer, now));
+            }, value: Remaining(state.Timer, stoppedAt));
             return true;
         }
     }
@@ -211,9 +224,10 @@ public sealed partial class TimerEngine
         TimerState? timeReachedAlert = null;
         lock (gate)
         {
-            var now = Now;
+            var now = ElapsedNow;
+            var wall = CalendarTimestamp(now);
             var completed = state.Timer.Mode==SessionMode.Timer && state.Timer.IsRunning && state.Timer.EndTime <= now;
-            var deadlineDue = state.Schedules.Any(x => x.StartTime <= now && !x.WaitingForCurrentSession && !x.AwaitingDecision)
+            var deadlineDue = state.Schedules.Any(x => x.StartTime <= wall && !x.WaitingForCurrentSession && !x.AwaitingDecision)
                 || completed || (!HasUnfinishedSession(state.Timer) && state.Schedules.Any(x => x.WaitingForCurrentSession));
             var cutoffDue = CutoffDue(state.Timer, now);
             var audio = AudioSettings.From(state);
@@ -222,8 +236,9 @@ public sealed partial class TimerEngine
             var lowTimeDue = !deadlineDue && state.Timer.Mode==SessionMode.Timer && state.Timer.IsRunning && state.Timer.LowTime.Enabled && !state.Timer.LowTimePlayed
                 && Remaining(state.Timer, now) > 0
                 && Remaining(state.Timer, now) <= LowTimeThresholdSeconds(state);
-            if (!deadlineDue && !cutoffDue && !lowTimeDue && !timeReachedDue) return;
-            Change(cutoffDue ? "timer.autoRestartDisabled" : deadlineDue ? "timer.deadline" : timeReachedDue ? "stopwatch.timeReached" : "timer.lowTime", s => {
+            var clockAdjusted = Math.Abs(wall - now - savedClockOffset) >= 1000;
+            if (!deadlineDue && !cutoffDue && !lowTimeDue && !timeReachedDue && !clockAdjusted) return;
+            Change(cutoffDue ? "timer.autoRestartDisabled" : deadlineDue ? "timer.deadline" : timeReachedDue ? "stopwatch.timeReached" : lowTimeDue ? "timer.lowTime" : "timer.clockAdjusted", s => {
                 // A cutoff is independent of the countdown, including while paused.
                 // Expire before completion so no extra repeat starts at the boundary.
                 ExpireAutoRestart(s, now);
@@ -232,7 +247,7 @@ public sealed partial class TimerEngine
                 if (!deadlineDue) return;
                 if (completed) CompletePrompt(s, now);
                 ApplyScheduleHandoff(s, now, completed);
-            }, value: dueCount(state, now));
+            }, value: dueCount(state, wall));
             if (lowTimeDue) lowTimeAlert = state.Timer;
             if (timeReachedDue) timeReachedAlert = state.Timer;
         }
@@ -242,11 +257,12 @@ public sealed partial class TimerEngine
     }
 
     private static bool HasUnfinishedSession(TimerState timer) => timer.IsRunning || IsPaused(timer);
-    private static void ApplyScheduleHandoff(AppState state, long now, bool completed)
+    private void ApplyScheduleHandoff(AppState state, long now, bool completed)
     {
         // Natural completion and explicit early completion share one atomic
         // selection step. Never auto-start a repeat just to replace it next tick.
-        var due = state.Schedules.Where(x => x.StartTime <= now && !x.WaitingForCurrentSession && !x.AwaitingDecision)
+        var wall = CalendarTimestamp(now);
+        var due = state.Schedules.Where(x => x.StartTime <= wall && !x.WaitingForCurrentSession && !x.AwaitingDecision)
             .OrderBy(x => x.StartTime).ToList();
         var latest = due.LastOrDefault();
         var olderIds = due.Take(Math.Max(0, due.Count - 1)).Select(x => x.Id).ToHashSet();
@@ -272,7 +288,7 @@ public sealed partial class TimerEngine
         if (waiting is not null) StartScheduled(state, waiting, now);
         else if (completed) RestartOrStop(state, now);
     }
-    private static void StartScheduled(AppState state, ScheduledSession session, long now)
+    private void StartScheduled(AppState state, ScheduledSession session, long now)
     {
         state.Schedules.RemoveAll(x => x.Id == session.Id);
         if (state.Timer.Mode==SessionMode.Stopwatch) {
@@ -296,8 +312,8 @@ public sealed partial class TimerEngine
         }
         else if (decision == ScheduleDecision.Skip) s.Schedules.RemoveAll(x => x.Id == id);
         else {
-            if (HasUnfinishedSession(s.Timer)) CompletePrompt(s, Now);
-            StartScheduled(s, session, Now);
+            if (HasUnfinishedSession(s.Timer)) CompletePrompt(s, ElapsedNow);
+            StartScheduled(s, session, ElapsedNow);
         }
     }, id, (int)decision);
 
@@ -334,7 +350,7 @@ public sealed partial class TimerEngine
     {
         var id = Guid.NewGuid();
         Change("prompt.test", s => s.Prompts.Add(new(id, Now, s.Timer.Mode==SessionMode.Stopwatch?0:s.Timer.DurationSeconds, s.Timer.Volume, true) {
-            Mode=s.Timer.Mode, ActualDurationSeconds = s.Timer.Mode==SessionMode.Stopwatch?ActualSeconds(s.Timer,Now):s.Timer.DurationSeconds
+            Mode=s.Timer.Mode, ActualDurationSeconds = s.Timer.Mode==SessionMode.Stopwatch?ActualSeconds(s.Timer,ElapsedNow):s.Timer.DurationSeconds
         }), id);
         return id;
     }
@@ -342,7 +358,7 @@ public sealed partial class TimerEngine
     {
         lock (gate) {
             if (state.Timer.Mode==SessionMode.Stopwatch) return ReviewStopwatch();
-            if (!HasUnfinishedSession(state.Timer) || RemainingMilliseconds(state.Timer, Now) <= 0)
+            if (!HasUnfinishedSession(state.Timer) || RemainingMilliseconds(state.Timer, ElapsedNow) <= 0)
                 throw new ArgumentException("Start a timer before making a check-in. Older entries are available under Pending reflections.");
             var existing = state.Prompts.FirstOrDefault(p => p.IsCheckIn && p.CheckInSessionId is not null && p.CheckInSessionId == state.Timer.SessionId);
             if (existing is not null) return existing.Id;
@@ -352,7 +368,7 @@ public sealed partial class TimerEngine
                 s.Timer = s.Timer with { SessionId = s.Timer.SessionId ?? Guid.NewGuid() };
                 s.Prompts.Add(new(id, Now, s.Timer.DurationSeconds, s.Timer.Volume, false) {
                     IsCheckIn = true, CheckInSessionId = s.Timer.SessionId, SessionId = s.Timer.SessionId,
-                    ActualDurationSeconds = ActualSeconds(s.Timer, Now)
+                    ActualDurationSeconds = ActualSeconds(s.Timer, ElapsedNow)
                 });
             }, id);
             return id;
@@ -385,7 +401,7 @@ public sealed partial class TimerEngine
                 EarlyEndReason = prompt.EndedEarly || prompt.IsCheckIn ? earlyEndReason ?? prompt.EarlyEndReason : prompt.EarlyEndReason
             };
             s.Prompts = s.Prompts.Select(p => p.Id == id ? saved : p).ToList();
-            ResumeAfterReflectionSave(s, prompt, Now);
+            ResumeAfterReflectionSave(s, prompt, ElapsedNow);
         }, id);
     }
     public void SkipPrompt(Guid id) => Change("prompt.skipped", s => s.Prompts.RemoveAll(x => x.Id == id), id);
@@ -398,8 +414,9 @@ public sealed partial class TimerEngine
             return true;
         }
     }
-    public bool QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false, bool endSession = false)
+    public bool QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false, bool endSession = false, long? requestedAt = null)
     {
+        requestedAt ??= ElapsedNow;
         lock (gate) {
             var saved = state.Prompts.SingleOrDefault(p => p.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
             text = ReflectionDrafts.Content(saved, text);
@@ -413,22 +430,23 @@ public sealed partial class TimerEngine
                 && associated is not null && (saved.Mode==SessionMode.Stopwatch || associated==state.Timer);
             Change(complete ? "reflection.endedAndQueued" : autoSent ? "reflection.autoSent" : "reflection.queued", s => {
                 var prompt = s.Prompts.SingleOrDefault(x => x.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
-                var submittedAt = clock();
+                var submittedAt = CalendarNow;
                 if (complete) {
-                    var now = submittedAt.ToUnixTimeMilliseconds();
+                    var now = ElapsedNow;
+                    var stoppedAt = SessionStopTime(associated!, requestedAt.Value, now);
                     if (associated!.Mode==SessionMode.Stopwatch && associated.SessionId!=s.Timer.SessionId) {
-                        prompt = prompt with { ActualDurationSeconds=ActualSeconds(associated,now), IsCheckIn=false,
-                            CheckInSessionId=null, ResumeStopwatchOnSave=false, CompletedAt=now };
-                        s.ParkedTimer = PauseStopwatch(associated,now) with { StopwatchCompleted=true };
+                        prompt = prompt with { ActualDurationSeconds=ActualSeconds(associated,stoppedAt), IsCheckIn=false,
+                            CheckInSessionId=null, ResumeStopwatchOnSave=false, CompletedAt=submittedAt.ToUnixTimeMilliseconds() };
+                        s.ParkedTimer = PauseStopwatch(associated,stoppedAt) with { StopwatchCompleted=true };
                     } else {
                         ExpireAutoRestart(s, now);
-                        CompletePrompt(s, now);
+                        CompletePrompt(s, stoppedAt);
                         prompt = s.Prompts.Single(p => p.Id == promptId);
                         ApplyScheduleHandoff(s, now, completed: true);
                     }
                 }
                 var linked = prompt.IsCheckIn ? SessionTimer(s,prompt.CheckInSessionId) : null;
-                var actual = linked is not null ? ActualSeconds(linked, submittedAt.ToUnixTimeMilliseconds()) : prompt.ActualDurationSeconds;
+                var actual = linked is not null ? ActualSeconds(linked, SessionStopTime(linked, requestedAt.Value, ElapsedNow)) : prompt.ActualDurationSeconds;
                 s.Outbox.Add(new() {
                     Id = promptId, Mode=prompt.Mode, SessionId = prompt.SessionId ?? prompt.CheckInSessionId, Message = text, SubmittedAt = submittedAt, DurationSeconds = prompt.DurationSeconds, LocalOnly = localOnly,
                     ActualDurationSeconds = actual, EndedEarly = prompt.EndedEarly, IsCheckIn = prompt.Mode==SessionMode.Timer&&prompt.IsCheckIn, AutoSent = autoSent,
@@ -446,20 +464,21 @@ public sealed partial class TimerEngine
     }
     // Resolve the shortcut against authoritative session state under the same
     // lock as the save. Browser state can be one tick behind at the deadline.
-    public (bool Queued, bool SessionCompleted) SaveOrSendReflection(Guid promptId, string text, string? reason = null, bool localOnly = false)
+    public (bool Queued, bool SessionCompleted) SaveOrSendReflection(Guid promptId, string text, string? reason = null, bool localOnly = false, long? requestedAt = null)
     {
+        requestedAt ??= ElapsedNow;
         lock (gate) {
             var prompt = state.Prompts.SingleOrDefault(p => p.Id == promptId)
                 ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
             var associated=SessionTimer(state,prompt.CheckInSessionId);
             var attached = !prompt.IsTest && prompt.IsCheckIn && associated is not null;
-            if (attached && (prompt.Mode==SessionMode.Stopwatch || RemainingMilliseconds(associated!, Now) > 0)) {
+            if (attached && (prompt.Mode==SessionMode.Stopwatch || RemainingMilliseconds(associated!, SessionStopTime(associated!, requestedAt.Value, ElapsedNow)) > 0)) {
                 SaveReflectionForLater(promptId, text, reason);
                 return (false, false);
             }
             // Only an already-expired attached timer needs promotion before
             // sending. This cannot fast-forward a running or paused session.
-            return (true, QueueReflection(promptId, text, reason, localOnly, endSession: attached));
+            return (true, QueueReflection(promptId, text, reason, localOnly, endSession: attached, requestedAt: requestedAt));
         }
     }
     public OutboxItem? BeginUpload(bool supportsSafeRetry = false)
@@ -478,6 +497,16 @@ public sealed partial class TimerEngine
                     RetryProtected = x.RetryProtected || (x.Attempts == 0 && supportsSafeRetry),
                     ReceiverUrl = x.ReceiverUrl.Length > 0 ? x.ReceiverUrl : s.Connection.WebAppUrl } : x).ToList(), item.Id);
             return state.Outbox.Single(x => x.Id == item.Id);
+        }
+    }
+    // A delayed local acknowledgment belongs only to the attempt that produced
+    // it. Never overwrite a newer retry or an entry the user already reviewed.
+    public bool FinishUploadAttempt(Guid id, int attempt, bool success, string errorKind = "", string tab = "", bool retryable = false)
+    {
+        lock (gate) {
+            if (!state.Outbox.Any(x => x.Id == id && x.Attempts == attempt && x.Status == DeliveryStatus.Sending)) return false;
+            FinishUpload(id, success, errorKind, tab, retryable);
+            return true;
         }
     }
     public void FinishUpload(Guid id, bool success, string errorKind = "", string tab = "", bool retryable = false) => Change(success ? "upload.sent" : "upload.needsReview", s =>

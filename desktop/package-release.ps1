@@ -3,7 +3,7 @@ $ErrorActionPreference = 'Stop'
 $env:DOTNET_CLI_TELEMETRY_OPTOUT = '1'
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $PSScriptRoot 'ReflectionTimer.Desktop\ReflectionTimer.Desktop.csproj'
-$version = ([xml](Get-Content -LiteralPath $projectPath -Raw)).Project.PropertyGroup.Version
+$version = (Get-Content -LiteralPath (Join-Path $repoRoot 'VERSION') -Raw).Trim()
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Invalid release version.' }
 if (-not $RuntimeVersion) {
     $runtimeMetadata = Invoke-RestMethod -Uri 'https://builds.dotnet.microsoft.com/dotnet/release-metadata/10.0/releases.json'
@@ -11,19 +11,8 @@ if (-not $RuntimeVersion) {
 }
 if ($RuntimeVersion -notmatch '^10\.0\.\d+$') { throw 'Choose a stable .NET 10 runtime patch version.' }
 
-& $Node (Join-Path $repoRoot 'scripts\check-public-source.cjs')
-if ($LASTEXITCODE -ne 0) { throw 'Public-source privacy scan failed; no package produced.' }
-
-# Engine, upgrade, delivery, browser accessibility, and receiver checks use synthetic data.
-& $DotNet run --project (Join-Path $PSScriptRoot 'ReflectionTimer.Tests\ReflectionTimer.Tests.csproj') -c Release
-if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed; no package produced.' }
-& $Node (Join-Path $PSScriptRoot 'ReflectionTimer.Tests\ui.cjs')
-if ($LASTEXITCODE -ne 0) { throw 'Browser accessibility tests failed; no package produced.' }
-Push-Location $repoRoot
-try {
-    & $Node --test test/apps-script.test.js test/receiver-setup.test.js test/release-assets.test.js
-    if ($LASTEXITCODE -ne 0) { throw 'Receiver/package tests failed; no package produced.' }
-} finally { Pop-Location }
+# The same credential-free gate runs locally and in CI, before slow packaging.
+& (Join-Path $PSScriptRoot 'validate.ps1') -DotNet $DotNet -Node $Node
 # Fresh staging prevents a prior private build from leaking into a public release.
 $runRoot = Join-Path $PSScriptRoot ('artifacts\public-' + [DateTime]::Now.ToString('yyyyMMdd-HHmmss') + '-' + [guid]::NewGuid().ToString('N').Substring(0,8))
 $packageName = "ReflectionTimer-$version-win-x64"

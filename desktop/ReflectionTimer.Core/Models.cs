@@ -15,6 +15,9 @@ public record TimerState
     public SessionMode Mode { get; init; }
     public long ElapsedMilliseconds { get; init; }
     public long? RunningSince { get; init; }
+    // Portable recovery metadata only; runtime timing uses the engine's elapsed clock.
+    public long? ClockSavedAt { get; init; }
+    public long? RemainingMillisecondsAtSave { get; init; }
     public bool StopwatchCompleted { get; init; }
     public bool TimeReachedPlayed { get; init; }
     public const int DefaultDurationSeconds = 15 * 60;
@@ -97,6 +100,11 @@ public record OutboxItem
 
 public record AppState
 {
+    // All nested records are immutable. Only these three lists (and AppState's
+    // own properties) need detaching. Keep this in sync if mutable fields are added.
+    internal AppState Detached() => this with {
+        Schedules = new(Schedules), Prompts = new(Prompts), Outbox = new(Outbox)
+    };
     // Only brand-new profiles use these defaults; deserialized legacy audio
     // remains null and retains its original migration behavior.
     public static AppState CreateDefault() => new() {

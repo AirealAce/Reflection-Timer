@@ -18,7 +18,8 @@ static class NativeClockSmoke
             try {
                 Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);Application.EnableVisualStyles();
                 var now=DateTimeOffset.Now;
-                var session=new PreviewSession(new MemoryStore{State=new AppState{LoggingEnabled=false,AutoSendIncompleteReflections=false,Timer=new(){Volume=0}}},()=>now,isolatedProfile:true);
+                var correction=TimeSpan.Zero;
+                var session=new PreviewSession(new MemoryStore{State=new AppState{LoggingEnabled=false,AutoSendIncompleteReflections=false,Timer=new(){Volume=0}}},()=>now+correction,isolatedProfile:true,timeProvider:new ElapsedClock(()=>now));
                 session.Engine.Start(20,false,0,lowTime:new(){Enabled=false});
                 app=new(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-ClockSmoke-"+Guid.NewGuid().ToString("N")),startInTray:true,profileName:"clock-smoke",shortcutRegistration:new Registration());
                 // Advance the test's clock deliberately, without wall-clock tick races.
@@ -31,6 +32,11 @@ static class NativeClockSmoke
                         var main=windows.Single(w=>w.View=="main");var compact=windows.Single(w=>w.View=="compact");
                         foreach(var window in new[]{main,compact})await ((TaskCompletionSource)typeof(PreviewWindow).GetField("interfaceReady",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!).Task.WaitAsync(TimeSpan.FromSeconds(20));
                         async Task Both(string expected,string message){await Until(async()=>await Text(main)==expected&&await Text(compact)==expected);Check(true,message);}
+                        correction=TimeSpan.FromHours(1);session.Tick();
+                        await Both("0:20","A forward calendar correction does not fast-forward either native countdown viewer");
+                        correction=TimeSpan.FromHours(-2);session.Tick();
+                        await Both("0:20","A backward calendar correction does not add time in either native countdown viewer");
+                        correction=TimeSpan.Zero;session.Tick();
                         var id=session.Engine.CheckIn();app.Open("reflection",id);
                         await Until(()=>Task.FromResult(windows.Any(w=>w.ReflectionOpen&&w.Visible)));
                         now=now.AddSeconds(19);app.Broadcast(new{type="clock",clock=session.Clock()});
@@ -193,5 +199,10 @@ static class NativeClockSmoke
     {
         public bool Register(nint window,int id,uint modifiers,uint key)=>true;
         public bool Unregister(nint window,int id)=>true;
+    }
+    private sealed class ElapsedClock(Func<DateTimeOffset> read) : TimeProvider
+    {
+        public override long GetTimestamp() => read().ToUnixTimeMilliseconds();
+        public override long TimestampFrequency => 1000;
     }
 }

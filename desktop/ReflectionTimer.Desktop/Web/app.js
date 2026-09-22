@@ -185,7 +185,10 @@ function tables() {
 }
 
 function render(next) {
-  const previous = state; state = next;
+  const previous = state;
+  const historyChanged=next.outbox!=null||next.schedules!=null;
+  // A null list in an incremental host update means unchanged, not empty.
+  state = {...next,outbox:next.outbox??previous?.outbox??[],schedules:next.schedules??previous?.schedules??[]};
   settings.state(state);
   if (view === 'reflection') { renderReflection(); return; }
   const stopwatch=state.timer.mode===1;
@@ -221,7 +224,7 @@ function render(next) {
       const li=document.createElement('li'), button=document.createElement('button'); button.type='button'; li.append(button);
       button.addEventListener('click',()=>run(()=>send('openReflection',{id:record.id}))); return li;
     },(li,record)=>setText(li.firstChild,`${record.mode===1?'Stopwatch reflection':record.isCheckIn ? 'Check-in' : 'Reflection'} from ${record.completed}`));
-    tables();
+    if(historyChanged||!previous)tables();
   }
   initial = false;
   renderDuration();
@@ -267,6 +270,10 @@ bridge?.addEventListener('message', event => {
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
   else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;focusTimerControl(state?.timer.mode===1);}
   else if (message.type === 'cycleAppTab') layout.cycle(message.backward);
+  else if (message.type === 'flushSettings') {
+    const wasInert=document.body.inert;document.body.inert=true;
+    settings.flush().then(()=>send('flushed')).catch(e=>{error(e.message);return send('flushFailed').catch(()=>{});}).finally(()=>{document.body.inert=wasInert;});
+  }
   else if (message.type === 'flush') {
     if(message.freeze)setReflectionBusy(true);
     saveDraft().then(()=>send('flushed')).catch(e=>{ error(e.message); send('flushFailed').catch(()=>{}); });

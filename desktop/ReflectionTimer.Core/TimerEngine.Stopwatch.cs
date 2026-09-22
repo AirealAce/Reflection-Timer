@@ -17,6 +17,10 @@ public sealed partial class TimerEngine
     private static long StopwatchStopTime(TimerState timer, long requestedAt, long now) =>
         Math.Clamp(requestedAt, Math.Min(timer.RunningSince ?? requestedAt, now), now);
 
+    private static long SessionStopTime(TimerState timer, long requestedAt, long now) => timer.Mode == SessionMode.Stopwatch
+        ? StopwatchStopTime(timer, requestedAt, now)
+        : Math.Clamp(requestedAt, Math.Min(timer.RunningSince ?? timer.EndTime - timer.DurationSeconds * 1000L ?? requestedAt, now), now);
+
     private static TimerState ResumeStopwatch(TimerState timer, long now)
     {
         if (timer.SessionId is null || timer.StopwatchCompleted)
@@ -35,19 +39,20 @@ public sealed partial class TimerEngine
 
     public void SwitchMode(SessionMode mode, long? requestedAt = null)
     {
-        requestedAt ??= Now;
+        requestedAt ??= ElapsedNow;
         if (!Enum.IsDefined(mode)) throw new ArgumentException("Choose Timer or Stopwatch.");
         lock (gate) {
             if (state.Timer.Mode == mode) return;
             Change("session.modeChanged", s => {
-                var now = Now;
+                var now = ElapsedNow;
                 var previous = s.Timer;
                 ClearStopwatchResume(s);
                 if (previous.Mode == SessionMode.Stopwatch) previous = PauseStopwatch(previous, StopwatchStopTime(previous, requestedAt.Value, now));
                 else if (previous.IsRunning) {
-                    if (previous.EndTime <= now) CompletePrompt(s, now);
-                    previous = previous with { IsRunning = false, RemainingSeconds = Remaining(previous, now),
-                        PausedRemainingMilliseconds = RemainingMilliseconds(previous, now), EndTime = null };
+                    var stoppedAt = SessionStopTime(previous, requestedAt.Value, now);
+                    if (previous.EndTime <= stoppedAt) CompletePrompt(s, stoppedAt);
+                    previous = previous with { IsRunning = false, RemainingSeconds = Remaining(previous, stoppedAt),
+                        PausedRemainingMilliseconds = RemainingMilliseconds(previous, stoppedAt), EndTime = null, RunningSince = null };
                 }
                 s.Timer = (s.ParkedTimer ?? new TimerState { Mode = mode }) with { Volume = previous.Volume };
                 s.ParkedTimer = previous;
@@ -59,23 +64,23 @@ public sealed partial class TimerEngine
     public void StartStopwatch() => Change("stopwatch.started", s => {
         if (s.Timer.Mode != SessionMode.Stopwatch) throw new ArgumentException("Select Stopwatch first.");
         s.Timer = s.Timer with { SessionId = Guid.NewGuid(), IsRunning = true, ElapsedMilliseconds = 0,
-            RunningSince = Now, StopwatchCompleted = false, TimeReachedPlayed = false,
+            RunningSince = ElapsedNow, StopwatchCompleted = false, TimeReachedPlayed = false,
             AutoRestart = false, AutoRestartUntil = null, EndTime = null, PausedRemainingMilliseconds = null };
     });
 
     public Guid ReviewStopwatch(long? requestedAt = null)
     {
-        requestedAt ??= Now;
+        requestedAt ??= ElapsedNow;
         lock (gate) {
             if (state.Timer.Mode != SessionMode.Stopwatch || !HasUnfinishedSession(state.Timer))
                 throw new ArgumentException("Start the stopwatch before opening its reflection.");
             var existing = state.Prompts.LastOrDefault(p => p.Mode == SessionMode.Stopwatch && p.CheckInSessionId == state.Timer.SessionId);
             if (!state.Timer.IsRunning && existing?.ResumeStopwatchOnSave == true) return existing.Id;
             var id = existing?.Id ?? Guid.NewGuid();
-            var stoppedAt = StopwatchStopTime(state.Timer, requestedAt.Value, Now);
+            var stoppedAt = StopwatchStopTime(state.Timer, requestedAt.Value, ElapsedNow);
             Change("stopwatch.reviewOpened", s => {
                 s.Timer = PauseStopwatch(s.Timer, stoppedAt);
-                var prompt = new ReflectionPrompt(id, stoppedAt, 0, s.Timer.Volume, false, existing?.Draft ?? "") {
+                var prompt = new ReflectionPrompt(id, CalendarTimestamp(stoppedAt), 0, s.Timer.Volume, false, existing?.Draft ?? "") {
                     Mode = SessionMode.Stopwatch, SessionId = s.Timer.SessionId, IsCheckIn = true,
                     CheckInSessionId = s.Timer.SessionId, ActualDurationSeconds = ActualSeconds(s.Timer, stoppedAt),
                     ResumeStopwatchOnSave = true, ContinuationSeparator = existing?.ContinuationSeparator

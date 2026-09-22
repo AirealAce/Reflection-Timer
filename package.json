@@ -1,11 +1,14 @@
 {
   "name": "reflection-timer-desktop",
-  "version": "4.2.11",
+  "version": "4.2.12",
   "private": true,
   "description": "Accessible Windows focus timer with Google Sheets reflection logging.",
   "scripts": {
-    "test": "node --test test/apps-script.test.js test/receiver-setup.test.js test/release-assets.test.js",
+    "test": "node --test test/apps-script.test.js test/receiver-setup.test.js test/release-assets.test.js test/version.test.cjs",
     "test:ui": "node desktop/ReflectionTimer.Tests/ui.cjs",
-    "check:public": "node scripts/check-public-source.cjs"
-  }
+    "check:public": "node scripts/check-public-source.cjs",
+    "check:version": "node scripts/version.cjs",
+    "version:sync": "node scripts/version.cjs --write"
+  },
+  "devDependencies": { "playwright": "1.62.1" }
 }

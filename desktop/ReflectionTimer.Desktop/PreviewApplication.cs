@@ -21,14 +21,16 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private long lastSync;
     private readonly NotifyIcon tray;
     private (AppColorTheme Theme, bool Contrast)? menuTheme;
+    private (AppColorTheme Theme, bool Contrast, bool Compact, bool Tiny, bool Prompt)? displayPreference;
     private readonly PreviewShortcuts shortcuts;
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
     internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null)
     {
-        Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice;
+        Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         Services = new(session.Engine, directory); Services.Announcement += Announce;
+        Services.DeliveryIssueChanged += () => Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });
         Services.Log.Record("app.started");
         Services.Log.Record("theme.loaded",value:(int)session.Engine.Snapshot.Theme);
         promptCoordinator=new(session,()=>windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed).Cast<IReflectionPromptWindow>().ToArray(),ShowReflection,()=>{_ = Services.Sync();});
@@ -40,15 +42,14 @@ internal sealed partial class PreviewApplication : ApplicationContext
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
-        session.Engine.Changed += () => {ApplyTheme();Broadcast(new { type = "state", state = session.View(), keepTimeOnly });};
+        session.Engine.Changed += () => {ApplyTheme();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
-            try { var pending=Session.Engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn).Select(p=>p.Id).ToHashSet();
-                Session.Tick();
-                foreach(var prompt in Session.Engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn&&!pending.Contains(p.Id))) _ = OpenReflectionAsync(prompt.Id,false,true);
+            try {
+                foreach(var prompt in Session.Tick()) _ = OpenReflectionAsync(prompt.Id,false,true);
                 ApplyTheme();Broadcast(new { type = "clock", clock = Session.Clock() }); tickFailed = false;
-                if (Session.Engine.Now - lastSync >= 15000) { lastSync = Session.Engine.Now; _ = Services.Sync(); if(shortcuts?.RetryUnavailable()==true)Broadcast(new{type="shortcuts",shortcuts=ShortcutState}); } }
+                if (Session.Engine.ElapsedNow - lastSync >= 15000) { lastSync = Session.Engine.ElapsedNow; _ = Services.Sync(); if(shortcuts?.RetryUnavailable()==true)Broadcast(new{type="shortcuts",shortcuts=ShortcutState}); } }
             catch { if (!tickFailed) Announce("Could not save a timer update. Your last saved state is retained."); tickFailed = true; }
         };
         shortcuts = new PreviewShortcuts([
@@ -66,18 +67,22 @@ internal sealed partial class PreviewApplication : ApplicationContext
     }
     private void ApplyTheme()
     {
-        foreach(var window in windows.ToArray()){window.ApplyWindowTheme();window.ApplyTopMost();}
-        var preference=(Session.Engine.Snapshot.Theme,SystemInformation.HighContrast);
+        var settings=Session.Engine.SettingsSnapshot;
+        var display=(settings.Theme,SystemInformation.HighContrast,settings.CompactAlwaysOnTop,settings.TimeOnlyAlwaysOnTop,settings.PromptAlwaysOnTop);
+        if(displayPreference==display)return;
+        displayPreference=display;
+        foreach(var window in windows.ToArray()){window.ApplyWindowTheme(settings);window.ApplyTopMost(settings);}
+        var preference=(settings.Theme,SystemInformation.HighContrast);
         if(menuTheme==preference)return;
         menuTheme=preference;PreviewTheme.ApplyMenu(tray.ContextMenuStrip!,PreviewTheme.Palette(preference.Item1,preference.Item2));
     }
     private Action<TimeSpan> Shortcut(int id, Action<long> action) => queueDelay =>
     {
-        var requestedAt=Session.Engine.Now-(long)Math.Max(0,queueDelay.TotalMilliseconds);
+        var requestedAt=Session.Engine.ElapsedNow-(long)Math.Max(0,queueDelay.TotalMilliseconds);
         if(closing)return;
         try { action(requestedAt); }
         catch(Exception e) { if(id!=4)Open("main"); Announce(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained."); }
-        finally { Services.Log.Record(new Activity(requestedAt,"shortcut.used",null,id)); }
+        finally { Services.Log.Record(new Activity(Session.Engine.CalendarTimestamp(requestedAt),"shortcut.used",null,id)); }
     };
     private void OpenPendingOrCheckIn(long requestedAt)
     {
@@ -199,7 +204,10 @@ internal sealed partial class PreviewApplication : ApplicationContext
         else compact?.Hide();
         compact?.ApplyPosition();
     }
-    internal void Broadcast(object message) { foreach (var window in windows.ToArray()) window.Post(message); }
+    internal void Broadcast(object message) {
+        var json=System.Text.Json.JsonSerializer.Serialize(message,PreviewSession.Json);
+        foreach (var window in windows.ToArray()) window.PostJson(json);
+    }
     private void PublishAppViewVisibility()
     {
         var visible=AppViewVisible;
@@ -219,12 +227,13 @@ internal sealed partial class PreviewApplication : ApplicationContext
         try {
             await promptCoordinator.ExclusivelyAsync(async()=>{
                 foreach (var window in windows.ToArray()) await window.FlushDraftAsync();
+                Session.Engine.Checkpoint();
                 Services.Log.Record("app.exiting");pulse.Stop();
                 foreach (var window in windows.Where(w => w != MainForm).ToArray()) window.ClosePermanently();
                 ((PreviewWindow)MainForm!).ClosePermanently();
             });
         }
-        catch { Announce("Could not save a reflection draft. The app is staying open. Try again."); }
+        catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again."); }
         finally { closing = false; }
     }
     protected override void Dispose(bool disposing) { if (disposing) { shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }

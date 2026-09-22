@@ -12,6 +12,8 @@ public sealed class PreviewSession
     public event Action<string>? Announcement;
     public event Action<string[]?>? DurationDraftChanged;
     private string[]? durationDraft;
+    private List<OutboxItem>? broadcastOutbox;
+    private List<ScheduledSession>? broadcastSchedules;
     private readonly bool isolatedProfile;
     internal LowTimeOptions ScheduledLowDraft { get; set; }=new();
     internal void SelectScheduleDraft(Guid? id)=>ScheduledLowDraft=id is {} key
@@ -28,7 +30,7 @@ public sealed class PreviewSession
         if(parts is not null && (parts.Length!=3 || parts.Any(p=>p is null || p.Length>20)))throw new ArgumentException("Enter three valid duration fields.");
         durationDraft=parts?.ToArray();DurationDraftChanged?.Invoke(durationDraft?.ToArray());
     }
-    public PreviewSession(IStateStore store, Func<DateTimeOffset>? clock = null, bool isolatedProfile = false)
+    public PreviewSession(IStateStore store, Func<DateTimeOffset>? clock = null, bool isolatedProfile = false, TimeProvider? timeProvider = null)
     {
         this.isolatedProfile = isolatedProfile;
         var saved = store.Load();
@@ -37,9 +39,9 @@ public sealed class PreviewSession
             saved.Outbox = saved.Outbox.Select(o => o.SheetUrl.Length == 0 ? o with { LocalOnly = true } : o).ToList();
             store.Save(saved);
         }
-        Engine = new(store, clock);
-        Engine.LowTimeReached += timer => Announcement?.Invoke($"Low time. {SpeakTime(TimerEngine.Remaining(timer, Engine.Now))} remaining.");
-        Engine.TimeReached += timer => Announcement?.Invoke($"Time reached. {SpeakTime(TimerEngine.ActualSeconds(timer, Engine.Now))} elapsed.");
+        Engine = new(store, clock, timeProvider);
+        Engine.LowTimeReached += timer => Announcement?.Invoke($"Low time. {SpeakTime(TimerEngine.Remaining(timer, Engine.ElapsedNow))} remaining.");
+        Engine.TimeReached += timer => Announcement?.Invoke($"Time reached. {SpeakTime(TimerEngine.ActualSeconds(timer, Engine.ElapsedNow))} elapsed.");
     }
     public static AppState SampleState(DateTimeOffset now) => new() {
         ExtensionDisabledConfirmed = false,
@@ -53,17 +55,20 @@ public sealed class PreviewSession
     };
     public object Clock()
     {
-        var timer = Engine.Snapshot.Timer;
+        return Clock(Engine.CurrentTimer);
+    }
+    private object Clock(TimerState timer)
+    {
         var status = Status(timer);
         if(timer.Mode==SessionMode.Stopwatch) {
             // Preview the next stopwatch at zero after sending, while retaining
             // the finished session's elapsed time for reflection accounting.
-            var elapsed=status=="Finished"?0:TimerEngine.ActualSeconds(timer,Engine.Now);
+            var elapsed=status=="Finished"?0:TimerEngine.ActualSeconds(timer,Engine.ElapsedNow);
             return new { seconds=elapsed,text=SpeakTime(elapsed),status,stopwatch=true };
         }
         // Keep completion and reflection accounting in the engine, but show the
         // duration ready for the next session once the countdown has ended.
-        var seconds = status == "Finished" ? timer.DurationSeconds : TimerEngine.Remaining(timer, Engine.Now);
+        var seconds = status == "Finished" ? timer.DurationSeconds : TimerEngine.Remaining(timer, Engine.ElapsedNow);
         // Read-time feedback and recovery snapshots use the same edited duration
         // as the idle viewers, including a valid all-zero preview. Never change
         // the running countdown or the completed session's recorded duration.
@@ -81,11 +86,11 @@ public sealed class PreviewSession
     internal bool AutoSendReflection(Guid id) => Engine.AutoSendReflection(id, isolatedProfile && SheetsClient.Validate(Engine.Snapshot.Connection) is not null);
     internal Guid? ReflectionForShortcut(long? requestedAt = null)
     {
-        requestedAt ??= Engine.Now;
+        requestedAt ??= Engine.ElapsedNow;
         var state=Engine.Snapshot;
         if(state.Timer.Mode==SessionMode.Stopwatch&&(state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer)))return Engine.ReviewStopwatch(requestedAt);
         if(state.Prompts.LastOrDefault() is {} pending)return pending.Id;
-        return (state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer))&&TimerEngine.Remaining(state.Timer,Engine.Now)>0
+        return (state.Timer.IsRunning||TimerEngine.IsPaused(state.Timer))&&TimerEngine.Remaining(state.Timer,Engine.ElapsedNow)>0
             ? Engine.CheckIn() : null;
     }
     public static string SpeakTime(int total)
@@ -97,43 +102,49 @@ public sealed class PreviewSession
         return string.Join(" ", parts);
     }
     // Only fields needed by these views cross the bridge. No connection object or custom paths.
-    public object View()
+    public object View(bool incremental = false)
     {
         var state = Engine.Snapshot;
+        var includeOutbox=!incremental||broadcastOutbox is null||!broadcastOutbox.SequenceEqual(state.Outbox);
+        var includeSchedules=!incremental||broadcastSchedules is null||!broadcastSchedules.SequenceEqual(state.Schedules);
+        if(incremental){broadcastOutbox=state.Outbox;broadcastSchedules=state.Schedules;}
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
-            clock = Clock(), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
-            timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil, state.Timer.EndTime,
+            clock = Clock(state.Timer), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
+            timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil,
+                endTime = state.Timer.EndTime is { } end ? Engine.CalendarTimestamp(end) : (long?)null,
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,
                 low=LowView(countdown.LowTime,AudioSettings.From(state).LowTimeThresholdSeconds) },
             prompts = state.Prompts.Select(p => new { p.Id, mode=(int)p.Mode, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
                 resumeOnSave=p.Mode==SessionMode.Stopwatch&&p.ResumeStopwatchOnSave&&p.CheckInSessionId==state.Timer.SessionId&&TimerEngine.IsPaused(state.Timer),
-                showEarlyEndReason=TimerEngine.ShowEarlyEndReason(p,state.Timer,Engine.Now),
+                showEarlyEndReason=TimerEngine.ShowEarlyEndReason(p,state.Timer,Engine.ElapsedNow),
                 allotted = p.Mode==SessionMode.Stopwatch?"Not applicable":SpeakTime(p.DurationSeconds), actual = p.ActualDurationSeconds is { } actual ? SpeakTime(actual) : "Unavailable",
                 completed = DateTimeOffset.FromUnixTimeMilliseconds(p.CompletedAt).ToLocalTime().ToString("g") }),
-            schedules = state.Schedules.Select(s => new { s.Id, start = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("g"),
+            schedules = !includeSchedules ? null : state.Schedules.Select(s => new { s.Id, start = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("g"),
                 duration = SpeakTime(s.DurationSeconds), repeat = s.AutoRestart ? "On" : "Off", lowTime = s.LowTime.Enabled ? s.LowTime.ThresholdSeconds is {} threshold ? $"{threshold/60}:{threshold%60:00}" : "Default" : "Off",
                 status = s.AwaitingDecision ? "Needs choice" : s.WaitingForCurrentSession ? "Waiting" : "Scheduled",
                 editStart = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("yyyy-MM-ddTHH:mm"), s.DurationSeconds, s.AutoRestartUntil, s.Volume }),
-            outbox = state.Outbox.Select(o => new { o.Id, saved = o.SubmittedAt.LocalDateTime.ToString("g"),
+            outbox = !includeOutbox ? null : state.Outbox.Select(o => new { o.Id, saved = o.SubmittedAt.LocalDateTime.ToString("g"),
                 localOnly = o.LocalOnly,
                 destination = o.LocalOnly ? "Local preview only" : o.IsTest ? "test" : o.SheetMode == "fixed" ? o.SheetName : o.SubmittedAt.ToString("MM/dd/yyyy"),
                 status = o.Status == DeliveryStatus.Sent && o.LocalOnly ? "Simulated success" : o.Status.ToString(),
                 mode=(int)o.Mode,o.Attempts, o.Message, o.DurationSeconds, o.ActualDurationSeconds, o.EndedEarly, o.EarlyEndReason, o.IsCheckIn, o.AutoSent, o.NextAttemptAt, duration = SpeakTime(o.DurationSeconds), error = o.ErrorKind.Length == 0 ? "" : TimerEngine.SafeError(o.ErrorKind) })
         };
     }
-    public void Tick()
+    public IReadOnlyList<ReflectionPrompt> Tick()
     {
         var before = Engine.Snapshot;
         Engine.Advance();
         var after = Engine.Snapshot;
-        if (after.Prompts.Any(p => !p.IsCheckIn&&before.Prompts.All(old => old.IsCheckIn||old.Id != p.Id)))
+        var added=after.Prompts.Where(p => !p.IsCheckIn&&before.Prompts.All(old => old.IsCheckIn||old.Id != p.Id)).ToArray();
+        if (added.Length>0)
             Announcement?.Invoke("Session finished. A reflection is available under Pending reflections.");
         else if (!before.Timer.IsRunning && after.Timer.IsRunning) Announcement?.Invoke("Scheduled timer started.");
+        return added;
     }
     public CommandResult Execute(string action, JsonElement data, long? requestedAt = null)
     {
-        requestedAt ??= Engine.Now;
+        requestedAt ??= Engine.ElapsedNow;
         var state = Engine.Snapshot;
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new TimerState();
         switch (action)
@@ -155,7 +166,7 @@ public sealed class PreviewSession
                     return new(Engine.Snapshot.Timer.IsRunning?"Stopwatch running.":"Stopwatch paused.");
                 }
                 if (state.Timer.IsRunning) {
-                    Engine.Pause();
+                    Engine.Pause(requestedAt);
                     var completed=Engine.Snapshot.Prompts.FirstOrDefault(p=>!p.IsCheckIn&&state.Prompts.All(old=>old.IsCheckIn||old.Id!=p.Id));
                     return new(completed is null?"Timer paused.":"Session ended. Reflection opened.",completed?.Id,SessionCompleted:completed is not null);
                 }
@@ -176,7 +187,7 @@ public sealed class PreviewSession
             case "end":
                 if(state.Timer.Mode==SessionMode.Stopwatch)return new("Stopwatch paused for reflection.",Engine.ReviewStopwatch(requestedAt));
                 var previous = state.Prompts.Where(p=>!p.IsCheckIn).Select(p => p.Id).ToHashSet();
-                if (!Engine.EndEarly()) throw new ArgumentException("Start or resume the timer before ending it early.");
+                if (!Engine.EndEarly(requestedAt)) throw new ArgumentException("Start or resume the timer before ending it early.");
                 return new("Session ended. Reflection opened.", Engine.Snapshot.Prompts.First(p => !p.IsCheckIn&&!previous.Contains(p.Id)).Id,SessionCompleted:true);
             case "checkIn": return new("Check-in opened.", state.Timer.Mode==SessionMode.Stopwatch?Engine.ReviewStopwatch(requestedAt):Engine.CheckIn());
             case "testReflection": return new("Practice reflection opened.", Engine.TestPrompt());
@@ -192,14 +203,14 @@ public sealed class PreviewSession
                 var response=Text(data,"text",5000);var reason=Text(data,"reason",1000);
                 if(response.Length==0&&reason.Length==0)return Execute("skip",data);
                 var decision = Engine.SaveOrSendReflection(Id(data), response, reason,
-                    isolatedProfile && SheetsClient.Validate(state.Connection) is not null);
+                    isolatedProfile && SheetsClient.Validate(state.Connection) is not null, requestedAt);
                 return new(decision.Queued ? "Reflection saved in Outbox for delivery when enabled." : "Reflection saved locally.",
                     Close: true, SessionCompleted: decision.SessionCompleted);
             case "skip":
                 var skipped=Id(data);RequiredPrompt(skipped);Engine.SkipPrompt(skipped);return new("Reflection skipped.",Close:true);
             case "queue":
                 var localOnly = isolatedProfile && SheetsClient.Validate(state.Connection) is not null;
-                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"));
+                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"), requestedAt: requestedAt);
                 return new((ended ? "Session ended. " : "") + (localOnly ? "Reflection saved locally in the Outbox." : "Reflection saved in Outbox for Sheets delivery when enabled."), Close: true, SessionCompleted: ended);
             case "schedule":
                 var date = Text(data, "start", 40);
@@ -242,14 +253,14 @@ public sealed class PreviewSession
     }
     internal CommandResult ToggleModeFromShortcut(long? requestedAt = null)
     {
-        requestedAt ??= Engine.Now;
+        requestedAt ??= Engine.ElapsedNow;
         return Execute("switchMode", JsonSerializer.SerializeToElement(new {
             mode = Engine.Snapshot.Timer.Mode == SessionMode.Timer ? (int)SessionMode.Stopwatch : (int)SessionMode.Timer
         }),requestedAt);
     }
     internal CommandResult ToggleTimerFromShortcut(long? requestedAt = null)
     {
-        requestedAt ??= Engine.Now;
+        requestedAt ??= Engine.ElapsedNow;
         var timer=Engine.Snapshot.Timer;
         // Pause before parsing edited fields, just like the Compact form. This
         // also preserves normal completion if the key arrives at the deadline.

@@ -82,7 +82,7 @@ internal sealed partial class PreviewWindow
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ConnectionSetup.NormalizeSheetUrl(state.Connection.SheetUrl)){UseShellExecute=true});break;
             case "clearDiagnostics":
                 if(!ReadFlag(data,"confirmed"))throw new ArgumentException("Confirm before clearing the diagnostic log.");
-                services.Log.Clear();Post(new{type="diagnostics",report=services.Log.Report(state)});message="Local diagnostic log cleared.";break;
+                services.Log.Clear();Post(new{type="diagnostics",report=services.Log.Report(state,engine.ElapsedNow,engine.Now)});message="Local diagnostic log cleared.";break;
             case "connectionSave":
                 var checkedConnection=ReadConnection(data);
                 if(ReadFlag(data,"enabled"))message=await services.CheckAndSave(checkedConnection,true);
@@ -149,10 +149,10 @@ internal sealed partial class PreviewWindow
             case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,4),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview using your sound and fade settings."; break;
             case "stopSound": services.StopAudio(); message="App audio stopped."; break;
             case "markIssue": services.Log.Record("issue.marked"); message="Issue marked in local diagnostics."; break;
-            case "diagnostics": Post(new { type="diagnostics", report=services.Log.Report(state) }); break;
+            case "diagnostics": Post(new { type="diagnostics", report=services.Log.Report(state,engine.ElapsedNow,engine.Now) }); break;
             case "exportDiagnostics":
                 using (var save = new SaveFileDialog { Title="Export diagnostic report", Filter="JSON (*.json)|*.json", FileName="reflection-timer-accessibility-diagnostics.json" }) {
-                    if(save.ShowDialog(this)==DialogResult.OK) { File.WriteAllText(save.FileName,JsonSerializer.Serialize(services.Log.Report(state),DataJson.Options)); message="Diagnostic report exported."; }
+                    if(save.ShowDialog(this)==DialogResult.OK) { File.WriteAllText(save.FileName,JsonSerializer.Serialize(services.Log.Report(state,engine.ElapsedNow,engine.Now),DataJson.Options)); message="Diagnostic report exported."; }
                 } break;
             case "sendPending": _ = services.Sync(true); break;
             case "setCutoff":

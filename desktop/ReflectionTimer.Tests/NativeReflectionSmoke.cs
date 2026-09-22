@@ -4,6 +4,7 @@ using Microsoft.Web.WebView2.WinForms;
 using Microsoft.Web.WebView2.Core;
 using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
+using ReflectionTimer.Desktop;
 
 // Opt-in native WebView smoke test. Only this test's in-memory session and its
 // disposable WebView profile are used; no production windows or input injection.
@@ -23,7 +24,7 @@ static class NativeReflectionSmoke
                 session.Engine.Start(60,false,0,lowTime:new(){Enabled=false});
                 var id=session.Engine.CheckIn();session.Engine.SaveDraft(id,"Saved native-window draft","Native reason draft");
                 var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-NativeSmoke-"+Guid.NewGuid().ToString("N"));
-                app=new PreviewApplication(session,directory,startInTray:true,profileName:"native-smoke");
+                app=new PreviewApplication(session,directory,startInTray:true,profileName:"native-smoke",shortcutRegistration:new Registration());
                 _=app.MainForm!.Handle;
                 app.MainForm.BeginInvoke(async()=>{
                     try {
@@ -308,4 +309,5 @@ static class NativeReflectionSmoke
     private static async Task<JsonElement> Read(PreviewWindow window)=>JsonDocument.Parse(await Script(window,"JSON.parse(JSON.stringify({draft:document.querySelector('#reflection-text').value,reason:document.querySelector('#early-reason').value,reasonVisible:!document.querySelector('#reason-group').hidden,theme:document.documentElement.dataset.theme,focused:document.activeElement.id}))")).RootElement.Clone();
     private static async Task Until(Func<bool> predicate){using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(20));while(!predicate())await Task.Delay(25,timeout.Token);}
     private static async Task UntilAsync(Func<Task<bool>> predicate){using var timeout=new CancellationTokenSource(TimeSpan.FromSeconds(20));while(!await predicate())await Task.Delay(25,timeout.Token);}
+    private sealed class Registration:IHotKeyRegistration{public bool Register(nint window,int id,uint modifiers,uint key)=>true;public bool Unregister(nint window,int id)=>true;}
 }

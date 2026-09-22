@@ -1,0 +1,10 @@
+<Project>
+  <PropertyGroup>
+    <ReflectionTimerVersion>$([System.IO.File]::ReadAllText('$(MSBuildThisFileDirectory)../VERSION').Trim())</ReflectionTimerVersion>
+    <Version>$(ReflectionTimerVersion)</Version>
+  </PropertyGroup>
+  <Target Name="ValidateReflectionTimerVersion" BeforeTargets="PrepareForBuild">
+    <Error Condition="!$([System.Text.RegularExpressions.Regex]::IsMatch('$(ReflectionTimerVersion)', '^\d+\.\d+\.\d+$'))" Text="VERSION must contain a three-part release version." />
+    <Error Condition="'$(Version)' != '$(ReflectionTimerVersion)'" Text="Build version must match the repository VERSION file." />
+  </Target>
+</Project>
