@@ -11,6 +11,7 @@ public sealed class PreviewServices : IDisposable
     private readonly TimerEngine engine;
     private readonly SheetsClient sheets;
     private readonly AlertSoundPlayer sounds;
+    private readonly SessionVoice voice;
     private readonly CancellationTokenSource stop = new();
     private bool syncing;
     private bool disposed;
@@ -28,9 +29,11 @@ public sealed class PreviewServices : IDisposable
     private readonly HashSet<Guid> sounded = [];
     public DiagnosticLog Log { get; }
     public event Action<string>? Announcement;
-    public PreviewServices(TimerEngine engine, string directory, SheetsClient? sheets = null, IAlertAudioBackend? audio = null, TimeProvider? time = null)
+    internal event Action<string,bool>? SessionAnnouncement;
+    public PreviewServices(TimerEngine engine, string directory, SheetsClient? sheets = null, IAlertAudioBackend? audio = null, TimeProvider? time = null, IVoiceOutput? speech = null)
     {
         this.engine = engine; this.sheets = sheets ?? new(); sounds = new(audio);
+        voice=new(engine,speech??new WindowsVoiceOutput(),(message,supplementary)=>SessionAnnouncement?.Invoke(message,supplementary));
         this.time = time ?? TimeProvider.System;
         Log = new(directory) { Enabled = engine.SettingsSnapshot.LoggingEnabled };
         foreach (var prompt in engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn)) sounded.Add(prompt.Id);
@@ -86,7 +89,7 @@ public sealed class PreviewServices : IDisposable
             hasToken = s.Connection.ApiToken.Length > 0, hasDraft = s.SetupDraft is not null, s.ExtensionDisabledConfirmed, s.LoggingEnabled, s.StartAtLogin,
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed, deliveryIssue = DeliveryIssue,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
-            audio.TimeReachedEnabled,audio.TimeReachedSeconds,
+            audio.TimeReachedEnabled,audio.TimeReachedSeconds,s.VoiceAnnouncements,
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,
             placement = (int)s.FloatingPlacement, popup = (int)s.PopupPosition, theme = (int)s.Theme, overlap = (int)s.ScheduleOverlap,
@@ -271,11 +274,13 @@ public sealed class PreviewServices : IDisposable
             else if (preview&&announcePreview) Announcement?.Invoke(result == AlertSoundResult.Muted ? "This audio is muted." : "Audio preview finished.");
         } catch { if (!stop.IsCancellationRequested) Announcement?.Invoke("Audio could not play."); }
     }
-    public void StopAudio() => sounds.Stop();
+    public void StopAudio() { sounds.Stop();voice.Stop(); }
+    internal void PollVoiceStatus(){if(voice.PollFailure() is {} message)Announcement?.Invoke(message);}
+    internal void PreviewVoice(){voice.Preview();PollVoiceStatus();}
     public void Dispose()
     {
         if(disposed) return; disposed=true;
         engine.ActivityRecorded -= Record; engine.LowTimeReached -= LowTime; engine.TimeReached -= TimeReached; engine.Changed -= Changed;
-        stop.Cancel(); sounds.Dispose(); sheets.Dispose(); stop.Dispose(); Log.Dispose();
+        stop.Cancel(); voice.Dispose(); sounds.Dispose(); sheets.Dispose(); stop.Dispose(); Log.Dispose();
     }
 }

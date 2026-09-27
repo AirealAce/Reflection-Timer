@@ -80,22 +80,25 @@ static class DefaultsThemeShortcutTests
         Exception? failure=null;
         var thread=new Thread(()=>{
             try {
-                var backend=new Registration();var calls=new int[9];
+                var backend=new Registration();var calls=new int[10];
                 backend.Blocked.Add(GlobalShortcut.CompactId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleAltId);
                 backend.Blocked.Add(GlobalShortcut.ModeToggleId);
-                var delays=new TimeSpan[9];
-                using var keys=new PreviewShortcuts(Enumerable.Range(0,9).Select(i=>(Action<TimeSpan>)(delay=>{calls[i]++;delays[i]=delay;})).ToArray(),backend:backend);
+                var delays=new TimeSpan[10];
+                using var keys=new PreviewShortcuts(Enumerable.Range(0,10).Select(i=>(Action<TimeSpan>)(delay=>{calls[i]++;delays[i]=delay;})).ToArray(),backend:backend);
                 check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBC,0xBE,0xBF})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five global chords use the swapped comma/slash mappings with Ctrl+Alt and no key-repeat");
-                check(backend.Requests.Count==9&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
+                check(backend.Requests.Count==10&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
                 check(backend.Requests[6]==(0x20u,0x4003u),"The alias registers Ctrl+Alt+Space with held-key repeat suppressed");
                 check(backend.Requests[8]==(0x52u,0x4003u),"Ctrl+Alt+R registers global reset with held-key repeats suppressed");
-                check(backend.Requests[7]==(0xDEu,0x4003u)&&PreviewShortcuts.Chords.Select(c=>c.Id).Distinct().Count()==9,"Ctrl+Alt+apostrophe registers its own US virtual key with held-key repeat suppressed");
+                check(backend.Requests[7]==(0xDEu,0x4003u)&&PreviewShortcuts.Chords.Select(c=>c.Id).Distinct().Count()==10,"Ctrl+Alt+apostrophe registers its own US virtual key with held-key repeat suppressed");
+                check(backend.Requests[9]==(0xBCu,0x4007u),"Reverse cycle registers comma with Ctrl+Alt+Shift and no repeat");
                 var states=JsonSerializer.SerializeToElement(keys.Status,PreviewSession.Json);
-                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false,false,false,true}),"Compact, timer toggle, and mode toggle conflicts report their own unavailable status");
+                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false,false,false,true,true}),"Compact, timer toggle, and mode toggle conflicts report their own unavailable status");
                 foreach(var chord in PreviewShortcuts.Chords)keys.Dispatch(GlobalShortcut.HotKeyMessage,chord.Id);
-                check(calls.SequenceEqual(new[]{1,1,0,1,1,0,0,0,1}),"Registered shortcut messages invoke exactly their matching action");
+                check(calls.SequenceEqual(new[]{1,1,0,1,1,0,0,0,1,1}),"Registered shortcut messages invoke exactly their matching action");
+                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactReverseId);
+                check(calls[9]==2&&calls[2]==0,"Reverse cycle dispatches independently while forward comma is unavailable");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ResetTimerId);
                 check(calls[8]==2&&calls[1]==1&&calls[5]==0,"Global reset dispatches only its own action");
                 var attempts=backend.Requests.Count;keys.RetryUnavailable();
@@ -115,7 +118,7 @@ static class DefaultsThemeShortcutTests
                 backend.Blocked.Clear();check(keys.RetryUnavailable(),"Releasing a competing shortcut recovers without restarting");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactId);
                 check(calls[2]==1&&!keys.Dispatch(0,GlobalShortcut.HotKeyId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,-1),"Recovered shortcut works and unrelated messages are ignored");
-                keys.Dispose();check(backend.Removed.Count==9&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId),"Exit releases all nine owned shortcuts and stops timer and mode toggle shortcuts");
+                keys.Dispose();check(backend.Removed.Count==10&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactReverseId),"Exit releases all ten owned shortcuts, including reverse cycle");
                 var clock=new Clock();var pairs=new ConsecutiveShortcutPresses(clock);
                 var first=pairs.Press();clock.Ticks+=TimeSpan.FromMilliseconds(799).Ticks;
                 check(!first&&pairs.Press()&&!pairs.Press(),"Period double press selects App once and consumes the pair");
@@ -125,6 +128,13 @@ static class DefaultsThemeShortcutTests
         });
         thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
         if(failure is not null)throw failure;
+        foreach(var current in Enum.GetValues<FloatingView>()) {
+            var forward=FloatingViewCycle.Next(current!=FloatingView.Hidden,current==FloatingView.TimeOnly,false);
+            var reverse=FloatingViewCycle.Next(current!=FloatingView.Hidden,current==FloatingView.TimeOnly,true);
+            check(forward==(FloatingView)(((int)current+1)%3)&&reverse==(FloatingView)(((int)current+2)%3),$"{current}: forward and reverse have opposite cycle order");
+            check(FloatingViewCycle.Next(forward!=FloatingView.Hidden,forward==FloatingView.TimeOnly,true)==current,$"{current}: reverse undoes forward");
+        }
+        check(FloatingViewCycle.Next(false,true,true)==FloatingView.TimeOnly&&FloatingViewCycle.Next(false,true,false)==FloatingView.Compact,"Hidden view's old layout does not change either cycle order");
     }
     private sealed class Registration : IHotKeyRegistration
     {

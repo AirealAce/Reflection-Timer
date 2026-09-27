@@ -22,11 +22,13 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action) && action!="timeReached") return false;
+        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice")) return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
         switch (action) {
+            case "voiceAnnouncements": engine.SetVoiceAnnouncements(ReadFlag(data,"enabled"));message="Voice announcement preference saved.";break;
+            case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;
             case "settingsSaveComplete":
                 _=services.Play(SoundEvent.Success);Reply(requestId);return true;

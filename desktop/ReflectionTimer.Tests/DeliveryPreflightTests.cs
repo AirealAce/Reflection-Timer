@@ -227,7 +227,7 @@ static class DeliveryPreflightTests
             Engine = new(new Store(new() { Connection = Connection, ExtensionDisabledConfirmed = true,
                 LoggingEnabled = false, Outbox = (entries ?? [Entry()]).ToList() }), () => Clock.GetUtcNow());
             Client = new(Receiver, timeout);
-            Services = new(Engine, Path.Combine(Path.GetTempPath(), "ReflectionTimer-Preflight-" + Guid.NewGuid().ToString("N")), Client, Audio, Clock);
+            Services = new(Engine, Path.Combine(Path.GetTempPath(), "ReflectionTimer-Preflight-" + Guid.NewGuid().ToString("N")), Client, Audio, Clock, new SilentSpeech());
             Services.Announcement += Notices.Add;
             Services.DeliveryIssueChanged += () => HealthUpdates++;
         }

@@ -34,7 +34,8 @@ internal sealed class PreviewShortcuts : IDisposable
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleModifiers),
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleAltId, GlobalShortcut.Modifiers),
         (GlobalShortcut.ModeToggleKey, GlobalShortcut.ModeToggleId, GlobalShortcut.Modifiers),
-        (GlobalShortcut.ResetTimerKey, GlobalShortcut.ResetTimerId, GlobalShortcut.Modifiers)
+        (GlobalShortcut.ResetTimerKey, GlobalShortcut.ResetTimerId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.CompactKey, GlobalShortcut.CompactReverseId, GlobalShortcut.CompactReverseModifiers)
     ];
     private readonly GlobalShortcut?[] registrations = new GlobalShortcut?[Chords.Length];
     private readonly Action<TimeSpan>[] actions;
@@ -70,5 +71,15 @@ internal sealed class PreviewShortcuts : IDisposable
         if (disposed) return;
         disposed = true;
         foreach (var shortcut in registrations) shortcut?.Dispose();
+    }
+}
+
+internal enum FloatingView { Compact, TimeOnly, Hidden }
+internal static class FloatingViewCycle
+{
+    internal static FloatingView Next(bool visible,bool timeOnly,bool reverse)
+    {
+        var current=!visible?FloatingView.Hidden:timeOnly?FloatingView.TimeOnly:FloatingView.Compact;
+        return (FloatingView)(((int)current+(reverse?2:1))%3);
     }
 }

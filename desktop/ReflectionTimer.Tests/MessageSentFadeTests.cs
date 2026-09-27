@@ -67,7 +67,7 @@ static class MessageSentFadeTests
             Connection=new(){SheetUrl="https://docs.google.com/spreadsheets/d/abcdefghijklmnopqrstuvwxyz/edit",WebAppUrl="https://script.google.com/macros/s/syntheticReceiver/exec",ApiToken=new string('a',64)},
             Audio=new(){LowTime=new(){Behavior=SoundBehavior.Polite,FadeOutAfterMessageSent=true,MessageSentFadeSeconds=4},SessionEnd=new(){Track=LibrarySound.None},Success=new(){Track=LibrarySound.None},Failure=new(){Track=LibrarySound.None}}}};
         var engine=new TimerEngine(memory,()=>now);var backend=new HoldingAudio();var receiver=new Receiver();
-        using var services=new PreviewServices(engine,directory,new SheetsClient(receiver),backend);
+        using var services=new PreviewServices(engine,directory,new SheetsClient(receiver),backend,speech:new SilentSpeech());
         try{
             engine.Start(20,ending=="natural",80,lowTime:new(){ThresholdSeconds=10});var sessionId=engine.Snapshot.Timer.SessionId;
             var prompt=engine.CheckIn();engine.SaveReflectionForLater(prompt,"Saved locally");
@@ -123,7 +123,7 @@ static class MessageSentFadeTests
                 Prompts=[new(itemId,now.ToUnixTimeMilliseconds(),20,80,mode=="practice"){
                     SessionId=mode=="unknown session"?null:mode=="different session"?Guid.NewGuid():id}]
             }},()=>now);
-            var backend=new HoldingAudio();using var services=new PreviewServices(engine,directory,audio:backend);
+            var backend=new HoldingAudio();using var services=new PreviewServices(engine,directory,audio:backend,speech:new SilentSpeech());
             try{
                 engine.Advance();var low=await backend.Next();
                 if(mode=="manual confirmation")engine.MarkAlreadySent(itemId);

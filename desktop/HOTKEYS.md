@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.12. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.18. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -29,7 +29,8 @@ Stopwatch pauses use the queued shortcut's timestamp. Waiting for a busy UI thre
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
 | Ctrl+Alt+T | If the main window is focused, hide it exactly like its X button. Otherwise bring it forward, preserving the selected tab; on Timer, select the first positive duration field. The timer and compact view continue unchanged. |
 | Ctrl+Alt+backtick (`) | Start the specified timer, resume a paused timer, or end a running session early and show its reflection. Auto-start and its cutoff still apply. |
-| Ctrl+Alt+, | Cycle compact controls → time-only → hidden → controls. The countdown continues. |
+| Ctrl+Alt+, | Cycle compact controls → time-only → hidden → controls. Entering Time-only returns focus to the previous usable window; the timer continues. |
+| Ctrl+Alt+Shift+, | Reverse cycle: compact controls → hidden → time-only → controls. Showing Time-only does not take focus. |
 | Ctrl+Alt+. | Focus Compact: select the Timer duration or focus the Stopwatch start/pause/resume button. Press twice within 0.8 seconds to do the same in App's Timer tab. |
 | Ctrl+Alt+/ | Bring an existing reflection forward and focus its first text box. In the focused reflection, focus the first box if neither is focused; if either text box is focused, Save the draft and close. With no open window, reopen the latest pending reflection or create a check-in for a running/paused session. Never opens App. |
 
@@ -43,7 +44,7 @@ Ctrl+Space or Ctrl+Alt+Space keeps an existing time-only viewer small when start
 
 Space or Ctrl+Enter performs that same timer action from anywhere in the focused Compact or Time-only viewer, including its clock, page background, duration inputs, and buttons. It does not activate the focused button's other action or insert a space in a duration field. Held-key repeats and repeated requests while saving are ignored; an open dialog keeps its own keys. Space is local to the focused floating viewer, not a global shortcut; it retains normal behavior in App and reflection text boxes. In App Settings, Ctrl+Enter or Ctrl+S saves settings from any focused control or page text; reflection behavior is described below.
 
-In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either control switches to Time-only and focuses the clock. From Time-only, either hides the floating viewer. This works while ready, running, paused, or finished and does not change the timer or other windows. Holding Escape performs only one step.
+In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either switches to Time-only and releases focus to the previous usable window. Automatic shrink when a session starts does the same. If another window is already focused, it keeps focus. From an explicitly focused Time-only viewer, Escape or minus hides it. The global comma shortcuts work without focusing the viewer. This works while ready, running, paused, or finished and does not change the timer. Holding Escape performs only one step. Time-only controls remain clickable; expanding Compact still focuses the timer controls. Closed, hidden, minimized, or disabled return targets are skipped; an owned modal is not bypassed.
 
 Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+slash still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
 
@@ -56,9 +57,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.12 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.18 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.12. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.18. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.
@@ -68,7 +69,7 @@ For a source checkout, update origin to `https://github.com/AirealAce/Reflection
 ## Verify behavior safely
 
 - Hide the main app in the tray; Ctrl+Alt+T should restore it. Press again while the main window is focused: it should hide like X, without quitting or stopping the timer. Minimize it and repeat. From a reflection or compact window, T should bring the main app forward, not hide it. An owned modal stays in front.
-- Use comma to cycle compact modes; period once selects compact duration and twice selects the full Timer duration.
+- Use comma to cycle compact modes and Shift+comma with the same Ctrl+Alt modifiers to reverse. Time-only returns focus rather than holding keyboard input; period once selects compact duration and twice selects the full Timer duration.
 - With a short disposable session, backtick starts the timer. Another press ends it early and opens a reflection; skip that test reflection instead of sending it to a live sheet.
 - During a disposable running session with no pending reflection, slash opens a check-in without stopping the countdown. From a reflection button or the page background, slash focuses the first text box. From either text box, it saves the draft locally and closes. A later press reopens the saved draft. Save & send remains the separate submission action.
 - If slash is unavailable, use the App check-in control. Other unavailable shortcuts also have normal app controls as alternatives.
@@ -77,6 +78,6 @@ Punctuation bindings currently use Windows US-keyboard virtual keys (OEM grave, 
 
 ## Developer regression gate
 
-Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all eight exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
+Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all ten exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, forward/reverse compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
 
 The public packaging script runs this gate before producing a ZIP, alongside onboarding/install, delivery-safety, receiver, and bundled-audio checks. It includes only the eight hash-verified approved MP3s and excludes local data, credentials, and additional personal audio.

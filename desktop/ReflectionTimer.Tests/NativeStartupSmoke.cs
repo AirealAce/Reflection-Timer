@@ -21,7 +21,7 @@ static class NativeStartupSmoke
                     Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);Application.EnableVisualStyles();
                     var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-StartupSmoke-"+Guid.NewGuid().ToString("N"));
                     var store=new EncryptedStore(directory);
-                    var saved=new AppState{Theme=theme,LoggingEnabled=false,StartAtLogin=true,AutoSendIncompleteReflections=false,
+                    var saved=new AppState{Theme=theme,LoggingEnabled=false,StartAtLogin=true,ShowAppView=true,AutoSendIncompleteReflections=false,
                         CompactAlwaysOnTop=false,TimeOnlyAlwaysOnTop=false,PromptAlwaysOnTop=false,ReflectionSeparator=ReflectionSeparator.Bullet,
                         PopupPosition=ReflectionPopupPosition.TopLeft,FloatingPlacement=FloatingTimerPlacement.TopRight,
                         Timer=new(){DurationSeconds=163,RemainingSeconds=163,Volume=0},

@@ -145,7 +145,7 @@ public sealed class DiagnosticLog : IDisposable
         Audio = Enum.GetValues<SoundEvent>().Select(kind => new { Event = kind.ToString(), AudioSettings.From(state).For(kind).Behavior,
             AudioSettings.From(state).For(kind).Track, Custom = AudioSettings.From(state).For(kind).Mp3Path.Length > 0 }),
         AudioSettings.From(state).LowTimeThresholdSeconds,
-        AudioSettings.From(state).TimeReachedEnabled,AudioSettings.From(state).TimeReachedSeconds,
+        AudioSettings.From(state).TimeReachedEnabled,AudioSettings.From(state).TimeReachedSeconds,state.VoiceAnnouncements,
         Enabled, StorageAvailable, Events = Recent(), Timer = state.Timer with { LowTime = state.Timer.LowTime with { Mp3Path = "" } },
         TimerLowTimeCustom = state.Timer.LowTime.Mp3Path.Length > 0,
         Schedules = state.Schedules.Select(x => x with { LowTime = x.LowTime with { Mp3Path = "" } }), PendingPrompts = state.Prompts.Count,

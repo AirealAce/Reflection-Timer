@@ -260,6 +260,7 @@ bridge?.addEventListener('message', event => {
   else if (message.type === 'clock') {if(state?.clock.status===message.clock.status&&Boolean(message.clock.stopwatch)===(state?.timer.mode===1))renderDuration(message.clock);}
   else if (message.type === 'timeRead') snapshot(message.clock,true);
   else if (message.type === 'announcement') announce(message.message);
+  else if (message.type === 'sessionStatus') setText($('session-status'),message.message);
   else if (message.type === 'durationDraft'&&view!=='reflection')sharedDuration(message.parts);
   else if (message.type === 'focusReflection') {if(view==='reflection'&&!document.querySelector('dialog[open]'))$('reflection-text').focus();}
   else if (message.type === 'reflectionShortcut') {

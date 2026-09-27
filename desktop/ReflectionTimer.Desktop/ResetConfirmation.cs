@@ -34,7 +34,7 @@ internal sealed partial class PreviewApplication
             try {
                 await WithResetConfirmationAsync(owner,()=>{
                     var result=KeepingTimeOnly(Session.ResetTimerFromShortcut);
-                    Announce(result.Message);return Task.CompletedTask;
+                    Announce(result);return Task.CompletedTask;
                 },requireReady:false);
             } catch(Exception error) {
                 Announce(error is ArgumentException or InvalidOperationException?error.Message:"The timer could not be reset. Your saved session and drafts are retained.");
@@ -99,7 +99,7 @@ internal sealed partial class PreviewWindow
         if(View=="reflection")throw new ArgumentException("Use Ctrl+R to reset from a reflection window.");
         var completed=await app.WithResetConfirmationAsync(this,()=>{
             var result=app.KeepingTimeOnly(()=>app.Session.Execute("reset",data,requestedAt));
-            app.Announce(result.Message);return Task.CompletedTask;
+            app.Announce(result);return Task.CompletedTask;
         });
         Reply(requestId,cancelled:!completed);
     }

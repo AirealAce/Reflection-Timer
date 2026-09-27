@@ -126,6 +126,10 @@ public record AppState
     public AudioSettings? Audio { get; set; } // Null migrates the existing session-end MP3 without changing it.
     public ReflectionPopupPosition PopupPosition { get; set; } = ReflectionPopupPosition.BottomRight;
     public bool ShowFloatingTimer { get; set; } = true;
+    // Null preserves legacy launch behavior until the user changes the view.
+    public bool? ShowAppView { get; set; }
+    public bool? FloatingTimeOnly { get; set; }
+    public bool VoiceAnnouncements { get; set; }
     public bool CompactAlwaysOnTop { get; set; } = true;
     public bool TimeOnlyAlwaysOnTop { get; set; } = true;
     public bool PromptAlwaysOnTop { get; set; } = true;

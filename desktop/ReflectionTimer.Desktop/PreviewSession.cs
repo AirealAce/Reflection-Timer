@@ -139,7 +139,6 @@ public sealed class PreviewSession
         var added=after.Prompts.Where(p => !p.IsCheckIn&&before.Prompts.All(old => old.IsCheckIn||old.Id != p.Id)).ToArray();
         if (added.Length>0)
             Announcement?.Invoke("Session finished. A reflection is available under Pending reflections.");
-        else if (!before.Timer.IsRunning && after.Timer.IsRunning) Announcement?.Invoke("Scheduled timer started.");
         return added;
     }
     public CommandResult Execute(string action, JsonElement data, long? requestedAt = null)
@@ -152,7 +151,7 @@ public sealed class PreviewSession
             case "switchMode":
                 Engine.SwitchMode((SessionMode)Number(data,"mode",0,1),requestedAt);
                 var completedOnSwitch=Engine.Snapshot.Prompts.FirstOrDefault(p=>!p.IsCheckIn&&state.Prompts.All(old=>old.IsCheckIn||old.Id!=p.Id));
-                return new(Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch?"Stopwatch selected. Previous session paused.":"Timer selected. Previous session paused.",completedOnSwitch?.Id,SessionCompleted:completedOnSwitch is not null);
+                return new(Engine.Snapshot.Timer.Mode==SessionMode.Stopwatch?"Stopwatch selected. Previous session paused.":"Timer selected. Previous session paused.",completedOnSwitch?.Id,SessionCompleted:completedOnSwitch is not null,HasSessionFeedback:true);
             case "timeReached":
                 Engine.SetTimeReached(Flag(data,"enabled"),Number(data,"seconds",1,TimerEngine.MaxDuration));
                 return new("Time-reached alert saved.");
@@ -163,21 +162,21 @@ public sealed class PreviewSession
                     if(state.Timer.IsRunning)Engine.Pause(requestedAt);
                     else if(TimerEngine.IsPaused(state.Timer))Engine.Resume();
                     else Engine.StartStopwatch();
-                    return new(Engine.Snapshot.Timer.IsRunning?"Stopwatch running.":"Stopwatch paused.");
+                    return new(Engine.Snapshot.Timer.IsRunning?"Stopwatch running.":"Stopwatch paused.",HasSessionFeedback:true);
                 }
                 if (state.Timer.IsRunning) {
                     Engine.Pause(requestedAt);
                     var completed=Engine.Snapshot.Prompts.FirstOrDefault(p=>!p.IsCheckIn&&state.Prompts.All(old=>old.IsCheckIn||old.Id!=p.Id));
-                    return new(completed is null?"Timer paused.":"Session ended. Reflection opened.",completed?.Id,SessionCompleted:completed is not null);
+                    return new(completed is null?"Timer paused.":"Session ended. Reflection opened.",completed?.Id,SessionCompleted:completed is not null,HasSessionFeedback:completed is null);
                 }
                 var seconds = Number(data, "seconds", 1, TimerEngine.MaxDuration);
                 if (TimerEngine.IsPaused(state.Timer) && seconds == state.Timer.DurationSeconds) Engine.Resume();
                 else Engine.Start(seconds, Flag(data, "repeat"), state.Timer.Volume, state.Timer.AutoRestartUntil, lowTime:state.Timer.LowTime with {Enabled=Flag(data,"lowTime")});
                 SetDurationDraft(null);
-                return new("Timer running.");
+                return new("Timer running.",HasSessionFeedback:true);
             case "reset":
-                if(state.Timer.Mode==SessionMode.Stopwatch){Engine.Reset();return new("Stopwatch reset.");}
-                Engine.Reset(Number(data, "seconds", 1, TimerEngine.MaxDuration));SetDurationDraft(null);return new("Timer reset.");
+                if(state.Timer.Mode==SessionMode.Stopwatch){Engine.Reset();return new("Stopwatch reset.",HasSessionFeedback:true);}
+                Engine.Reset(Number(data, "seconds", 1, TimerEngine.MaxDuration));SetDurationDraft(null);return new("Timer reset.",HasSessionFeedback:true);
             case "repeat":
                 Engine.SetPreferences(Flag(data, "enabled"), state.Timer.Volume, Flag(data,"enabled") ? countdown.AutoRestartUntil : null);
                 return new(Flag(data, "enabled") ? "Auto-start enabled." : "Auto-start disabled.");
@@ -295,4 +294,4 @@ public sealed class PreviewSession
     private static string Text(JsonElement data, string name, int max) => data.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text && text.Length <= max
         ? text : throw new ArgumentException($"Enter valid {name} (up to {max} characters).");
 }
-public record CommandResult(string Message, Guid? OpenReflection = null, bool Close = false, bool SessionCompleted = false);
+public record CommandResult(string Message, Guid? OpenReflection = null, bool Close = false, bool SessionCompleted = false, bool HasSessionFeedback = false);

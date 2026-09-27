@@ -9,6 +9,21 @@ export function settingsUI({send, run, bind, view, announce}) {
   const $ = id => document.getElementById(id);
   let settings, volumeRevision=0, volumeSaving=Promise.resolve(), volumeTimer, volumePending=false;
   let deliveryIssue=null, deliveryEnabled=false;
+  let voiceRevision=0,voiceSavedRevision=0,voicePending=false,voiceSaving=Promise.resolve();
+  function flushVoice(){
+    if(voicePending||voiceRevision===voiceSavedRevision)return voiceSaving;
+    voicePending=true;
+    voiceSaving=(async()=>{
+      while(voiceRevision!==voiceSavedRevision){
+        const revision=voiceRevision,enabled=$('voice-announcements').checked;
+        await send('voiceAnnouncements',{enabled,quiet:true});voiceSavedRevision=revision;
+      }
+    })().finally(()=>{voicePending=false;});
+    return voiceSaving;
+  }
+  $('voice-form').addEventListener('submit',event=>event.preventDefault());
+  $('voice-announcements').addEventListener('change',()=>{voiceRevision++;run(flushVoice);});
+  bind('preview-voice',()=>send('previewVoice'));
   function renderDelivery() {
     const message=deliveryIssue
       ? deliveryIssue.message+(deliveryIssue.nextRetryAt ? ` Automatic retry after ${new Date(deliveryIssue.nextRetryAt).toLocaleString()}.` : '')
@@ -124,7 +139,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     })().finally(()=>{volumePending=false;});
     return volumeSaving;
   }
-  async function flushAutosaves(){await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await flushVolume();}
+  async function flushAutosaves(){await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await flushVoice();await flushVolume();}
   for(const id of ['app-volume','settings-volume']){
     $(id).addEventListener('input',()=>{
       const value=Number($(id).value);++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');
@@ -167,11 +182,17 @@ export function settingsUI({send, run, bind, view, announce}) {
     },
     message(message) {
       if(view!=='main') return;
+      if(message.type==='settings') {
+        $('voice-announcements').disabled=false;$('preview-voice').disabled=false;
+        if(voiceRevision===voiceSavedRevision)$('voice-announcements').checked=message.settings.voiceAnnouncements===true;
+      }
       if(message.type==='settingsSaveShortcut'){if(canSaveFromShortcut())run(saveSettings);return;}
       if(message.type==='deliveryIssue') { deliveryIssue=message.issue;renderDelivery(); }
       else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
       else if(message.type==='shortcuts'){
         const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact; twice within 0.8 seconds for App. Selects the Timer duration or focuses the Stopwatch play button.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small, and hidden windows stay hidden.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. In the focused App or Compact view, the same press focuses the Stopwatch play button or selects the Timer duration. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden.",'Ctrl+Alt+R · reset the selected timer or stopwatch from any app. Uses the reset confirmation setting. Keeps hidden windows hidden and Time-only small.'];
+        descriptions[2]+=' Entering time-only returns focus to the previous usable window.';
+        descriptions.push('Ctrl+Alt+Shift+, · cycle in reverse: compact controls → hidden → time-only → controls. Time-only does not take focus.');
         $('shortcut-notices').replaceChildren(...descriptions.map((text,i)=>{
           const p=document.createElement('p'),key=document.createElement('kbd'),[shortcut,description]=text.split(' · ');
           key.textContent=shortcut;

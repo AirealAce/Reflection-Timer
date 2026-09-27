@@ -40,6 +40,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         Text = $"Reflection Timer — {(view == "main" ? "App view" : view == "compact" ? "Compact view" : "Session end")} · {typeof(PreviewWindow).Assembly.GetName().Version?.ToString(3)}";
         StartPosition = FormStartPosition.Manual; AutoScaleMode = AutoScaleMode.Dpi;
         var state=app.Session.Engine.Snapshot;
+        IsTimeOnly = view=="compact" && (state.FloatingTimeOnly ?? state.Timer.IsRunning);
         Size = view == "main" ? new(940, 810) : view == "compact" ? new(228, 200) : new(560, state.Prompts.Any(p=>p.Id==prompt&&ReflectionTimer.Core.TimerEngine.ShowEarlyEndReason(p,state.Timer,app.Session.Engine.ElapsedNow))?525:440);
         MinimumSize = view == "main" ? new(420, 400) : view == "compact" ? new(80,32) : new(420,360);
         if(view=="compact") { FormBorderStyle=FormBorderStyle.None; ShowInTaskbar=false; MaximizeBox=false; MinimizeBox=false; }
@@ -62,9 +63,17 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         };
         ResizeEnd+=(_,_)=>{if(View=="compact")try{app.Session.Engine.SetFloatingTimerPosition(Left,Top);}catch{app.Announce("Could not save the compact position.");}};
         FormClosing += async (_, e) => {
+            // Windows also raises this during its shutdown/sign-out query.
+            // Vetoing it would cancel the entire Windows shutdown. Leave the
+            // window untouched in case another application cancels the query.
+            if (e.CloseReason == CloseReason.WindowsShutDown) return;
             if (allowClose) return;
             e.Cancel = true;
-            if (View == "main") { Hide(); return; }
+            if (View == "main") {
+                try { app.HideAppView(); }
+                catch { app.Announce("Could not save the hidden App view. This window is staying open. Try again."); }
+                return;
+            }
             if(handoffInProgress)return;
             if (requestingClose) return;
             requestingClose = true;
@@ -74,6 +83,16 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         };
     }
     protected override bool ShowWithoutActivation => View is "compact" or "reflection";
+    protected override void SetVisibleCore(bool value)
+    {
+        // Application.Run(context) tries to show MainForm even for --tray.
+        // Suppress that implicit show without changing the saved preference.
+        if(value && View=="main" && !app.AppViewMayShow)value=false;
+        var passiveTinyShow=value&&!Visible&&View=="compact"&&IsTimeOnly;
+        if(passiveTinyShow)RememberCompactFocus(ReflectionTimer.Desktop.WindowActivation.Foreground);
+        base.SetVisibleCore(value);
+        if(passiveTinyShow)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
+    }
     protected override CreateParams CreateParams {get{var value=base.CreateParams;if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;return value;}}
     internal void ApplyTopMost(AppState? preferences = null)
     {
@@ -81,7 +100,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         var top=View=="reflection"?state.PromptAlwaysOnTop:View=="compact"&&(IsTimeOnly?state.TimeOnlyAlwaysOnTop:state.CompactAlwaysOnTop);
         if(TopMost!=top)TopMost=top;
     }
-    internal void FocusControls(bool timerPage=false){if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}Post(new{type=View=="compact"?"expandCompact":View=="reflection"?"focusReflection":"focusTimer",selectTimer=timerPage});}
+    internal void FocusControls(bool timerPage=false){if(View=="compact"){SetCompactMode(false,true);return;}if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}Post(new{type=View=="reflection"?"focusReflection":"focusTimer",selectTimer=timerPage});}
     internal async Task PrepareReflectionAsync()
     {
         if(View!="reflection"||IsDisposed)return;
@@ -203,14 +222,15 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if(handoffInProgress && action is "queue" or "reflectionSendStarted" or "saveForLater" or "saveOrSendReflection" or "skip" or "close" or "navigateReflection")throw new InvalidOperationException("This reflection is being saved before another prompt opens.");
             var data = root.GetProperty("data");
             if (action == "ready") {
-                ready = true; Post(new { type = "init", view = View, promptId = PromptId, state = app.Session.View(), appViewVisible = app.AppViewVisible, timeOnly = recoveringInterface ? (bool?)IsTimeOnly : null });
+                ready = true; Post(new { type = "init", view = View, promptId = PromptId, state = app.Session.View(), appViewVisible = app.AppViewVisible, timeOnly = View=="compact" ? (bool?)IsTimeOnly : null, compactRevision });
                 if(View=="main" && app.RecoveryNotice is { } notice) { Post(new { type="announcement", message=notice }); app.RecoveryNotice=null; }
                 if(focusOnReady){focusOnReady=false;FocusControls(selectTimerOnReady);}
-                if(View=="main"&&!app.StartInTray&&!recoveringInterface)ReflectionTimer.Desktop.WindowActivation.Focus(this);
+                if(View=="main"&&Visible&&app.AppViewMayShow&&!app.StartInTray&&!recoveringInterface)ReflectionTimer.Desktop.WindowActivation.Focus(this);
                 Reply(requestId); return;
             }
             if(action=="interfaceReady") {
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
+                if(View=="compact"&&IsTimeOnly)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
                 interfaceReady.TrySetResult();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
@@ -245,12 +265,19 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             }
             if (action == "compactSize") {
                 if(View!="compact") throw new ArgumentException("Only the compact window can request this size.");
+                var revision=data.TryGetProperty("revision",out var reported)?reported.GetInt32():0;
+                if(revision!=compactRevision){Reply(requestId);return;}
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
-                IsTimeOnly=ReadFlag(data,"tiny");
+                var timeOnly=ReadFlag(data,"tiny");
+                var enteringTimeOnly=timeOnly&&!IsTimeOnly;
+                if(IsTimeOnly!=timeOnly)app.Session.Engine.SetFloatingTimeOnly(timeOnly);
+                IsTimeOnly=timeOnly;
                 ApplyTopMost();
-                Text=$"Reflection Timer — {(IsTimeOnly?"Time-only":"Compact")} view · {typeof(PreviewWindow).Assembly.GetName().Version?.ToString(3)}";
+                UpdateCompactTitle();
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
-                ApplyPosition();Reply(requestId);return;
+                ApplyPosition();Reply(requestId);
+                if(enteringTimeOnly)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
+                return;
             }
             if (action == "main") { app.Open("main"); Reply(requestId); return; }
             if(action=="navigateReflection") {
@@ -273,11 +300,11 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 : app.Session.Execute(action, data,requestedAt);
             Reply(requestId);
             if (result.Close) {
-                CloseAfterSave(); app.Announce(result.Message);
+                CloseAfterSave(); app.Announce(result);
                 if(result.SessionCompleted&&PromptId is {} submittedId)await app.CompleteSubmittedSessionAsync(submittedId);
             }
             else if (result.OpenReflection is { } prompt) app.Open("reflection", prompt,sessionCompleted:result.SessionCompleted);
-            else app.Announce(result.Message);
+            else app.Announce(result);
         }
         catch (Exception error) {
             var message = error is ArgumentException or InvalidOperationException ? error.Message : "The change could not be saved. Review its current values and try again.";

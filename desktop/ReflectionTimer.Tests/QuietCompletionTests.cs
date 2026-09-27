@@ -15,7 +15,7 @@ static class QuietCompletionTests
                 Success=new(){Track=LibrarySound.LevelUp,Behavior=SoundBehavior.Polite}
             }}},()=>now);
             var audio=new RecordingAudio();
-            using var services=new PreviewServices(engine,directory,audio:audio);
+            using var services=new PreviewServices(engine,directory,audio:audio,speech:new SilentSpeech());
             try {
                 engine.Start(60,repeat,50,lowTime:new(){Enabled=false});now=now.AddSeconds(10);
                 var id=engine.CheckIn();if(paused)engine.Pause();

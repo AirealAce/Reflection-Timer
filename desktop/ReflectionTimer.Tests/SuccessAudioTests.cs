@@ -13,7 +13,7 @@ static class SuccessAudioTests
             SessionEnd=new(){Track=LibrarySound.None},Success=new(){Track=LibrarySound.LevelUp,Volume=40,Behavior=SoundBehavior.Polite}
         }}};
         var session=new PreviewSession(memory,isolatedProfile:true);var audio=new RecordingAudio();
-        using var services=new PreviewServices(session.Engine,directory,audio:audio);
+        using var services=new PreviewServices(session.Engine,directory,audio:audio,speech:new SilentSpeech());
         try {
             var prompt=session.Engine.TestPrompt();
             session.Execute("skip",JsonSerializer.SerializeToElement(new{id=prompt}));

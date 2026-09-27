@@ -12,12 +12,12 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.2.12</p>
+    <p class="eyebrow">Reflection Timer 4.2.18</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
   </header>
-  <div class="messages"><p id="status" role="status" aria-atomic="true"></p><p id="error" role="alert" aria-atomic="true"></p></div>
+  <div class="messages"><p id="session-status" aria-live="off"></p><p id="status" role="status" aria-atomic="true"></p><p id="error" role="alert" aria-atomic="true"></p></div>
   <main id="main" tabindex="-1">
     <section id="timer" class="timer-view" aria-labelledby="timer-heading">
       <h2 id="timer-heading">Focus timer</h2>
@@ -107,6 +107,13 @@
       <p>Low-on-time audio plays once per session. If a session starts within its threshold, it alerts on its first tick. Ending near zero counts as a normal completion within the threshold, or 15 seconds when Use threshold is unchecked, capped at 10% of the session duration. Time spent is still recorded accurately.</p></div>
       <form id="settings-volume-form"><label class="volume-control"><span id="settings-volume-caption">App sound (50%)</span><input id="settings-volume" type="range" min="0" max="100" value="50" aria-label="Settings app sound volume"></label></form>
       <p>App sound controls all app audio and matches the Timer slider. Each audio volume below scales this level.</p>
+      <form id="voice-form" aria-labelledby="voice-heading">
+        <h3 id="voice-heading">Voice announcements</h3>
+        <label class="check"><input id="voice-announcements" type="checkbox" aria-describedby="voice-help voice-preset-help" disabled>Use the app voice for timer actions, mode changes, and view changes</label>
+        <p id="voice-help">Optional app voice announces start, pause, resume, reset, Timer/Stopwatch switches, and view changes, including in the tray. Speaks remaining or elapsed time and the reset duration; omits the time at 0:00. Follows App sound volume and plays alongside MP3 audio. View announcements wait for the current timer action to finish; rapid view changes announce only the latest destination. Off by default; saves automatically. Your saved choice is kept on upgrades. Screen readers receive the same messages independently, even with this option off or App sound muted, using their own voice and notification settings.</p>
+        <p id="voice-preset-help">Preferred voice: Microsoft Hazel Desktop, speed +3, pitch +20%. If unavailable, uses another installed voice. To get Hazel, install the English (United Kingdom) text-to-speech language feature in Windows Settings → Time &amp; language, then restart this app. The voice package is not bundled.</p>
+        <button id="preview-voice" type="button" disabled>Preview voice</button>
+      </form>
       <form id="sound-form"><label>Sound event<select id="sound-kind"><option value="0">Session end</option><option value="1">Success</option><option value="2">Failure</option><option value="3">Low time</option></select></label>
         <p id="sound-default"></p><label>Track<select id="sound-track" aria-describedby="sound-default"></select></label>
         <label>Playback behavior<select id="sound-behavior"><option value="0">Disruptive</option><option value="1">Assertive</option><option value="2">Polite</option></select></label>
@@ -149,7 +156,7 @@
       <ol><li>Enter a duration, leave the input, and read the surrounding text at your own pace.</li><li>Start the timer. Read this page or another app for a minute. The countdown should not interrupt you.</li><li>Use Read remaining time. You should hear the current time once.</li><li>Open the compact timer and try both views using the keyboard.</li><li>Navigate individual Scheduler and Outbox cells using your reader's table commands.</li><li>Write a practice reflection, choose Save, and reopen it to check that the draft is preserved.</li></ol>
       <p>Settings, audio, connection setup, delivery, and diagnostics use your saved desktop profile. Practice reflections are sent to the test tab when delivery is enabled.</p>
       <p>App, the floating timer, and session-end prompts are separate windows. Compact and Time-only share one floating window. App opens centered, the floating timer bottom left, and session-end prompts bottom right. Closing App hides it in the tray; choose Quit desktop app to exit.</p>
-      <p>Ctrl+Space or Ctrl+Alt+Space starts, resumes, or pauses the timer globally, including while its windows are hidden. The Ctrl+Alt shortcuts are available when another running app has not already registered them: T for App, , to shrink or hide the floating timer, . to focus Compact (twice for App), / for a check-in, ' (apostrophe) to switch Timer / Stopwatch, and ` to end early. You can also open views from the tray icon.</p>
+      <p>Ctrl+Space or Ctrl+Alt+Space starts, resumes, or pauses the timer globally, including while its windows are hidden. The Ctrl+Alt shortcuts are available when another running app has not already registered them: T for App, , to cycle Compact → Time-only → hidden (add Shift to reverse), . to focus Compact (twice for App), / for a check-in, ' (apostrophe) to switch Timer / Stopwatch, and ` to end early. Entering Time-only releases focus to the previous usable window. You can also open views from the tray icon.</p>
     </section>
     <section id="reflection" class="reflection-only" aria-labelledby="reflection-heading">
       <h2 id="reflection-heading" tabindex="-1">Session reflection</h2><p id="reflection-context"></p>
@@ -168,6 +175,6 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.12</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.18</span></footer>
 </body>
 </html>

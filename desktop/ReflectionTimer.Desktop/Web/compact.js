@@ -2,7 +2,7 @@ import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
-let sequence=0,state,dirty=false,tiny=false,revealed=false,lastRunning=false,lastDeadline,repeatPending=false;
+let sequence=0,state,dirty=false,tiny=false,revealed=false,lastRunning=false,lastDeadline,repeatPending=false,compactRevision=0;
 function send(action,data={}){return new Promise((resolve,reject)=>{const requestId=`${requestPrefix}:${++sequence}`;if(!bridge)return reject(new Error('Open the compact timer through Reflection Timer.'));const timeout=['reset','resetAndReload'].includes(action)?undefined:setTimeout(()=>{requests.delete(requestId);reject(new Error('The app did not respond.'));},35000);requests.set(requestId,{resolve,reject,timeout});bridge.postMessage({requestId,action,data});});}
 function run(action){setText($('error'),'');Promise.resolve().then(action).catch(e=>setText($('error'),e.message));}
 function bind(id,action){$(id).addEventListener('click',()=>{if($(id).getAttribute('aria-disabled')!=='true')run(action);});}
@@ -23,10 +23,10 @@ function renderDuration(clock=state?.clock){
   try{setText($('visual-clock'),formatClock(displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),dirty).seconds));}
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
-function resize(){if(state)send('compactSize',{width:Math.ceil(document.body.getBoundingClientRect().width),height:Math.ceil(document.body.getBoundingClientRect().height),tiny}).catch(e=>setText($('error'),e.message));}
-function mode(value){tiny=value;document.body.dataset.tiny=String(value);$('shrink').setAttribute('aria-label',value?'Hide compact timer':'Shrink to time-only view');$('expand').setAttribute('aria-label',value?'Expand compact view':'Open main timer page');['shrink','expand'].forEach(id=>$(id).title=$(id).getAttribute('aria-label'));}
+function resize(){if(state)send('compactSize',{width:Math.ceil(document.body.getBoundingClientRect().width),height:Math.ceil(document.body.getBoundingClientRect().height),tiny,revision:compactRevision}).catch(e=>setText($('error'),e.message));}
+function mode(value){const entering=value&&!tiny;tiny=value;document.body.dataset.tiny=String(value);$('shrink').setAttribute('aria-label',value?'Hide compact timer':'Shrink to time-only view');$('expand').setAttribute('aria-label',value?'Expand compact view':'Open main timer page');['shrink','expand'].forEach(id=>$(id).title=$(id).getAttribute('aria-label'));if(entering)document.activeElement?.blur();}
 function expand(){revealed=true;mode(false);focusTimerControl(state?.timer.mode===1);}
-function shrink(){revealed=false;mode(true);$('read-time').focus();}
+function shrink(){revealed=false;mode(true);resize();}
 function snapshot(clock,speak=false){try{clock=displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),dirty);}catch{}const text=`${clock.text} ${clock.stopwatch?'elapsed':clock.status==='Finished'?'set':'remaining'}. ${clock.status}.`;setText($('time-snapshot'),`Time checked: ${text}`);if(speak)announce(text);}
 function render(next,keepTimeOnly=false){const previous=state;state=next;document.documentElement.dataset.theme=String(state.theme??0);const running=state.clock.status==='Running';
   const stopwatch=state.timer.mode===1;
@@ -47,18 +47,19 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   $('end').title=stopwatch?'Pause and reflect':'End timer early';$('end').setAttribute('aria-label',$('end').title);
   renderDuration();
   document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(stopwatch?state.clock.seconds:state.timer.durationSeconds).length*15+16)}px`);
-  if(tiny&&['hours','minutes','seconds','repeat','app','reset','end'].includes(document.activeElement.id))$('read-time').focus();
 }
 bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve(m);}
-  else if(m.type==='init'){render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>setText($('error'),e.message));}
+  else if(m.type==='init'){compactRevision=m.compactRevision??0;render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>setText($('error'),e.message));}
   else if(m.type==='appViewVisibility')setAppVisibility(m.visible);
   else if(m.type==='state')render(m.state,m.keepTimeOnly===true);
   else if(m.type==='clock'){if(state?.clock.status===m.clock.status&&Boolean(m.clock.stopwatch)===(state?.timer.mode===1)){renderDuration(m.clock);if(m.clock.stopwatch)document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(m.clock.seconds).length*15+16)}px`);}}
   else if(m.type==='timeRead')snapshot(m.clock,true);
   else if(m.type==='announcement')announce(m.message);
+  else if(m.type==='sessionStatus')setText($('session-status'),m.message);
   else if(m.type==='durationDraft')sharedDuration(m.parts);
   else if(m.type==='expandCompact')expand();
   else if(m.type==='shrinkCompact')shrink();
+  else if(m.type==='compactLayout'){compactRevision=m.revision;revealed=!m.timeOnly;mode(m.timeOnly);if(m.focus&&!tiny)focusTimerControl(state?.timer.mode===1);resize();}
   else if(m.type==='measureCompact')resize();
 });
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>Boolean(state)});
@@ -94,7 +95,7 @@ document.addEventListener('keydown',event=>{
 document.addEventListener('keydown',event=>{
   if(event.key!=='Escape'||!state||document.querySelector('dialog[open]'))return;
   event.preventDefault();
-  // One press shrinks and focuses the clock; a second press hides the viewer.
+  // One press shrinks and releases focus; the global comma chord can then hide it.
   if(!event.repeat)$('shrink').click();
 });
 window.addEventListener('blur',()=>{if(revealed&&state?.clock.status==='Running'){revealed=false;mode(true);}});

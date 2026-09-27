@@ -46,7 +46,7 @@ static class PromotionTests
             offline.Execute("queue", JsonSerializer.SerializeToElement(new { id, text = "Queued offline", reason = "" }));
             check(!offline.Engine.Snapshot.Outbox.Single().LocalOnly, "A new primary reflection saved offline can later be delivered");
             var receiver = new Receiver();
-            using var services = new PreviewServices(offline.Engine, directory, new SheetsClient(receiver));
+            using var services = new PreviewServices(offline.Engine, directory, new SheetsClient(receiver),speech:new SilentSpeech());
             offline.Engine.SetAppVolume(0);
             services.SaveConnection(connection, false);
             var bound = offline.Engine.Snapshot.Outbox.Single();

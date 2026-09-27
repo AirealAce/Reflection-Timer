@@ -122,7 +122,7 @@ internal sealed partial class PreviewWindow
                 browser.CoreWebView2.Reload();
                 await interfaceReady.Task.WaitAsync(TimeSpan.FromSeconds(20));
                 recoveringInterface=false;
-                Post(new{type="announcement",message=result.Message+" Page refreshed."});
+                Post(new{type="announcement",message=result.HasSessionFeedback?"Page refreshed.":result.Message+" Page refreshed."});
             });
             if(!completed)Reply(requestId,cancelled:true);
         } catch {

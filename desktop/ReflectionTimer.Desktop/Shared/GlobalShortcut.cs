@@ -27,6 +27,8 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const int TimerToggleAltId = 0x525A;
     internal const int ModeToggleId = 0x525B;
     internal const int ResetTimerId = 0x525C;
+    internal const int CompactReverseId = 0x525D;
+    internal const uint CompactReverseModifiers = Modifiers | 0x0004; // Shift
     internal const uint ResetTimerKey = 0x52; // R
     internal const uint ModeToggleKey = 0xDE; // VK_OEM_7: apostrophe/quote on a US keyboard.
     internal const uint TimerToggleKey = 0x20; // VK_SPACE
@@ -111,6 +113,25 @@ internal sealed class WindowsHotKeyRegistration : IHotKeyRegistration
 
 internal static class WindowActivation
 {
+    internal static nint Foreground => GetForegroundWindow();
+    internal static bool IsReturnTarget(nint target,nint source) => target!=0&&target!=source&&IsWindow(target)
+        &&IsWindowVisible(target)&&IsWindowEnabled(target)&&!IsIconic(target);
+    internal static void ReleaseFocus(Form window,nint previous)
+    {
+        // Never redirect typing from a window the user has already moved to,
+        // or bypass an owned modal. The floating window stays visible.
+        if(!IsForeground(window))return;
+        if(IsReturnTarget(previous,window.Handle)&&SetForegroundWindow(previous))return;
+        // If the previous window closed, try the next normal window, not a
+        // no-activate/tool overlay. Fall back to the desktop without hiding it.
+        var seen=new HashSet<nint>();
+        for(var next=GetWindow(window.Handle,2);next!=0&&seen.Add(next);next=GetWindow(next,2)) {
+            if(!IsReturnTarget(next,window.Handle)||(GetWindowLongPtr(next,-20).ToInt64()&(0x80|0x08000000))!=0)continue;
+            if(SetForegroundWindow(next))return;
+        }
+        var shell=GetShellWindow();
+        if(IsReturnTarget(shell,window.Handle))SetForegroundWindow(shell);
+    }
     internal static bool CanReceiveFocus(Form window) =>
         !window.IsDisposed && window.Enabled && (!window.IsHandleCreated || IsWindowEnabled(window.Handle));
 
@@ -148,4 +169,10 @@ internal static class WindowActivation
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool IsWindowEnabled(nint window);
+    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindow(nint window);
+    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsWindowVisible(nint window);
+    [DllImport("user32.dll")][return: MarshalAs(UnmanagedType.Bool)] private static extern bool IsIconic(nint window);
+    [DllImport("user32.dll")] private static extern nint GetWindow(nint window,uint command);
+    [DllImport("user32.dll")] private static extern nint GetShellWindow();
+    [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] private static extern nint GetWindowLongPtr(nint window,int index);
 }

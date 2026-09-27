@@ -13,7 +13,7 @@ static class ServiceTests
         state.Outbox=state.Outbox.Select(o=>o with { LocalOnly=false }).ToList(); // Upgrade a 0.1 profile.
         var session=new PreviewSession(new MemoryStore { State=state }, isolatedProfile: true);
         var handler=new Receiver(); var audio=new SilentAudio();
-        using var services=new PreviewServices(session.Engine,directory,new SheetsClient(handler),audio);
+        using var services=new PreviewServices(session.Engine,directory,new SheetsClient(handler),audio,speech:new SilentSpeech());
         var connection=new ConnectionSettings { SheetUrl="https://docs.google.com/spreadsheets/d/abcdefghijklmnopqrstuvwxyz/edit",
             WebAppUrl="https://script.google.com/macros/s/syntheticReceiver/exec",ApiToken=new string('a',64),SheetMode="fixed",SheetName="QA only" };
         JsonElement Data(object value)=>JsonSerializer.SerializeToElement(value,PreviewSession.Json);

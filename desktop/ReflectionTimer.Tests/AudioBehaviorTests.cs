@@ -16,7 +16,7 @@ static class AudioBehaviorTests
             var prompt=engine.CheckIn();engine.SaveDraft(prompt,"Draft retained through sound transition");
             if(ending=="scheduled")engine.SaveSchedule(null,now.AddSeconds(18),60,false,80,lowTime:new(){Enabled=false});
             var backend=new HoldingAudio();
-            using var services=new PreviewServices(engine,directory,audio:backend);
+            using var services=new PreviewServices(engine,directory,audio:backend,speech:new SilentSpeech());
             try {
                 now=now.AddSeconds(10);engine.Advance();var low=await backend.Next();
                 check(low.Level.Gain==.8f&&!low.Token.IsCancellationRequested,"Low-time sound begins at its configured volume: "+ending+" / "+behavior);
@@ -42,7 +42,7 @@ static class AudioBehaviorTests
             engine.SetSound(SoundEvent.TimeReached,new(){Behavior=SoundBehavior.Polite});
             engine.SetSound(SoundEvent.SessionEnd,new(){Behavior=behavior});
             engine.SwitchMode(SessionMode.Stopwatch);engine.StartStopwatch();engine.SetTimeReached(true,5);
-            var backend=new HoldingAudio();using var services=new PreviewServices(engine,Path.Combine(Path.GetTempPath(),"ReflectionTimer-StopwatchAudio-"+Guid.NewGuid().ToString("N")),audio:backend);
+            var backend=new HoldingAudio();using var services=new PreviewServices(engine,Path.Combine(Path.GetTempPath(),"ReflectionTimer-StopwatchAudio-"+Guid.NewGuid().ToString("N")),audio:backend,speech:new SilentSpeech());
             now=now.AddSeconds(5);engine.Advance();var reached=await backend.Next();
             var id=engine.ReviewStopwatch();var end=await backend.Next();
             check(!engine.Snapshot.Timer.IsRunning&&end.Level.Gain>0,"Stopwatch review plays the session-end sound after pausing: "+behavior);

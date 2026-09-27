@@ -9,6 +9,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     internal string ProfileDirectory { get; }
     internal string? ProfileName { get; }
     internal bool StartInTray { get; }
+    internal bool AppViewMayShow { get; private set; }
     internal object ShortcutState => shortcuts.Status;
     internal bool AppViewVisible => MainForm is { IsDisposed: false, Visible: true, WindowState: not FormWindowState.Minimized };
     internal PreviewServices Services { get; }
@@ -28,8 +29,10 @@ internal sealed partial class PreviewApplication : ApplicationContext
     internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
+        AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         Services = new(session.Engine, directory); Services.Announcement += Announce;
+        Services.SessionAnnouncement += AnnounceSession;
         Services.DeliveryIssueChanged += () => Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });
         Services.Log.Record("app.started");
         Services.Log.Record("theme.loaded",value:(int)session.Engine.Snapshot.Theme);
@@ -47,23 +50,25 @@ internal sealed partial class PreviewApplication : ApplicationContext
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
             try {
+                Services.PollVoiceStatus();
                 foreach(var prompt in Session.Tick()) _ = OpenReflectionAsync(prompt.Id,false,true);
                 ApplyTheme();Broadcast(new { type = "clock", clock = Session.Clock() }); tickFailed = false;
                 if (Session.Engine.ElapsedNow - lastSync >= 15000) { lastSync = Session.Engine.ElapsedNow; _ = Services.Sync(); if(shortcuts?.RetryUnavailable()==true)Broadcast(new{type="shortcuts",shortcuts=ShortcutState}); } }
             catch { if (!tickFailed) Announce("Could not save a timer update. Your last saved state is retained."); tickFailed = true; }
         };
         shortcuts = new PreviewShortcuts([
-            Shortcut(0, _=>{compactPresses.Reset();if(WindowActivation.IsForeground(MainForm))MainForm.Hide();else Open("main");}),
+            Shortcut(0, _=>{compactPresses.Reset();if(WindowActivation.IsForeground(MainForm))HideAppView();else Open("main");}),
             Shortcut(1, at=>{compactPresses.Reset();var result=Session.Execute("startOrEnd",System.Text.Json.JsonSerializer.SerializeToElement(new{}),at);if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);}),
-            Shortcut(2, _=>{compactPresses.Reset();var compact=windows.FirstOrDefault(w=>w.View=="compact");if(compact is null||!compact.Visible)Open("compact");else if(compact.IsTimeOnly)ToggleCompactVisibility();else compact.Post(new{type="shrinkCompact"});}),
+            Shortcut(2, _=>CycleCompact(false)),
             Shortcut(3, _=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
             Shortcut(4, ReflectionHotkey),
             Shortcut(5, ToggleTimerFromGlobalShortcut),
             Shortcut(6, ToggleTimerFromGlobalShortcut),
             Shortcut(7, ToggleModeFromGlobalShortcut),
-            Shortcut(8, _=>ResetFromGlobalShortcut())
+            Shortcut(8, _=>ResetFromGlobalShortcut()),
+            Shortcut(9, _=>CycleCompact(true))
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
-        ApplyTheme();pulse.Start(); if(!startInTray)MainForm.Show(); ApplyDisplayPreferences();
+        ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
     }
     private void ApplyTheme()
     {
@@ -103,7 +108,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private void ToggleTimerFromGlobalShortcut(long requestedAt)
     {
         compactPresses.Reset();
-        var result=KeepingTimeOnly(()=>Session.ToggleTimerFromShortcut(requestedAt));Announce(result.Message);
+        var result=KeepingTimeOnly(()=>Session.ToggleTimerFromShortcut(requestedAt));Announce(result);
         if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
     }
     internal CommandResult KeepingTimeOnly(Func<CommandResult> action)
@@ -121,7 +126,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         // before the state update can resize Compact or hide a duration field.
         var viewer=windows.FirstOrDefault(w=>WindowActivation.IsForeground(w)
             && (w.View=="main" || w.View=="compact"&&!w.IsTimeOnly));
-        var result=KeepingTimeOnly(()=>Session.ToggleModeFromShortcut(requestedAt));Announce(result.Message);
+        var result=KeepingTimeOnly(()=>Session.ToggleModeFromShortcut(requestedAt));Announce(result);
         if(viewer is not null)Open(viewer.View,timerPage:true);
         if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
     }
@@ -138,6 +143,23 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         if(expandOnShow&&!Session.Engine.Snapshot.ShowFloatingTimer)Open("compact");
         else {Session.Engine.SetFloatingTimer(!Session.Engine.Snapshot.ShowFloatingTimer);ApplyDisplayPreferences();}
+    }
+    internal void CycleCompact(bool reverse)
+    {
+        compactPresses.Reset();
+        var compact=windows.FirstOrDefault(w=>w.View=="compact");
+        if(compact is not null&&!WindowActivation.CanReceiveFocus(compact))return;
+        var next=FloatingViewCycle.Next(compact?.Visible==true,compact?.IsTimeOnly==true,reverse);
+        if(next==FloatingView.Compact){Open("compact");return;}
+        if(next==FloatingView.Hidden) {
+            // Supersede queued measurements so rapid cycles use native intent.
+            if(compact is not null)compact.SetCompactMode(compact.IsTimeOnly,false);
+            Session.Engine.SetFloatingTimer(false);ApplyDisplayPreferences();return;
+        }
+        compact??=Create("compact");
+        compact.SetCompactMode(true,false);
+        if(!Session.Engine.SettingsSnapshot.ShowFloatingTimer)Session.Engine.SetFloatingTimer(true);
+        ApplyDisplayPreferences(); // ShowWithoutActivation: do not focus tiny.
     }
     private PreviewWindow Create(string view, Guid? prompt = null)
     {
@@ -156,12 +178,36 @@ internal sealed partial class PreviewApplication : ApplicationContext
     internal void Open(string view, Guid? prompt = null, bool timerPage=false, bool sessionCompleted=false)
     {
         if(view=="reflection"){if(prompt is {} id)_ = OpenReflectionAsync(id,true,sessionCompleted);return;}
-        if(view=="compact" && !Session.Engine.Snapshot.ShowFloatingTimer) Session.Engine.SetFloatingTimer(true);
+        string? viewSaveError=null;
+        if(view=="main") {
+            try { Session.Engine.SetAppViewVisibility(true); }
+            catch {
+                // A full/read-only disk must not strand the user in the tray.
+                viewSaveError="App view opened, but its visibility could not be saved for the next launch.";
+                RecoveryNotice??=viewSaveError;
+            }
+            AppViewMayShow=true;
+        }
         var window = windows.FirstOrDefault(w => w.View == view && w.PromptId == prompt);
         if(window is null){window=Create(view,prompt);window.ApplyPosition();}
+        if(view=="compact"&&!Session.Engine.SettingsSnapshot.ShowFloatingTimer) {
+            window.SetCompactMode(false,false);
+            Session.Engine.SetFloatingTimer(true);
+        }
         if (window.WindowState == FormWindowState.Minimized) window.WindowState = FormWindowState.Normal;
+        window.RememberCompactFocus(WindowActivation.Foreground);
         WindowActivation.Focus(window);
         if(WindowActivation.CanReceiveFocus(window))window.FocusControls(timerPage);
+        if(viewSaveError is not null)Announce(viewSaveError);
+    }
+    internal void HideAppView()
+    {
+        // Save when the user chooses a view, not during shutdown, disposal, or
+        // startup. A failed write must leave the current window available.
+        if(!AppViewMayShow && !AppViewVisible)return;
+        Session.Engine.SetAppViewVisibility(false);
+        AppViewMayShow=false;
+        MainForm?.Hide();
     }
     private async Task OpenReflectionAsync(Guid id,bool activate,bool sessionCompleted=false)
     {
@@ -219,6 +265,18 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         if (message.Length == 0) return;
         (active is { Visible: true } ? active : MainForm as PreviewWindow)?.Post(new { type = "announcement", message });
+    }
+    internal void Announce(CommandResult result)
+    {
+        // The committed transition already supplied the more informative
+        // action+time message. Do not repeat its older terse command response.
+        if(!result.HasSessionFeedback)Announce(result.Message);
+    }
+    private void AnnounceSession(string message,bool supplementary)
+    {
+        var delivered=ScreenReaderAnnouncements.TryAnnounce(MainForm,message,supplementary);
+        Broadcast(new{type="sessionStatus",message}); // Readable, but not a second live event.
+        if(!delivered)Announce(message);
     }
     internal async Task CloseMainAsync()
     {

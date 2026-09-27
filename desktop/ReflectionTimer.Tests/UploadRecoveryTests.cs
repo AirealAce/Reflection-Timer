@@ -157,7 +157,7 @@ static class UploadRecoveryTests
             test.Store.FailuresRemaining = 1;
             await test.Services.Sync(); test.Services.Dispose();
             var restored = new TimerEngine(test.Store, () => test.Now);
-            using var resumed = new PreviewServices(restored, test.Directory, new SheetsClient(test.Receiver), test.Audio);
+            using var resumed = new PreviewServices(restored, test.Directory, new SheetsClient(test.Receiver), test.Audio,speech:new SilentSpeech());
             test.Now = test.Now.AddSeconds(16); await resumed.Sync();
             var entry = restored.Snapshot.Outbox.Single();
             check(safeRetry ? entry.Status == DeliveryStatus.Sent && test.Receiver.Writes.Count == 2 && test.Receiver.Writes.Distinct().Count() == 1
@@ -187,7 +187,7 @@ static class UploadRecoveryTests
                 Outbox = [new() { Message = "Synthetic recovery reflection", SubmittedAt = Now, SheetUrl = Connection.SheetUrl,
                     ReceiverUrl = Connection.WebAppUrl, SheetMode = "fixed", SheetName = Connection.SheetName, DurationSeconds = 300, ActualDurationSeconds = 60 }] });
             Engine = new(Store, () => Now); Receiver = new(safeRetry);
-            Services = new(Engine, Directory, new SheetsClient(Receiver), Audio);
+            Services = new(Engine, Directory, new SheetsClient(Receiver), Audio,speech:new SilentSpeech());
             Services.Announcement += Notices.Add;
         }
         public async Task WaitForAudio()

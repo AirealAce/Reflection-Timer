@@ -8,6 +8,12 @@ if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendMode
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
+if(args.Contains("--native-view-restore")){NativeViewRestoreSmoke.Run();return;}
+if(args.Contains("--native-compact-cycle")){NativeCompactCycleSmoke.Run();return;}
+if(args.Contains("--native-compact-focus")){NativeCompactCycleSmoke.RunInteractive();return;}
+if(args.Contains("--native-shutdown")){NativeShutdownSmoke.Run();return;}
+if(args.Contains("--native-voice-synthesis")){NativeVoiceSynthesisSmoke.Run();return;}
+if(args.Contains("--native-reader-notification")){NativeReaderNotificationSmoke.Run();return;}
 if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
 if(args.Contains("--native-stopwatch-focus")){NativeStopwatchSmoke.RunInteractive();return;}
 if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return;}
@@ -41,6 +47,9 @@ ResetConfirmationTests.Run(Check);
 ClockDisplayTests.Run(Check);
 ClockAccuracyTests.Run(Check);
 PerformanceTests.Run(Check);
+ViewPreferenceTests.Run(Check);
+await VoiceAnnouncementTests.Run(Check);
+ScreenReaderFeedbackTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);
 ProfileStorageTests.Run(Check);

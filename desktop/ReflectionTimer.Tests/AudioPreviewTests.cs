@@ -73,7 +73,7 @@ static class AudioPreviewTests
             var engine = new TimerEngine(new MemoryStore { State = new() { LoggingEnabled = false } });
             engine.SetSound(kind, new() { FadeOutEnabled = true, FadeOutAfterSeconds = 12, FadeOutAfterMessageSent = true, Behavior = SoundBehavior.Polite });
             var backend = new Backend();
-            using var services = new PreviewServices(engine, Path.Combine(Path.GetTempPath(), "ReflectionTimer-Preview-" + Guid.NewGuid().ToString("N")), audio: backend);
+            using var services = new PreviewServices(engine, Path.Combine(Path.GetTempPath(), "ReflectionTimer-Preview-" + Guid.NewGuid().ToString("N")), audio: backend, speech:new SilentSpeech());
             var task = services.Play(kind, preview: true);
             var playback = await backend.Next();
             check(playback.Level.FadeOutAfterSeconds == 12 && playback.Level.RequestedFadeSeconds == 0,
