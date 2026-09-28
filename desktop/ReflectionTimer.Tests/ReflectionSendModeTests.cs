@@ -25,7 +25,7 @@ static class ReflectionSendModeTests
             var after=JsonSerializer.Serialize(state);
             try{session.Execute("queue",Data(new{id,text="Duplicate",reason="",endSession=true}));throw new Exception("Duplicate accepted");}catch(ArgumentException){}
             check(JsonSerializer.Serialize(session.Engine.Snapshot)==after,"A duplicate end-and-send cannot end the next auto-started session");
-            check(new PreviewSession(store).Engine.Snapshot.Outbox.Single()==sent,"End-and-send accounting survives a saved-state reload");
+            check(JsonSerializer.Serialize(new PreviewSession(store).Engine.Snapshot.Outbox.Single())==JsonSerializer.Serialize(sent),"End-and-send accounting survives a saved-state reload");
         }
         CheckInAndBoundaries(check);
         await CompletionPolicy(check);

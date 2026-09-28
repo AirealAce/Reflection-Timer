@@ -95,7 +95,7 @@ static class NativeClockSmoke
                         Check(session.Engine.Snapshot.Timer is {DurationSeconds:45,AutoRestart:false}&&session.Engine.Snapshot.Prompts.Count==promptCount,"Compact Space starts the specified duration without toggling Auto-start");
                         var keys=(PreviewShortcuts)typeof(PreviewApplication).GetField("shortcuts",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
                         foreach(var window in windows)window.Hide();
-                        var draftBefore=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts);
+                        var draftBefore=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}));
                         var globalSession=session.Engine.Snapshot.Timer.SessionId;now=now.AddMilliseconds(4123);
                         Check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId),"Native Ctrl+Space registration routes to the app while all viewers are hidden");
                         Check(session.Engine.Snapshot.Timer is {IsRunning:false,PausedRemainingMilliseconds:40877}&&session.Engine.Snapshot.Timer.SessionId==globalSession,"Global Ctrl+Space pauses the same session with precise remaining time");
@@ -106,7 +106,7 @@ static class NativeClockSmoke
                         await Both("2:03","A hidden App duration edit reaches the shared native draft");
                         keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
                         Check(session.Engine.Snapshot.Timer is {IsRunning:true,DurationSeconds:123},"Global Ctrl+Space starts the shared edited duration through the production shortcut action");
-                        Check(windows.All(w=>!w.Visible)&&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==draftBefore,"Global toggling keeps viewers hidden and leaves pending reflection text unchanged");
+                        Check(windows.All(w=>!w.Visible)&&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==draftBefore,"Global toggling keeps viewers hidden and leaves pending reflection text unchanged");
                         var aliasSession=session.Engine.Snapshot.Timer.SessionId;
                         foreach(var running in new[]{false,true}){
                             Check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)
@@ -136,7 +136,7 @@ static class NativeClockSmoke
                                     $"Global {shortcut} preserves time-only mode, size and position without even briefly expanding: focused={focused}, running={running}");
                             }
                         }
-                        Check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==draftBefore,"Time-only global pause/resume retains all reflection drafts");
+                        Check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==draftBefore,"Time-only global pause/resume retains all reflection drafts");
                         foreach(var shortcutId in new[]{GlobalShortcut.TimerToggleId,GlobalShortcut.TimerToggleAltId}){
                             var shortcut=shortcutId==GlobalShortcut.TimerToggleId?"Ctrl+Space":"Ctrl+Alt+Space";
                             session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=123}));

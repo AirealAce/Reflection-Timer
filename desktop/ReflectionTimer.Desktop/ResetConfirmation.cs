@@ -7,7 +7,7 @@ internal sealed record ResetWarning(SessionMode Mode, bool Running, bool HasDraf
     internal static ResetWarning? For(AppState state)
     {
         if(!state.ConfirmBeforeReset)return null;
-        var hasDraft=state.Prompts.Any(p=>!string.IsNullOrWhiteSpace(p.Draft)||!string.IsNullOrWhiteSpace(p.EarlyEndReason));
+        var hasDraft=state.Prompts.Any(p=>!string.IsNullOrWhiteSpace(p.Draft)||!string.IsNullOrWhiteSpace(p.EarlyEndReason)||p.Pauses.Any(pause=>!string.IsNullOrWhiteSpace(pause.Reason)));
         return state.Timer.IsRunning||hasDraft ? new(state.Timer.Mode,state.Timer.IsRunning,hasDraft) : null;
     }
     internal string Title=>Mode==SessionMode.Stopwatch?"Reset stopwatch?":"Reset timer?";

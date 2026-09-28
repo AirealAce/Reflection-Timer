@@ -29,7 +29,7 @@ static class EarlyEndGraceTests
                 &&entry.SessionId==originalSession&&entry.EarlyEndReason==(early?"Synthetic reason":""),
                 $"Grace boundary uses effective low-time options and precise elapsed time: {sample}, paused={paused}, offset={offset}ms");
             check(!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Prompts.Count==0
-                &&new PreviewSession(store,()=>now,true).Engine.Snapshot.Outbox.Single()==entry,
+                &&JsonSerializer.Serialize(new PreviewSession(store,()=>now,true).Engine.Snapshot.Outbox.Single())==JsonSerializer.Serialize(entry),
                 "Grace classification and elapsed time survive reload without leaving an unfinished prompt");
         }
         CompletionRoutes(check);

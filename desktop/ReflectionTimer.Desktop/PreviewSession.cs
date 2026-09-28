@@ -116,6 +116,9 @@ public sealed class PreviewSession
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,
                 low=LowView(countdown.LowTime,AudioSettings.From(state).LowTimeThresholdSeconds) },
             prompts = state.Prompts.Select(p => new { p.Id, mode=(int)p.Mode, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
+                pauses = Engine.PausesFor(p).Select(pause => new { pause.Id, pause.Reason,
+                    paused = DateTimeOffset.FromUnixTimeMilliseconds(pause.PausedAt).ToLocalTime().ToString("g"),
+                    duration = pause.DurationMilliseconds is { } duration ? SpeakTime((int)(duration/1000)) : "Still paused" }),
                 resumeOnSave=p.Mode==SessionMode.Stopwatch&&p.ResumeStopwatchOnSave&&p.CheckInSessionId==state.Timer.SessionId&&TimerEngine.IsPaused(state.Timer),
                 showEarlyEndReason=TimerEngine.ShowEarlyEndReason(p,state.Timer,Engine.ElapsedNow),
                 allotted = p.Mode==SessionMode.Stopwatch?"Not applicable":SpeakTime(p.DurationSeconds), actual = p.ActualDurationSeconds is { } actual ? SpeakTime(actual) : "Unavailable",
@@ -128,6 +131,7 @@ public sealed class PreviewSession
                 localOnly = o.LocalOnly,
                 destination = o.LocalOnly ? "Local preview only" : o.IsTest ? "test" : o.SheetMode == "fixed" ? o.SheetName : o.SubmittedAt.ToString("MM/dd/yyyy"),
                 status = o.Status == DeliveryStatus.Sent && o.LocalOnly ? "Simulated success" : o.Status.ToString(),
+                pauses=o.Pauses.Select(p=>new {p.Reason,paused=DateTimeOffset.FromUnixTimeMilliseconds(p.PausedAt).ToLocalTime().ToString("g"),duration=SpeakTime((int)((p.DurationMilliseconds??0)/1000))}),
                 mode=(int)o.Mode,o.Attempts, o.Message, o.DurationSeconds, o.ActualDurationSeconds, o.EndedEarly, o.EarlyEndReason, o.IsCheckIn, o.AutoSent, o.NextAttemptAt, duration = SpeakTime(o.DurationSeconds), error = o.ErrorKind.Length == 0 ? "" : TimerEngine.SafeError(o.ErrorKind) })
         };
     }
@@ -194,22 +198,23 @@ public sealed class PreviewSession
                 var prompt = RequiredPrompt(Id(data)); return new("", prompt.Id);
             case "draft":
                 var draftId = Id(data); RequiredPrompt(draftId);
-                Engine.SaveDraft(draftId, Text(data, "text", 5000), Text(data, "reason", 1000)); return new("");
+                Engine.SaveDraft(draftId, Text(data, "text", 5000), Text(data, "reason", 1000), ReadPauseReasons(data)); return new("");
             case "saveForLater":
-                Engine.SaveReflectionForLater(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000));
+                Engine.SaveReflectionForLater(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), ReadPauseReasons(data));
                 return new("Reflection saved locally.", Close: true);
             case "saveOrSendReflection":
                 var response=Text(data,"text",5000);var reason=Text(data,"reason",1000);
-                if(response.Length==0&&reason.Length==0)return Execute("skip",data);
+                var pauseReasons=ReadPauseReasons(data);
+                if(response.Length==0&&reason.Length==0&&!(pauseReasons?.Values.Any(r=>r.Length>0)??Engine.PausesFor(RequiredPrompt(Id(data))).Any(p=>p.Reason.Length>0)))return Execute("skip",data);
                 var decision = Engine.SaveOrSendReflection(Id(data), response, reason,
-                    isolatedProfile && SheetsClient.Validate(state.Connection) is not null, requestedAt);
+                    isolatedProfile && SheetsClient.Validate(state.Connection) is not null, requestedAt, pauseReasons);
                 return new(decision.Queued ? "Reflection saved in Outbox for delivery when enabled." : "Reflection saved locally.",
                     Close: true, SessionCompleted: decision.SessionCompleted);
             case "skip":
                 var skipped=Id(data);RequiredPrompt(skipped);Engine.SkipPrompt(skipped);return new("Reflection skipped.",Close:true);
             case "queue":
                 var localOnly = isolatedProfile && SheetsClient.Validate(state.Connection) is not null;
-                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"), requestedAt: requestedAt);
+                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"), requestedAt: requestedAt, pauseReasons: ReadPauseReasons(data));
                 return new((ended ? "Session ended. " : "") + (localOnly ? "Reflection saved locally in the Outbox." : "Reflection saved in Outbox for Sheets delivery when enabled."), Close: true, SessionCompleted: ended);
             case "schedule":
                 var date = Text(data, "start", 40);
@@ -287,6 +292,15 @@ public sealed class PreviewSession
         return new DateTimeOffset(local).ToUnixTimeMilliseconds();
     }
     private ReflectionPrompt RequiredPrompt(Guid id) => Engine.Snapshot.Prompts.SingleOrDefault(p => p.Id == id) ?? throw new ArgumentException("That reflection is no longer pending.");
+    private static IReadOnlyDictionary<Guid,string>? ReadPauseReasons(JsonElement data)
+    {
+        if (!data.TryGetProperty("pauseReasons", out var reasons)) return null;
+        if (reasons.ValueKind != JsonValueKind.Array) throw new ArgumentException("Invalid pause reasons.");
+        var result = new Dictionary<Guid,string>();
+        foreach (var item in reasons.EnumerateArray())
+            if (!result.TryAdd(Id(item), Text(item,"reason",1000))) throw new ArgumentException("Duplicate pause reason.");
+        return result;
+    }
     private static Guid Id(JsonElement data) => Guid.TryParse(Text(data, "id", 36), out var id) ? id : throw new ArgumentException("Invalid record identifier.");
     private static int Number(JsonElement data, string name, int min, int max) => data.TryGetProperty(name, out var value) && value.TryGetInt32(out var number) && number >= min && number <= max
         ? number : throw new ArgumentException($"Enter a valid {name} between {min} and {max}.");

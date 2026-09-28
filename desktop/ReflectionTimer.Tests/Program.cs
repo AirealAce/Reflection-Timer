@@ -3,6 +3,7 @@ using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
 
+if(args.Contains("--pauses")){var checks=0;await PauseTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} pause checks passed.");return;}
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
@@ -56,6 +57,7 @@ ProfileStorageTests.Run(Check);
 ConditionalReflectionTests.Run(Check);
 EarlyEndGraceTests.Run(Check);
 await StopwatchTests.Run(Check);
+await PauseTests.Run(Check);
 var store = new MemoryStore { State = PreviewSession.SampleState(now) };
 var session = new PreviewSession(store, () => now, isolatedProfile: true);
 Check(session.Engine.Snapshot.Timer.DurationSeconds == 900 && session.Engine.Snapshot.Timer.LowTime.Enabled, "Fresh timer and low-time defaults");

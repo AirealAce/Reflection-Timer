@@ -20,13 +20,13 @@ static class TimerToggleShortcutTests
         check(started.Volume==37&&started.AutoRestart&&started.AutoRestartUntil==cutoff&&started.LowTime is {Enabled:false,ThresholdSeconds:23,Track:LibrarySound.PokemonHealed},"Global start retains Auto-start, cutoff, volume, and individual low-time settings");
         check(JsonSerializer.SerializeToElement(session.View(),PreviewSession.Json).GetProperty("durationDraft").ValueKind==JsonValueKind.Null,"Successful global start clears the shared duration draft like Compact");
         var id=session.Engine.CheckIn();session.Engine.SaveDraft(id,"Keep this reflection","Keep this reason");
-        var reflections=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts);
+        var reflections=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}));
         now=now.AddMilliseconds(4321);
         session.SetDurationDraft(["invalid","",""]);
         result=session.ToggleTimerFromShortcut();
         var paused=session.Engine.Snapshot.Timer;
         check(!paused.IsRunning&&paused.PausedRemainingMilliseconds==118679&&paused.SessionId==started.SessionId&&result.OpenReflection is null,"Global toggle pauses with millisecond precision even if a duration draft is invalid");
-        check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==reflections&&session.Engine.Snapshot.Outbox.Count==0,"Global pause neither sends nor changes an open reflection and its reason");
+        check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==reflections&&session.Engine.Snapshot.Outbox.Count==0,"Global pause neither sends nor changes an open reflection and its reason");
         foreach(var parts in new[]{new[]{"","",""},new[]{"-1","0","0"},new[]{"0","1.5","0"},new[]{"99999999999999999999","0","0"}}){
             session.SetDurationDraft(parts);
             var before=JsonSerializer.Serialize(session.Engine.Snapshot);

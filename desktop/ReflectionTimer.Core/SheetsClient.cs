@@ -5,7 +5,7 @@ using System.Text.RegularExpressions;
 namespace ReflectionTimer.Core;
 
 public record SheetReply(bool Success, string ErrorKind, string DisplayMessage, string Tab = "", string Target = "",
-    bool SupportsSafeRetry = false, bool Retryable = false, bool SupportsCheckIns = false, bool SupportsAutoSent = false, bool SupportsStopwatch = false);
+    bool SupportsSafeRetry = false, bool Retryable = false, bool SupportsCheckIns = false, bool SupportsAutoSent = false, bool SupportsStopwatch = false, bool SupportsPauses = false);
 
 /// <summary>A single send batch, bound to the connection verified when it began.
 /// Create a fresh batch for each sync; never retain it as a capability cache.</summary>
@@ -63,7 +63,7 @@ public sealed class SheetsClient : IDisposable
             return new(false, "receiver_changed", "This entry belongs to a different receiver. Restore its original connection before retrying.");
         // Independent uploads still verify all needed capabilities. In a batch,
         // one authenticated check covers them all for this exact connection.
-        var needsCapability = item is not null && (item.IsCheckIn || item.Mode == SessionMode.Stopwatch || (item.AutoSent && item.Message.Length > 4988));
+        var needsCapability = item is not null && (item.Pauses.Count > 0 || item.IsCheckIn || item.Mode == SessionMode.Stopwatch || (item.AutoSent && item.Message.Length > 4988));
         var receiver = verified;
         if (needsCapability) {
             receiver ??= await Ping(settings, cancellation);
@@ -74,6 +74,8 @@ public sealed class SheetsClient : IDisposable
             // blank. Check capability before sending any check-in data.
             if (!receiver!.SupportsCheckIns) return new(false, "receiver_update_required", "Update the Apps Script deployment to support check-ins, then retry this saved entry from the Outbox.");
         }
+        if (item?.Pauses.Count > 0 && !receiver!.SupportsPauses)
+            return new(false,"receiver_update_required","Update the Apps Script deployment to 2.10.0 or newer for pause details, then retry from Outbox. Your reflection and pause reasons are saved locally.");
         if (item?.Mode == SessionMode.Stopwatch) {
             // Never let an old receiver invent allotted time or reject elapsed
             // stopwatch time after already modifying a user's sheet.
@@ -93,6 +95,8 @@ public sealed class SheetsClient : IDisposable
             actualDurationSeconds = item?.ActualDurationSeconds, endedEarly = item?.EndedEarly ?? false, isCheckIn = item?.IsCheckIn ?? false,
             earlyEndReason = item?.EarlyEndReason ?? "",
             autoSent = item?.AutoSent ?? false,
+            pauses = item?.Pauses.Select(p=>new { id=p.Id, pausedAt=DateTimeOffset.FromUnixTimeMilliseconds(p.PausedAt).UtcDateTime.ToString("O"),
+                durationSeconds=(p.DurationMilliseconds ?? 0)/1000, reason=p.Reason }),
             deliveryProtocol = item?.RetryProtected == true ? DeliveryProtocol : null,
             // Keep the marker in the wire text so existing deployments also
             // record auto-send status and accept otherwise blank reflections.
@@ -152,7 +156,8 @@ public sealed class SheetsClient : IDisposable
                     return new(true, "", "Connected.", Read(root, "sheet"), Read(root, "target"), Read(root, "deliveryProtocol") == DeliveryProtocol,
                         SupportsCheckIns: root.TryGetProperty("supportsCheckIns", out var checkIns) && checkIns.ValueKind == JsonValueKind.True,
                         SupportsAutoSent: root.TryGetProperty("supportsAutoSent", out var autoSent) && autoSent.ValueKind == JsonValueKind.True,
-                        SupportsStopwatch: root.TryGetProperty("supportsStopwatch",out var stopwatch)&&stopwatch.ValueKind==JsonValueKind.True);
+                        SupportsStopwatch: root.TryGetProperty("supportsStopwatch",out var stopwatch)&&stopwatch.ValueKind==JsonValueKind.True,
+                        SupportsPauses: root.TryGetProperty("supportsPauses",out var pauses)&&pauses.ValueKind==JsonValueKind.True);
                 }
                 // Raw server responses can contain arbitrary reflection text or
                 // credentials. Never send them to diagnostics or persisted errors.

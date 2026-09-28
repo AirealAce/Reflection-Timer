@@ -11,7 +11,7 @@
  * the request works cleanly from a Manifest V3 service worker.
  */
 
-const APP_VERSION = '2.9.2';
+const APP_VERSION = '2.10.0';
 const DELIVERY_PROTOCOL = 'request-id-v1';
 const RECEIPT_PREFIX = 'RT_RECEIPT_';
 const ROWS_PER_BLOCK = 16;
@@ -107,6 +107,7 @@ function doPost(event) {
         supportsCheckIns: true,
         supportsAutoSent: true,
         supportsStopwatch: true,
+        supportsPauses: true,
         target: `${spreadsheet.getName()} / ${target.sheet ? target.sheet.getName() : target.name}`,
         willCreate: !target.sheet,
         template: target.templateName || null
@@ -120,7 +121,8 @@ function doPost(event) {
     let message = String(payload.message || '').trim();
     const autoSentMarker = message === '[auto-sent]' || message.startsWith('[auto-sent]\n');
     if (autoSentMarker) message = message.slice('[auto-sent]'.length).trim();
-    if (!message && !autoSentMarker && payload.autoSent !== true) {
+    const pauses = validatePauses_(payload.pauses);
+    if (!message && !autoSentMarker && payload.autoSent !== true && !pauses.some(p=>p.reason.trim())) {
       throw new Error('The reflection is empty.');
     }
     if (message.length > MAX_REFLECTION_LENGTH) {
@@ -153,7 +155,7 @@ function doPost(event) {
     }
     const sheet = target.sheet || createDailySheet_(spreadsheet, target);
     const result = appendReflection_(sheet, message, submissionDate_(spreadsheet, payload), spreadsheet, durationSeconds,
-      { ...session, requestId, fingerprint });
+      { ...session, pauses, requestId, fingerprint });
     SpreadsheetApp.flush();
     if (requestId) properties.setProperty(receiptKey, JSON.stringify({ status: 'done', fingerprint,
       sheet: sheet.getName(), timestamp: result.timestamp.toISOString(), at: Date.now() }));
@@ -201,6 +203,9 @@ function requestFingerprint_(p) {
   if (p.sessionMode === 'stopwatch') fields.push('stopwatch');
   // Text-marker requests keep their pre-upgrade fingerprint and retry receipts.
   if (p.autoSent === true && !String(p.message || '').trim().match(/^\[auto-sent\](?:\n|$)/)) fields.push('auto-sent');
+  // Omitted/empty pauses preserve all existing delivery receipts.
+  const pauses = validatePauses_(p.pauses);
+  if (pauses.length) fields.push('pauses', pauses);
   const text = JSON.stringify(fields);
   return Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, text, Utilities.Charset.UTF_8)
     .map(value => (value & 255).toString(16).padStart(2, '0')).join('');
@@ -430,11 +435,34 @@ function validateSession_(payload, allotted) {
   return { actualDurationSeconds, endedEarly, isCheckIn, autoSent, stopwatch, earlyEndReason: endedEarly ? earlyEndReason : '' };
 }
 
+function validatePauses_(value) {
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new Error('Invalid pauses.');
+  const ids = new Set();
+  const pauses = value.map(p => {
+    if (!p || typeof p.id !== 'string' || !/^[a-zA-Z0-9_-]{16,100}$/.test(p.id) || ids.has(p.id)
+        || typeof p.pausedAt !== 'string' || !/^\d{4}-\d{2}-\d{2}T/.test(p.pausedAt) || !Number.isFinite(Date.parse(p.pausedAt))
+        || typeof p.reason !== 'string' || p.reason.length > 1000) throw new Error('Invalid pause details.');
+    ids.add(p.id);
+    const durationSeconds = validateDuration_(p.durationSeconds);
+    if (durationSeconds === null) throw new Error('A pause needs its duration.');
+    return { id:p.id, pausedAt:new Date(p.pausedAt).toISOString(), durationSeconds, reason:p.reason };
+  });
+  if (pauses.reduce((size,p)=>size+(p.reason.length||3)+8,0) > 49000 || pauses.length > 1000)
+    throw new Error('Pause details exceed the spreadsheet cell limit; the entry must remain in Outbox.');
+  return pauses;
+}
+
+function pauseDurationLabel_(seconds) {
+  const h=Math.floor(seconds/3600),m=Math.floor(seconds/60)%60,s=seconds%60;
+  return [h?`${h} ${h===1?'hr':'hrs'}`:'',m?`${m} min`:'',s||(!h&&!m)?`${s} ${s===1?'sec':'secs'}`:''].filter(Boolean).join(' ');
+}
+
 function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds = null,
     session = { actualDurationSeconds: null, endedEarly: false, earlyEndReason: '' }) {
-  ensureColumns_(sheet, 7);
+  ensureColumns_(sheet, 10);
   // Only widen the newly owned fields, never shrink a user-chosen wider column.
-  for (const [column, width] of [[3, 220], [4, 220], [5, 135], [6, 300], [7, 135]]) {
+  for (const [column, width] of [[3, 220], [4, 220], [5, 135], [6, 300], [7, 135], [8, 220], [9, 220], [10, 300]]) {
     if (sheet.getColumnWidth(column) < width) sheet.setColumnWidth(column, width);
   }
   const previous = previousEntry_(sheet, spreadsheet);
@@ -447,21 +475,27 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   // Match column B's white cell outlines across every column.
   sheet.getRange(1, 1, 1, sheet.getMaxColumns())
     .setBorder(true, true, true, true, true, false, '#ffffff', SpreadsheetApp.BorderStyle.SOLID);
-  const entry = sheet.getRange(1, 1, 1, 7);
+  const entry = sheet.getRange(1, 1, 1, 10);
   // Treat reflections as plain text, including messages beginning with '='.
   entry.setNumberFormat('@');
   // Store a real Sheets duration (fraction of a day), not an uncalculable label.
   entry.getCell(1, 3).setNumberFormat(durationNumberFormat_(session.actualDurationSeconds));
   entry.getCell(1, 4).setNumberFormat(durationNumberFormat_(durationSeconds));
   const clockLabel = `${moment.hour % 12 || 12}:${String(moment.minute).padStart(2, '0')}`;
-  const response = session.autoSent && !message.trim() ? 'N/A' : message;
+  const pauses = session.pauses || [];
+  const response = !message.trim() && (session.autoSent || pauses.length) ? 'N/A' : message;
+  const pauseLines=format=>pauses.map((p,i)=>(pauses.length>1?`${i+1}. `:'')+format(p)).join('\n');
+  const pauseTimes=pauseLines(p=>Utilities.formatDate(new Date(p.pausedAt),spreadsheet.getSpreadsheetTimeZone(),'M/d/yyyy h:mm a'));
+  const pauseDurations=pauseLines(p=>pauseDurationLabel_(p.durationSeconds));
+  const pauseReasons=pauseLines(p=>p.reason||'N/A');
   entry.setValues([[clockLabel, response.startsWith('=') ? "'" + response : response,
     session.actualDurationSeconds === null ? '' : session.actualDurationSeconds / 86400,
     durationSeconds === null ? '' : durationSeconds / 86400,
     [session.isCheckIn ? 'Check-in' : session.endedEarly ? 'ended early' : '', session.autoSent ? 'auto-sent' : ''].filter(Boolean).join(' · '),
     session.earlyEndReason.startsWith('=') ? "'" + session.earlyEndReason : session.earlyEndReason,
-    session.stopwatch ? 'stop watch' : 'timer']])
+    session.stopwatch ? 'stop watch' : 'timer',pauseTimes,pauseDurations,pauseReasons.startsWith('=')?"'"+pauseReasons:pauseReasons]])
     .setFontWeight('normal').setVerticalAlignment('top').clearNote();
+  ['Pause time','Pause Duration','Pause Reason'].forEach((label,i)=>entry.getCell(1,8+i).setNote(label+' · chronological order; pause numbers match across H–J.'));
   entry.getCell(1, 1).setBackground(background)
     .setFontColor(textColor_(background)).setNote(NOTE_PREFIX + JSON.stringify({
       kind: 'entry', timestamp: moment.timestamp.toISOString(), hourStart: moment.hourStart, durationSeconds,
@@ -477,7 +511,7 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
     (_unused, index) => index % 2 === 0 ? '#000000' : '#ffffff');
   stripedCells.setBackgrounds([backgrounds])
     .setFontColors([backgrounds.map((color) => color === '#000000' ? '#ffffff' : '#000000')]);
-  sheet.getRange(1, 2, 1, 6).setWrap(true);
+  sheet.getRange(1, 2, 1, 9).setWrap(true);
 
   if (needsHour) {
     const theme = HOUR_THEMES[moment.hour];

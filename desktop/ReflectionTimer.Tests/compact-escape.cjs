@@ -16,7 +16,7 @@ module.exports=async function compactEscape(context,initial,check){
     const page=await open(status),before=await page.locator('#visual-clock').textContent();
     await page.locator('#minutes').focus();await trigger(page,click);
     await page.waitForFunction(()=>document.body.dataset.tiny==='true'&&window.previewMessages.some(m=>m.action==='compactSize'&&m.data.tiny));
-    check(await page.locator('#read-time').evaluate(e=>e===document.activeElement)&&await page.locator('#minutes').isHidden(),`${status} ${click?'minus':'Escape'} switches to Time-only and focuses its clock`);
+    check(await page.locator('body').evaluate(e=>e===document.activeElement)&&await page.locator('#minutes').isHidden(),`${status} ${click?'minus':'Escape'} switches to Time-only and releases input focus`);
     check(await page.locator('#visual-clock').textContent()===before&&await page.locator('#minutes').inputValue()==='13'&&(await actions(page)).length===0,`${status} shrink preserves the duration and timer without changing other windows`);
     await trigger(page,click);await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='close'));
     const sent=await actions(page);
@@ -27,7 +27,7 @@ module.exports=async function compactEscape(context,initial,check){
     const page=await open();
     if(target==='background')await page.evaluate(()=>document.activeElement.blur());else await page.locator(target).focus();
     await page.keyboard.press('Escape');
-    check(await page.locator('body').getAttribute('data-tiny')==='true'&&await page.locator('#read-time').evaluate(e=>e===document.activeElement)&&(await actions(page)).length===0,`Compact Escape from ${target} shrinks without activating the focused control`);
+    check(await page.locator('body').getAttribute('data-tiny')==='true'&&await page.locator('body').evaluate(e=>e===document.activeElement)&&(await actions(page)).length===0,`Compact Escape from ${target} shrinks without activating the focused control`);
     await page.close();
   }
   const held=await open('Running');await held.locator('#minutes').focus();
@@ -36,7 +36,7 @@ module.exports=async function compactEscape(context,initial,check){
   await held.keyboard.press('Escape');await held.waitForFunction(()=>window.previewMessages.some(m=>m.action==='close'));
   check((await actions(held)).length===1,'A separate second Escape hides the Time-only viewer');
   await held.evaluate(()=>window.previewDispatch({type:'expandCompact'}));await held.keyboard.press('Escape');
-  check(await held.locator('body').getAttribute('data-tiny')==='true'&&await held.locator('#read-time').evaluate(e=>e===document.activeElement)&&(await actions(held)).length===1,'A reused Compact window still shrinks and focuses normally after reopening');
+  check(await held.locator('body').getAttribute('data-tiny')==='true'&&await held.locator('body').evaluate(e=>e===document.activeElement)&&(await actions(held)).length===1,'A reused Compact window still shrinks and releases focus after reopening');
   await held.close();
   const modal=await open();
   await modal.evaluate(()=>{const dialog=document.createElement('dialog');document.body.append(dialog);dialog.showModal();});await modal.keyboard.press('Escape');

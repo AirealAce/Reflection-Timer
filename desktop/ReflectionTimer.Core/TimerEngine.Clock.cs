@@ -43,6 +43,7 @@ public sealed partial class TimerEngine
     }
     private static TimerState Restore(TimerState timer, ClockReading at)
     {
+        if (timer.PauseElapsedSince is { } paused) timer = timer with { PauseElapsedSince = at.Elapsed - Math.Max(0, at.Wall - paused) };
         if (!timer.IsRunning) return timer with { ClockSavedAt = null, RemainingMillisecondsAtSave = null };
         var downtime = timer.ClockSavedAt is { } saved ? Math.Max(0, at.Wall - saved) : (long?)null;
         return timer with {
@@ -55,6 +56,7 @@ public sealed partial class TimerEngine
     }
     private static TimerState PortableTimer(TimerState timer, ClockReading at)
     {
+        if (timer.PauseElapsedSince is { } paused) timer = timer with { PauseElapsedSince = at.CalendarTimestamp(paused) };
         if (!timer.IsRunning) return timer with { ClockSavedAt = null, RemainingMillisecondsAtSave = null };
         return timer with {
             ClockSavedAt = at.Wall,

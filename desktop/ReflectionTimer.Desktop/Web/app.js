@@ -18,7 +18,7 @@ let reflectionBusy=false, savingAndClosing=false, repeatPending=false, repeatDra
 function setReflectionBusy(busy){
   reflectionBusy=busy;const blocked=busy||savingAndClosing;
   $('reflection-form').setAttribute('aria-busy',String(blocked));
-  ['reflection-text','early-reason'].forEach(id=>$(id).readOnly=blocked);
+  reflectionInputs().forEach(input=>input.readOnly=blocked);
   document.querySelectorAll('#reflection-form button').forEach(button=>available(button,!blocked));
   renderReflectionNavigation();
 }
@@ -68,7 +68,30 @@ function renderDuration(clock=state?.clock){
   try{setText($('visual-clock'),formatClock(displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),durationDirty).seconds));}
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
-function draft() { return {id: promptId, text: $('reflection-text').value, reason: $('early-reason').value}; }
+function reflectionInputs(){return [$('reflection-text'),$('early-reason'),...document.querySelectorAll('#pause-reasons textarea')];}
+function preservePromptWidth(){const main=$('main');main.style.setProperty('--pause-gutter',`${Math.max(0,main.offsetWidth-main.clientWidth)}px`);}
+if(view==='reflection')new ResizeObserver(preservePromptWidth).observe($('main'));
+function draft() { return {id: promptId, text: $('reflection-text').value, reason: $('early-reason').value,
+  pauseReasons:[...document.querySelectorAll('#pause-reasons textarea')].map(input=>({id:input.dataset.pauseId,reason:input.value}))}; }
+function renderPauses(prompt){
+  const container=$('pause-reasons'),pauses=prompt.pauses??[];
+  if(loadedPrompt!==prompt.id)container.replaceChildren();
+  container.hidden=pauses.length===0;document.body.dataset.pauses=String(pauses.length>0);
+  pauses.forEach((pause,index)=>{
+    let input=[...container.querySelectorAll('textarea')].find(e=>e.dataset.pauseId===pause.id);
+    if(!input){
+      const group=document.createElement('div'),label=document.createElement('label'),row=document.createElement('div'),duration=document.createElement('p'),timestamp=document.createElement('p');
+      group.className='pause-reason';input=document.createElement('textarea');input.id=`pause-${pause.id}`;input.dataset.pauseId=pause.id;
+      input.setAttribute('form','reflection-form');input.rows=2;input.maxLength=1000;input.value=pause.reason??'';input.readOnly=reflectionBusy||savingAndClosing;
+      label.htmlFor=input.id;label.textContent=`Reason for pause ${index+1} (optional)`;
+      row.className='reflection-status-row';duration.className='pause-duration';timestamp.className='pause-timestamp';timestamp.id=`${input.id}-time`;
+      input.setAttribute('aria-describedby',timestamp.id);row.append(duration,timestamp);group.append(label,input,row);container.append(group);
+    }
+    const group=input.parentElement;setText(group.querySelector('.pause-timestamp'),pause.paused);
+    setText(group.querySelector('.pause-duration'),pause.duration);
+  });
+  preservePromptWidth();
+}
 function saveDraft() {
   clearTimeout(saveDelay);
   if (!loadedPrompt || queued) return saving;
@@ -88,6 +111,7 @@ function renderReflection() {
   setText($('reflection-timestamp'), prompt.completed);
   $('reason-group').hidden = !(prompt.showEarlyEndReason??prompt.endedEarly);
   if($('reason-group').hidden&&document.activeElement===$('early-reason')&&document.hasFocus())$('reflection-text').focus();
+  renderPauses(prompt);
   if(loadedPrompt===prompt.id)return;
   loadedPrompt = prompt.id;
   $('reflection-text').value = prompt.draft; $('early-reason').value = prompt.earlyEndReason;
@@ -149,6 +173,7 @@ function renderSelections() {
     text=entry.message+'\n\n'+(actual!=null?formatClock(actual)+' spent':'Actual time unavailable')+(entry.mode===1?' · Stopwatch · no allotted time':' / '+(entry.durationSeconds!=null?formatClock(entry.durationSeconds):entry.duration)+' allotted');
     if(entry.isCheckIn)text+=' · Check-in';
     else if(entry.endedEarly)text+=' · ended early\nReason: '+(entry.earlyEndReason||'Not supplied');
+    for(const [index,pause] of (entry.pauses??[]).entries())text+=`\n\nPause ${index+1}: ${pause.paused} · ${pause.duration}\n${pause.reason||'No reason provided.'}`;
     if(entry.autoSent)text+='\nauto-sent';
     if(entry.status==='Pending'&&entry.nextAttemptAt)text+='\nNext retry: '+new Date(entry.nextAttemptAt).toLocaleTimeString();
     if(entry.status==='NeedsReview')text+='\nNeeds review: '+entry.error+'. Check the Sheet before retrying.';
@@ -265,7 +290,7 @@ bridge?.addEventListener('message', event => {
   else if (message.type === 'focusReflection') {if(view==='reflection'&&!document.querySelector('dialog[open]'))$('reflection-text').focus();}
   else if (message.type === 'reflectionShortcut') {
     if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing||document.querySelector('dialog[open]'))return;
-    if(['reflection-text','early-reason'].some(id=>$(id)===document.activeElement))$('later').click();
+    if(reflectionInputs().includes(document.activeElement))$('later').click();
     else $('reflection-text').focus();
   }
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
@@ -338,15 +363,15 @@ $('schedule-form').addEventListener('submit',event=>{event.preventDefault();run(
 });});
 $('schedule-cutoff-enabled').addEventListener('change',()=>{$('schedule-cutoff').disabled=!$('schedule-cutoff-enabled').checked;if($('schedule-cutoff-enabled').checked)$('schedule-repeat').checked=true;if($('schedule-cutoff-enabled').checked&&!$('schedule-cutoff').value)$('schedule-cutoff').value=localDateTime(new Date($('schedule-start').value||Date.now()).getTime()+3600000);});
 bind('schedule-cancel',()=>{clearScheduleEdit();$('schedule-start').focus();});
-['reflection-text','early-reason'].forEach(id=>$(id).addEventListener('input',()=>{
+document.addEventListener('input',event=>{if(!reflectionInputs().includes(event.target))return;
   setText($('draft-status'),'Saving draft…'); clearTimeout(saveDelay); saveDelay=setTimeout(()=>saveDraft().catch(e=>error(e.message)),300);
-}));
+});
 async function submitReflection(endSession=false){
   if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   // Start the optional audio fade before validation or a durable draft save.
   // Audio feedback must not delay or prevent saving the response.
   send('reflectionSendStarted',{id:promptId}).catch(()=>{});
-  if(!$('reflection-text').value.trim()) { $('reflection-text').setAttribute('aria-invalid','true'); $('reflection-text').focus(); throw new Error('Write a reflection before sending.'); }
+  if(!$('reflection-text').value.trim()&&![...document.querySelectorAll('#pause-reasons textarea')].some(input=>input.value.trim())) { $('reflection-text').setAttribute('aria-invalid','true'); $('reflection-text').focus(); throw new Error('Write a reflection before sending.'); }
   $('reflection-text').removeAttribute('aria-invalid');
   // Lock before the draft flush so another shortcut cannot submit it twice.
   savingAndClosing=true;setReflectionBusy(reflectionBusy);
@@ -398,7 +423,7 @@ document.addEventListener('keydown',event=>{
   event.preventDefault();
   if(event.repeat||event.isComposing||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
   // Inspect both fields, including a reason retained after natural completion.
-  const empty=['reflection-text','early-reason'].every(id=>$(id).value.length===0);
+  const empty=reflectionInputs().every(input=>input.value.length===0);
   if(save)$('later').click();
   else if(empty)$('skip-reflection').click();
   else if(endAndSend)run(()=>submitReflection(true));

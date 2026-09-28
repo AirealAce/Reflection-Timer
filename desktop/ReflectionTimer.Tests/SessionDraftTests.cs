@@ -59,7 +59,7 @@ static class SessionDraftTests
         pausedSession.Engine.Start(20,false,50);clock=clock.AddMilliseconds(8123);pausedSession.Engine.Pause();
         var pausedTimer=pausedSession.Engine.Snapshot.Timer;
         clock=clock.AddDays(1);var afterRestart=new PreviewSession(pausedStore,()=>clock);afterRestart.Tick();
-        check(afterRestart.Engine.Snapshot.Timer==pausedTimer&&TimerEngine.IsPaused(afterRestart.Engine.Snapshot.Timer),"A paused session survives reopening and later ticks with its precise remaining time unchanged");
+        check(JsonSerializer.Serialize(afterRestart.Engine.Snapshot.Timer)==JsonSerializer.Serialize(pausedTimer)&&TimerEngine.IsPaused(afterRestart.Engine.Snapshot.Timer),"A paused session survives reopening and later ticks with its precise remaining time unchanged");
         check(afterRestart.Engine.Snapshot.Prompts.Count==0&&afterRestart.Engine.Snapshot.Outbox.Count==0,"Reopening a paused session does not finish it or create/send a reflection");
     }
     private static bool Reason(PreviewSession session,Guid id)=>JsonSerializer.SerializeToElement(session.View(),PreviewSession.Json)

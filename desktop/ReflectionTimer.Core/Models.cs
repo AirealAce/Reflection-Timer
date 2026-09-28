@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Immutable;
 
 namespace ReflectionTimer.Core;
 
@@ -10,8 +11,13 @@ public static class DataJson
 
 public enum SessionMode { Timer = 0, Stopwatch = 1 }
 
+public record SessionPause(Guid Id, long PausedAt, long? DurationMilliseconds = null, string Reason = "");
+
 public record TimerState
 {
+    public ImmutableList<SessionPause> Pauses { get; init; } = [];
+    // Elapsed-clock coordinate at runtime; converted to calendar time on disk.
+    public long? PauseElapsedSince { get; init; }
     public SessionMode Mode { get; init; }
     public long ElapsedMilliseconds { get; init; }
     public long? RunningSince { get; init; }
@@ -44,6 +50,7 @@ public enum ScheduleOverlapPolicy { EndWithReflection = 0, Ask = 1, Wait = 2 }
 public enum ScheduleDecision { StartNow = 0, Wait = 1, Skip = 2 }
 public record ReflectionPrompt(Guid Id, long CompletedAt, int DurationSeconds, int Volume, bool IsTest, string Draft = "")
 {
+    public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public bool ResumeStopwatchOnSave { get; init; }
     public ReflectionSeparator? ContinuationSeparator { get; init; }
@@ -72,6 +79,7 @@ public enum AppColorTheme { Dark = 0, Light = 1, HighContrast = 2, Glamour = 3 }
 public enum FloatingTimerPlacement { Custom = 0, Center = 1, TopLeft = 2, TopRight = 3, BottomLeft = 4, BottomRight = 5, TopCenter = 6, BottomCenter = 7 }
 public record OutboxItem
 {
+    public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public Guid? SessionId { get; init; }
     public bool AutoSent { get; init; }

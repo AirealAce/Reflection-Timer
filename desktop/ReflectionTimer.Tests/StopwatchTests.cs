@@ -109,10 +109,10 @@ static class StopwatchTests
         now=now.AddMilliseconds(4250);
         var prompt=session.Engine.CheckIn();session.Engine.SaveDraft(prompt,"Retain this draft","Retain this reason");
         session.SetDurationDraft(["invalid","",""]);
-        var prompts=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts);
+        var prompts=JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}));
         result=session.ToggleModeFromShortcut();
         check(session.Engine.Snapshot.ParkedTimer is {IsRunning:false,PausedRemainingMilliseconds:130750} parked&&parked.SessionId==timerId
-            &&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts)==prompts&&result.OpenReflection is null,
+            &&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==prompts&&result.OpenReflection is null,
             "Mode shortcut parks the precise countdown and its draft, even with invalid duration input");
         session.ToggleTimerFromShortcut();now=now.AddMilliseconds(7250);
         var stopwatchId=session.Engine.Snapshot.Timer.SessionId;
@@ -203,7 +203,7 @@ static class StopwatchTests
         {
             Last=JsonDocument.Parse(await request.Content!.ReadAsStringAsync(cancellation)).RootElement.Clone();
             var ping=Last.GetProperty("action").GetString()=="ping";if(!ping)Writes++;
-            return new(HttpStatusCode.OK){Content=new StringContent(ping?JsonSerializer.Serialize(new{success=true,target="Synthetic",supportsStopwatch=Stopwatch}):JsonSerializer.Serialize(new{success=true,requestId=Last.GetProperty("requestId").GetString(),sheet="test"}))};
+            return new(HttpStatusCode.OK){Content=new StringContent(ping?JsonSerializer.Serialize(new{success=true,target="Synthetic",supportsStopwatch=Stopwatch,supportsPauses=true}):JsonSerializer.Serialize(new{success=true,requestId=Last.GetProperty("requestId").GetString(),sheet="test"}))};
         }
     }
 }

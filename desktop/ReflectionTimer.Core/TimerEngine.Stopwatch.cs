@@ -47,10 +47,11 @@ public sealed partial class TimerEngine
                 var now = ElapsedNow;
                 var previous = s.Timer;
                 ClearStopwatchResume(s);
-                if (previous.Mode == SessionMode.Stopwatch) previous = PauseStopwatch(previous, StopwatchStopTime(previous, requestedAt.Value, now));
+                if (previous.Mode == SessionMode.Stopwatch) { var at=StopwatchStopTime(previous, requestedAt.Value, now); previous = PauseStopwatch(BeginPause(previous,at),at); }
                 else if (previous.IsRunning) {
                     var stoppedAt = SessionStopTime(previous, requestedAt.Value, now);
                     if (previous.EndTime <= stoppedAt) CompletePrompt(s, stoppedAt);
+                    else previous = BeginPause(previous,stoppedAt);
                     previous = previous with { IsRunning = false, RemainingSeconds = Remaining(previous, stoppedAt),
                         PausedRemainingMilliseconds = RemainingMilliseconds(previous, stoppedAt), EndTime = null, RunningSince = null };
                 }
@@ -65,7 +66,7 @@ public sealed partial class TimerEngine
         if (s.Timer.Mode != SessionMode.Stopwatch) throw new ArgumentException("Select Stopwatch first.");
         s.Timer = s.Timer with { SessionId = Guid.NewGuid(), IsRunning = true, ElapsedMilliseconds = 0,
             RunningSince = ElapsedNow, StopwatchCompleted = false, TimeReachedPlayed = false,
-            AutoRestart = false, AutoRestartUntil = null, EndTime = null, PausedRemainingMilliseconds = null };
+            AutoRestart = false, AutoRestartUntil = null, EndTime = null, PausedRemainingMilliseconds = null, Pauses=[], PauseElapsedSince=null };
     });
 
     public Guid ReviewStopwatch(long? requestedAt = null)
@@ -79,11 +80,11 @@ public sealed partial class TimerEngine
             var id = existing?.Id ?? Guid.NewGuid();
             var stoppedAt = StopwatchStopTime(state.Timer, requestedAt.Value, ElapsedNow);
             Change("stopwatch.reviewOpened", s => {
-                s.Timer = PauseStopwatch(s.Timer, stoppedAt);
+                s.Timer = PauseStopwatch(BeginPause(s.Timer, stoppedAt), stoppedAt);
                 var prompt = new ReflectionPrompt(id, CalendarTimestamp(stoppedAt), 0, s.Timer.Volume, false, existing?.Draft ?? "") {
                     Mode = SessionMode.Stopwatch, SessionId = s.Timer.SessionId, IsCheckIn = true,
                     CheckInSessionId = s.Timer.SessionId, ActualDurationSeconds = ActualSeconds(s.Timer, stoppedAt),
-                    ResumeStopwatchOnSave = true, ContinuationSeparator = existing?.ContinuationSeparator
+                    ResumeStopwatchOnSave = true, ContinuationSeparator = existing?.ContinuationSeparator, Pauses=s.Timer.Pauses
                 };
                 s.Prompts.RemoveAll(p => p.Id == id);
                 s.Prompts.Add(prompt);
@@ -103,6 +104,6 @@ public sealed partial class TimerEngine
         // different session. A failed save commits neither the draft nor resume.
         if (prompt.ResumeStopwatchOnSave && prompt.CheckInSessionId == value.Timer.SessionId
             && value.Timer.Mode == SessionMode.Stopwatch && IsPaused(value.Timer))
-            value.Timer = ResumeStopwatch(value.Timer, now);
+            value.Timer = ResumeStopwatch(FinishPause(value.Timer, now), now);
     }
 }

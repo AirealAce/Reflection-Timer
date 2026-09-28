@@ -15,6 +15,9 @@ static class PerformanceTests
         var seen=new HashSet<Type>();
         void Immutable(Type type) {
             if(type.IsValueType||type==typeof(string)||!seen.Add(type))return;
+            if(type.IsGenericType&&type.GetGenericTypeDefinition()==typeof(System.Collections.Immutable.ImmutableList<>)) {
+                Immutable(type.GenericTypeArguments.Single());return;
+            }
             check(type.Namespace==typeof(AppState).Namespace,"Snapshot reference type is an audited core record: "+type.Name);
             foreach(var property in type.GetProperties(BindingFlags.Public|BindingFlags.Instance)) {
                 check(property.SetMethod is null||property.SetMethod.ReturnParameter.GetRequiredCustomModifiers().Contains(typeof(IsExternalInit)),"Snapshot nested property is immutable: "+type.Name+"."+property.Name);
