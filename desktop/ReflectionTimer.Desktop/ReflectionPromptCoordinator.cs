@@ -17,10 +17,10 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
     Func<IReadOnlyList<IReflectionPromptWindow>> openWindows, Func<Guid,bool,Task> show, Action queued)
 {
     private readonly SemaphoreSlim gate = new(1,1);
-    internal async Task OpenAsync(Guid id, bool activate, Func<bool>? stopping = null, bool sessionCompleted = false)
+    internal async Task OpenAsync(Guid id, bool activate, Func<bool>? stopping = null, bool sessionCompleted = false, bool automaticCompletion = false)
     {
         await gate.WaitAsync();
-        try { await OpenCoreAsync(id,activate,stopping,sessionCompleted); }
+        try { await OpenCoreAsync(id,activate,stopping,sessionCompleted,automaticCompletion); }
         finally {gate.Release();}
     }
     internal async Task NavigateAsync(Guid from, int direction, Func<bool>? stopping = null)
@@ -58,7 +58,7 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
             } catch {window?.ResumeEditing();throw;}
         }
     }
-    private async Task OpenCoreAsync(Guid id,bool activate,Func<bool>? stopping,bool sessionCompleted)
+    private async Task OpenCoreAsync(Guid id,bool activate,Func<bool>? stopping,bool sessionCompleted,bool automaticCompletion=false)
     {
         if(stopping?.Invoke()==true)return;
         var state=session.Engine.Snapshot;
@@ -69,6 +69,10 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
             // arrivals, active check-ins, or reflections from a different test mode.
             await AutoSendPriorAsync(state.Prompts.TakeWhile(p=>p.Id!=id).Where(p=>!p.IsCheckIn&&p.IsTest==target.IsTest),stopping);
         }
+        // Suppress only unsolicited completion windows. Keep the new draft and
+        // existing auto-send policy, without freezing/replacing a current editor.
+        // Explicit check-ins, end-early, Pending, Prev/Next and tests still open.
+        if(automaticCompletion&&sessionCompleted&&!target.IsTest&&!session.Engine.SettingsSnapshot.SessionEndPopups)return;
         var prepared=new List<IReflectionPromptWindow>();
         try {
             foreach(var previous in openWindows().Where(w=>w.ReflectionId!=id).ToArray()) {

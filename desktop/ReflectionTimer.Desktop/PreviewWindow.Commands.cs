@@ -61,9 +61,12 @@ internal sealed partial class PreviewWindow
                     case "popup":engine.SetPopupPosition((ReflectionPopupPosition)ReadInt(data,"value",0,4));break;
                     case "overlap":engine.SetScheduleOverlap((ScheduleOverlapPolicy)ReadInt(data,"value",0,2));break;
                     case "showCompact":engine.SetFloatingTimer(ReadInt(data,"value",0,1)==1);app.ApplyDisplayPreferences();break;
+                    case "viewerAutoHide":engine.SetViewerAutoHide(ReadInt(data,"value",0,1)==1,state.ViewerAutoHideSeconds);break;
+                    case "viewerAutoHideSeconds":engine.SetViewerAutoHide(state.ViewerAutoHide,ReadInt(data,"value",1,TimerEngine.MaxDuration));break;
                     case "compactAlwaysOnTop":engine.SetAlwaysOnTop(ReadInt(data,"value",0,1)==1,state.TimeOnlyAlwaysOnTop,state.PromptAlwaysOnTop);break;
                     case "timeOnlyAlwaysOnTop":engine.SetAlwaysOnTop(state.CompactAlwaysOnTop,ReadInt(data,"value",0,1)==1,state.PromptAlwaysOnTop);break;
                     case "promptAlwaysOnTop":engine.SetAlwaysOnTop(state.CompactAlwaysOnTop,state.TimeOnlyAlwaysOnTop,ReadInt(data,"value",0,1)==1);break;
+                    case "sessionEndPopups":engine.SetSessionEndPopups(ReadInt(data,"value",0,1)==1);break;
                     case "autoSendIncompleteReflections":engine.SetAutoSendIncompleteReflections(ReadInt(data,"value",0,1)==1);break;
                     case "confirmBeforeReset":engine.SetConfirmBeforeReset(ReadInt(data,"value",0,1)==1);break;
                     case "reflectionSeparator":engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"value",0,3));break;
@@ -120,13 +123,17 @@ internal sealed partial class PreviewWindow
             case "saveAppearance":
                 var theme=(AppColorTheme)ReadInt(data,"theme",0,3);var placement=(FloatingTimerPlacement)ReadInt(data,"placement",0,7);
                 var popup=(ReflectionPopupPosition)ReadInt(data,"popup",0,4);var overlap=(ScheduleOverlapPolicy)ReadInt(data,"overlap",0,2);
+                var hideSeconds=data.TryGetProperty("viewerAutoHideSeconds",out _)?ReadInt(data,"viewerAutoHideSeconds",1,TimerEngine.MaxDuration):state.ViewerAutoHideSeconds;
+                var hideEnabled=data.TryGetProperty("viewerAutoHide",out _)?ReadFlag(data,"viewerAutoHide"):state.ViewerAutoHide;
                 app.SetStartup(ReadFlag(data,"startAtLogin"));
                 engine.SetTheme(theme); engine.SetFloatingTimerPlacement(placement); engine.SetPopupPosition(popup);
                 engine.SetScheduleOverlap(overlap);
                 engine.SaveSettings(state.Connection,ReadFlag(data,"logging"),engine.Snapshot.StartAtLogin,state.ExtensionDisabledConfirmed);
                 engine.SetFloatingTimer(ReadFlag(data,"showCompact"));
+                engine.SetViewerAutoHide(hideEnabled,hideSeconds);
                 engine.SetAlwaysOnTop(ReadFlag(data,"compactAlwaysOnTop"),ReadFlag(data,"timeOnlyAlwaysOnTop"),ReadFlag(data,"promptAlwaysOnTop"));
                 engine.SetAutoSendIncompleteReflections(ReadFlag(data,"autoSendIncompleteReflections"));
+                if(data.TryGetProperty("sessionEndPopups",out _))engine.SetSessionEndPopups(ReadFlag(data,"sessionEndPopups"));
                 engine.SetConfirmBeforeReset(ReadFlag(data,"confirmBeforeReset"));
                 engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"reflectionSeparator",0,3));
                 app.ApplyDisplayPreferences();

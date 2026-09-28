@@ -75,6 +75,45 @@ static class NativeCompactCycleSmoke
                         session.Engine.Start(900,false,0);await Layout(compact,true);
                         if(focus){await Until(()=>Task.FromResult(WindowActivation.IsForeground(other)));Check(true,"Automatic shrink when a timer starts also releases focus");}
                         Check(session.Engine.CurrentTimer.IsRunning,"Releasing focus does not pause the running timer");
+                        if(focus) {
+                            session.Engine.Pause();
+                            using var editor=new BrowserFocusTarget();
+                            await editor.FocusAsync();
+                            await Until(editor.HasEditorFocusAsync);
+                            Check(true,"Separate browser input queue starts with native and DOM editor focus");
+                            app.Open("compact");await Layout(compact,false);
+                            await Until(()=>Task.FromResult(WindowActivation.IsForeground(compact)));
+                            Cycle(false);await Layout(compact,true);
+                            await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"Shrinking restores browser editor and caret without reactivation: "+await editor.StateAsync());
+                            Cycle(false);await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"Hiding Time-only preserves browser editor focus: "+await editor.StateAsync());
+                            Cycle(false);await Layout(compact,false);
+                            Cycle(true);await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"Hiding Compact directly restores browser editor focus: "+await editor.StateAsync());
+                            app.Open("main");await Ready((PreviewWindow)app.MainForm);
+                            await Until(()=>Task.FromResult(WindowActivation.IsForeground(app.MainForm)));
+                            app.Open("compact");await Layout(compact,false);
+                            await Until(()=>Task.FromResult(WindowActivation.IsForeground(compact)));
+                            Cycle(false);await Layout(compact,true);await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"App-to-Compact-to-Time-only returns to the browser, not another timer window: "+await editor.StateAsync());
+                            app.Open("main");
+                            Cycle(false);await Task.Delay(500);
+                            Check(!compact.Visible&&await editor.HasEditorFocusAsync(),"Hiding the overlay while App holds focus returns to the external editor");
+                            app.Open("main");app.Open("compact");await Layout(compact,false);
+                            Cycle(true);await Task.Delay(500);
+                            Check(!compact.Visible&&await editor.HasEditorFocusAsync(),"Reverse hide also skips the main timer window");
+                            app.Open("main");app.Open("compact");await Layout(compact,false);
+                            await Script(compact,"document.querySelector('#shrink').click()");await Layout(compact,true);await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"The minus button returns to the external editor after App-to-Compact navigation");
+                            app.Open("main");app.Open("compact");await Layout(compact,false);
+                            await Script(compact,"document.querySelector('#close').click()");
+                            await Until(()=>Task.FromResult(!compact.Visible));await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"The close button releases focus before hiding its native window");
+                            app.Open("compact");await Layout(compact,false);await editor.FocusAsync();
+                            Cycle(false);await Layout(compact,true);await Task.Delay(500);
+                            Check(await editor.HasEditorFocusAsync(),"Background view changes never redirect an already-focused browser editor");
+                        }
                     }catch(Exception error){failure=error;}
                     finally{await app.CloseMainAsync();}
                 });

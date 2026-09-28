@@ -56,7 +56,9 @@ export function settingsUI({send, run, bind, view, announce}) {
       ['theme','placement','popup','overlap'].forEach(id=>setValue($(id),settings[id]));
       setValue($('reflectionSeparator'),settings.reflectionSeparator??3);
       $('show-compact').checked=settings.showFloatingTimer; $('logging').checked=settings.loggingEnabled;$('start-at-login').checked=!!settings.startAtLogin;
-      ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).checked=settings[id]!==false);
+      $('viewerAutoHide').checked=settings.viewerAutoHide===true;
+      $('viewerAutoHideSeconds').value=settings.viewerAutoHideSeconds??3;
+      ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','sessionEndPopups','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).checked=settings[id]!==false);
     } else if(form==='volume-form'&&!dirty.has('settings-volume-form')) setMasterVolume(settings.volume);
     else if(form==='connection-form') {
       populateConnection(settings); $('connection-token').value=''; $('connection-enabled').checked=settings.connected;$('extension-off').checked=!!settings.extensionDisabledConfirmed;
@@ -71,7 +73,8 @@ export function settingsUI({send, run, bind, view, announce}) {
   }
   const appearance=()=>({theme:Number($('theme').value),placement:Number($('placement').value),popup:Number($('popup').value),
     overlap:Number($('overlap').value),reflectionSeparator:Number($('reflectionSeparator').value),logging:$('logging').checked,showCompact:$('show-compact').checked,startAtLogin:$('start-at-login').checked,
-    compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,confirmBeforeReset:$('confirmBeforeReset').checked,quiet:true});
+    viewerAutoHide:$('viewerAutoHide').checked,viewerAutoHideSeconds:Number($('viewerAutoHideSeconds').value),
+    compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,sessionEndPopups:$('sessionEndPopups').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,confirmBeforeReset:$('confirmBeforeReset').checked,quiet:true});
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
   submit('connection-form','connectionSave',connection);
@@ -82,7 +85,12 @@ export function settingsUI({send, run, bind, view, announce}) {
     try{
       if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
       if(!$('appearance-form').reportValidity())return;
-      await flushAutosaves();await send('saveAppearance',appearance());dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
+      // Explicit Save retries all display values, including an earlier failed
+      // autosave. Other pending writes still must succeed before success audio.
+      const pendingDisplay=displaySaving;
+      await flushAutosaves(true);await send('saveAppearance',appearance());
+      if(displaySaving===pendingDisplay)displaySaving=Promise.resolve();
+      dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
       if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
       if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
       // One success sound after every part of this explicit save has succeeded.
@@ -124,7 +132,10 @@ export function settingsUI({send, run, bind, view, announce}) {
   }
   ['theme','placement','popup','overlap','reflectionSeparator'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,Number($(id).value))));
   $('show-compact').addEventListener('change',()=>saveDisplay('show-compact','showCompact',$('show-compact').checked?1:0));
-  ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
+  $('viewerAutoHide').addEventListener('change',()=>saveDisplay('viewerAutoHide','viewerAutoHide',$('viewerAutoHide').checked?1:0));
+  $('viewerAutoHideSeconds').addEventListener('change',()=>{if($('viewerAutoHideSeconds').reportValidity())saveDisplay('viewerAutoHideSeconds','viewerAutoHideSeconds',Number($('viewerAutoHideSeconds').value));});
+  $('viewerAutoHideSeconds').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.isComposing){event.preventDefault();$('viewerAutoHideSeconds').blur();}});
+  ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','sessionEndPopups','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
   function setMasterVolume(value){for(const id of ['app-volume','settings-volume']){$(id).value=value;setText($(id+'-caption'),'App sound ('+value+'%)');}}
   function flushVolume(){
     clearTimeout(volumeTimer);volumeTimer=undefined;
@@ -139,7 +150,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     })().finally(()=>{volumePending=false;});
     return volumeSaving;
   }
-  async function flushAutosaves(){await displaySaving;await lowTime.flush();await timeReached.flush();await audio.flush();await flushVoice();await flushVolume();}
+  async function flushAutosaves(retryDisplay=false){await (retryDisplay?displaySaving.catch(()=>{}):displaySaving);await lowTime.flush();await timeReached.flush();await audio.flush();await flushVoice();await flushVolume();}
   for(const id of ['app-volume','settings-volume']){
     $(id).addEventListener('input',()=>{
       const value=Number($(id).value);++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');
@@ -174,7 +185,10 @@ export function settingsUI({send, run, bind, view, announce}) {
     state(state) {
       lowTime.state(state);
       updateTheme(state.theme??0);
-      if(!dirty.has('appearance-form') && state.showFloatingTimer!==undefined) $('show-compact').checked=state.showFloatingTimer;
+      if(!dirtyFields.get('appearance-form')?.has('show-compact') && state.showFloatingTimer!==undefined) {
+        $('show-compact').checked=state.showFloatingTimer;
+        if(settings)settings.showFloatingTimer=state.showFloatingTimer;
+      }
       if(!dirty.has('volume-form')&&!dirty.has('settings-volume-form') && state.appVolume!==undefined) setMasterVolume(state.appVolume);
       deliveryEnabled=!!state.connected;renderDelivery();
       setText($('reflection-delivery'),state.connected?'Save & send queues this reflection for automatic Sheets delivery. Practice reflections use the receiver’s test tab.':'Save & send keeps this reflection in the Outbox. Sheets delivery is off.');

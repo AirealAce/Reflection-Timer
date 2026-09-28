@@ -45,13 +45,13 @@ internal sealed partial class PreviewApplication : ApplicationContext
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
-        session.Engine.Changed += () => {ApplyTheme();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly });};
+        session.Engine.Changed += () => {ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
             try {
                 Services.PollVoiceStatus();
-                foreach(var prompt in Session.Tick()) _ = OpenReflectionAsync(prompt.Id,false,true);
+                foreach(var prompt in Session.Tick()) _ = OpenReflectionAsync(prompt.Id,false,true,automaticCompletion:true);
                 ApplyTheme();Broadcast(new { type = "clock", clock = Session.Clock() }); tickFailed = false;
                 if (Session.Engine.ElapsedNow - lastSync >= 15000) { lastSync = Session.Engine.ElapsedNow; _ = Services.Sync(); if(shortcuts?.RetryUnavailable()==true)Broadcast(new{type="shortcuts",shortcuts=ShortcutState}); } }
             catch { if (!tickFailed) Announce("Could not save a timer update. Your last saved state is retained."); tickFailed = true; }
@@ -154,11 +154,12 @@ internal sealed partial class PreviewApplication : ApplicationContext
         if(next==FloatingView.Hidden) {
             // Supersede queued measurements so rapid cycles use native intent.
             if(compact is not null)compact.SetCompactMode(compact.IsTimeOnly,false);
-            Session.Engine.SetFloatingTimer(false);ApplyDisplayPreferences();return;
+            Session.Engine.SetFloatingTimer(false);ReleaseTimerViewFocus();ApplyDisplayPreferences();return;
         }
         compact??=Create("compact");
         compact.SetCompactMode(true,false);
         if(!Session.Engine.SettingsSnapshot.ShowFloatingTimer)Session.Engine.SetFloatingTimer(true);
+        ReleaseTimerViewFocus();
         ApplyDisplayPreferences(); // ShowWithoutActivation: do not focus tiny.
     }
     private PreviewWindow Create(string view, Guid? prompt = null)
@@ -177,6 +178,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     }
     internal void Open(string view, Guid? prompt = null, bool timerPage=false, bool sessionCompleted=false)
     {
+        RememberReturnFocus(WindowActivation.Foreground);
         if(view=="reflection"){if(prompt is {} id)_ = OpenReflectionAsync(id,true,sessionCompleted);return;}
         string? viewSaveError=null;
         if(view=="main") {
@@ -195,7 +197,6 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Session.Engine.SetFloatingTimer(true);
         }
         if (window.WindowState == FormWindowState.Minimized) window.WindowState = FormWindowState.Normal;
-        window.RememberCompactFocus(WindowActivation.Foreground);
         WindowActivation.Focus(window);
         if(WindowActivation.CanReceiveFocus(window))window.FocusControls(timerPage);
         if(viewSaveError is not null)Announce(viewSaveError);
@@ -209,9 +210,9 @@ internal sealed partial class PreviewApplication : ApplicationContext
         AppViewMayShow=false;
         MainForm?.Hide();
     }
-    private async Task OpenReflectionAsync(Guid id,bool activate,bool sessionCompleted=false)
+    private async Task OpenReflectionAsync(Guid id,bool activate,bool sessionCompleted=false,bool automaticCompletion=false)
     {
-        try {await promptCoordinator.OpenAsync(id,activate,()=>closing,sessionCompleted);}
+        try {await promptCoordinator.OpenAsync(id,activate,()=>closing,sessionCompleted,automaticCompletion);}
         catch {Announce("The reflection could not be opened. Existing drafts are retained; any current editor stays open. Try Pending reflections again.");}
     }
     internal Task NavigateReflectionAsync(Guid from,int direction)=>promptCoordinator.NavigateAsync(from,direction,()=>closing);

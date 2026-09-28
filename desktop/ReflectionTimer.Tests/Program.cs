@@ -15,6 +15,8 @@ if(args.Contains("--native-compact-focus")){NativeCompactCycleSmoke.RunInteracti
 if(args.Contains("--native-shutdown")){NativeShutdownSmoke.Run();return;}
 if(args.Contains("--native-voice-synthesis")){NativeVoiceSynthesisSmoke.Run();return;}
 if(args.Contains("--native-reader-notification")){NativeReaderNotificationSmoke.Run();return;}
+if(args.Contains("--native-popup-policy")){NativePopupPolicySmoke.Run();return;}
+if(args.Contains("--native-viewer-auto-hide")){NativeViewerAutoHideSmoke.Run();return;}
 if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
 if(args.Contains("--native-stopwatch-focus")){NativeStopwatchSmoke.RunInteractive();return;}
 if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return;}
@@ -49,6 +51,7 @@ ClockDisplayTests.Run(Check);
 ClockAccuracyTests.Run(Check);
 PerformanceTests.Run(Check);
 ViewPreferenceTests.Run(Check);
+ViewerAutoHideTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);
 ScreenReaderFeedbackTests.Run(Check);
 SessionDraftTests.Run(Check);
@@ -142,6 +145,7 @@ var shortcutEnd=shortcutSession.Execute("startOrEnd",Data(new{}));
 Check(!shortcutSession.Engine.Snapshot.Timer.IsRunning&&shortcutEnd.OpenReflection.HasValue,"Start/end shortcut opens an early-end reflection");
 await PromotionTests.Run(Check);
 await PromptPolicyTests.Run(Check);
+await SessionEndPopupTests.Run(Check);
 await ServiceTests.Run(Check);
 await UploadRecoveryTests.Run(Check);
 await DeliveryPreflightTests.Run(Check);

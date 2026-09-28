@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.19. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.21. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -29,7 +29,7 @@ Stopwatch pauses use the queued shortcut's timestamp. Waiting for a busy UI thre
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
 | Ctrl+Alt+T | If the main window is focused, hide it exactly like its X button. Otherwise bring it forward, preserving the selected tab; on Timer, select the first positive duration field. The timer and compact view continue unchanged. |
 | Ctrl+Alt+backtick (`) | Start the specified timer, resume a paused timer, or end a running session early and show its reflection. Auto-start and its cutoff still apply. |
-| Ctrl+Alt+, | Cycle compact controls → time-only → hidden → controls. Entering Time-only returns focus to the previous usable window; the timer continues. |
+| Ctrl+Alt+, | Cycle compact controls → time-only → hidden → controls. Entering Time-only or hidden returns focus to the last usable window outside Reflection Timer, even after moving through App and Compact; the timer continues. |
 | Ctrl+Alt+Shift+, | Reverse cycle: compact controls → hidden → time-only → controls. Showing Time-only does not take focus. |
 | Ctrl+Alt+. | Focus Compact: select the Timer duration or focus the Stopwatch start/pause/resume button. Press twice within 0.8 seconds to do the same in App's Timer tab. |
 | Ctrl+Alt+/ | Bring an existing reflection forward and focus its first text box. In the focused reflection, focus the first box if neither is focused; if either text box is focused, Save the draft and close. With no open window, reopen the latest pending reflection or create a check-in for a running/paused session. Never opens App. |
@@ -57,9 +57,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.19 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.21 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.19. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.21. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

@@ -548,6 +548,18 @@ public sealed partial class TimerEngine
         Change("display.floatingMode", s => s.FloatingTimeOnly = timeOnly);
     }
     public void SetAutoSendIncompleteReflections(bool enabled) => Change("settings.saved", s => s.AutoSendIncompleteReflections = enabled);
+    public void SetViewerAutoHide(bool enabled, int seconds)
+    {
+        ValidateDuration(seconds);
+        var current = SettingsSnapshot;
+        if (current.ViewerAutoHide == enabled && current.ViewerAutoHideSeconds == seconds) return;
+        Change("settings.saved", s => { s.ViewerAutoHide = enabled; s.ViewerAutoHideSeconds = seconds; });
+    }
+    public void SetSessionEndPopups(bool enabled)
+    {
+        if(SettingsSnapshot.SessionEndPopups==enabled)return;
+        Change("settings.saved",s=>s.SessionEndPopups=enabled);
+    }
     public void SetVoiceAnnouncements(bool enabled)
     {
         if (SettingsSnapshot.VoiceAnnouncements == enabled) return;

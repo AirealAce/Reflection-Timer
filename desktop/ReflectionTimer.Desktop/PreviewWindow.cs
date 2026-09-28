@@ -54,6 +54,10 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         // revealed only after that document has applied its saved preferences.
         browser.Visible=false;
         Controls.Add(browser);
+        ConfigureAutoHide();
+        Activated += (_, _) => RestartAutoHide();
+        ResizeBegin += (_, _) => { movingViewer = true; };
+        ResizeEnd += (_, _) => { movingViewer = false; RestartAutoHide(); };
         HandleCreated+=(_,_)=>ApplyWindowTheme();
         Shown += async (_, _) => {
             await (initialization??=InitializeAsync());
@@ -89,9 +93,15 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         // Suppress that implicit show without changing the saved preference.
         if(value && View=="main" && !app.AppViewMayShow)value=false;
         var passiveTinyShow=value&&!Visible&&View=="compact"&&IsTimeOnly;
-        if(passiveTinyShow)RememberCompactFocus(ReflectionTimer.Desktop.WindowActivation.Foreground);
+        var newlyShown=value&&!Visible;
+        if(!value)CancelAutoHide();
+        if(passiveTinyShow)app.RememberReturnFocus(ReflectionTimer.Desktop.WindowActivation.Foreground);
+        // Release while still visible: after Hide(), foreground/visibility
+        // guards can no longer recognize the window that held keyboard focus.
+        if(!value&&Visible&&View=="compact")app.ReleaseFocus(this);
         base.SetVisibleCore(value);
-        if(passiveTinyShow)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
+        if(passiveTinyShow)app.ReleaseFocus(this);
+        if(newlyShown)RestartAutoHide();
     }
     protected override CreateParams CreateParams {get{var value=base.CreateParams;if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;return value;}}
     internal void ApplyTopMost(AppState? preferences = null)
@@ -230,8 +240,8 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             }
             if(action=="interfaceReady") {
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
-                if(View=="compact"&&IsTimeOnly)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
-                interfaceReady.TrySetResult();Reply(requestId);return;
+                if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
+                interfaceReady.TrySetResult();RestartAutoHide();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
             if (action == "settingsShortcutScope") {
@@ -269,6 +279,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 if(revision!=compactRevision){Reply(requestId);return;}
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 var timeOnly=ReadFlag(data,"tiny");
+                var layoutChanged=timeOnly!=IsTimeOnly;
                 var enteringTimeOnly=timeOnly&&!IsTimeOnly;
                 if(IsTimeOnly!=timeOnly)app.Session.Engine.SetFloatingTimeOnly(timeOnly);
                 IsTimeOnly=timeOnly;
@@ -276,7 +287,8 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 UpdateCompactTitle();
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);
-                if(enteringTimeOnly)ReflectionTimer.Desktop.WindowActivation.ReleaseFocus(this,compactReturnFocus);
+                if(enteringTimeOnly)app.ReleaseFocus(this);
+                if(layoutChanged)RestartAutoHide();
                 return;
             }
             if (action == "main") { app.Open("main"); Reply(requestId); return; }
@@ -335,7 +347,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     // A hidden reflection is no longer an editor: it cannot be flushed/submitted.
     internal void CloseAfterSave() { ReflectionOpen=false;handoffInProgress=false;Hide(); }
     internal void ClosePermanently() { allowClose = true; Close(); }
-    protected override void Dispose(bool disposing) { if (disposing) browser.Dispose(); base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { autoHideTimer?.Dispose(); autoHideTimer=null; autoHideDeadline.Cancel(); browser.Dispose(); } base.Dispose(disposing); }
     [DllImport("user32.dll")]private static extern bool ReleaseCapture();
     [DllImport("user32.dll",EntryPoint="SendMessageW")]private static extern nint SendMessage(nint window,int message,nint wParam,nint lParam);
     [DllImport("dwmapi.dll")]private static extern int DwmSetWindowAttribute(nint window,int attribute,ref int value,int size);

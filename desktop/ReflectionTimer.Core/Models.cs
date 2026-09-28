@@ -137,10 +137,13 @@ public record AppState
     // Null preserves legacy launch behavior until the user changes the view.
     public bool? ShowAppView { get; set; }
     public bool? FloatingTimeOnly { get; set; }
+    public bool ViewerAutoHide { get; set; }
+    public int ViewerAutoHideSeconds { get; set; } = 3;
     public bool VoiceAnnouncements { get; set; }
     public bool CompactAlwaysOnTop { get; set; } = true;
     public bool TimeOnlyAlwaysOnTop { get; set; } = true;
     public bool PromptAlwaysOnTop { get; set; } = true;
+    public bool SessionEndPopups { get; set; } = true;
     public bool AutoSendIncompleteReflections { get; set; } = true;
     public bool ConfirmBeforeReset { get; set; } = true;
     public ReflectionSeparator ReflectionSeparator { get; set; } = ReflectionSeparator.Newline;
