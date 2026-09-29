@@ -18,6 +18,8 @@ static class NativeViewerAutoHideSmoke
                 var store=new MemoryStore{State=new(){ShowAppView=false,ShowFloatingTimer=false,LoggingEnabled=false,Timer=new(){Volume=0}}};
                 var now=DateTimeOffset.Now;
                 var session=new PreviewSession(store,()=>now,isolatedProfile:true);
+                var transitions=new Queue<string>();
+                session.Engine.ActivityRecorded+=activity=>{transitions.Enqueue(activity.Event);while(transitions.Count>12)transitions.Dequeue();};
                 using var app=new PreviewApplication(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-AutoHide-"+Guid.NewGuid().ToString("N")),
                     startInTray:true,profileName:"auto-hide",shortcutRegistration:new Registration());
                 var main=(PreviewWindow)app.MainForm!;_=main.Handle;
@@ -40,7 +42,8 @@ static class NativeViewerAutoHideSmoke
                             if(mode==SessionMode.Timer)session.Engine.Start(60,false,0);else session.Engine.StartStopwatch();
                             var id=session.Engine.CurrentTimer.SessionId;
                             await Task.Delay(650);compact.FocusControls();compact.SetCompactMode(true,false);
-                            await Task.Delay(500);
+                            await Task.Delay(750);
+                            if(compact.Visible)Console.WriteLine("Hide diagnostics: "+string.Join(", ",transitions)+$"; running={session.Engine.CurrentTimer.IsRunning}; enabled={compact.Enabled}; capture={compact.Capture}");
                             Check(!compact.Visible,"Focus and floating layout changes do not restart the start deadline: "+mode);
                             Check(session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==id&&main.Visible&&session.Engine.Snapshot.Prompts.Count==0,
                                 "Auto-hide leaves the selected session running and App visible: "+mode);
@@ -51,8 +54,17 @@ static class NativeViewerAutoHideSmoke
                             compact.SetCompactMode(true,false);session.Engine.Resume();
                             await Until(()=>Task.FromResult(!compact.Visible));
                             Check(session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==id,"Resuming in Time-only starts a fresh hide delay: "+mode);
+                            var foreground=WindowActivation.Foreground;
                             session.Engine.Pause();
+                            Check(compact.Visible&&compact.IsTimeOnly&&session.Engine.SettingsSnapshot.ShowFloatingTimer&&WindowActivation.Foreground==foreground,
+                                "Pausing restores the automatically hidden Time-only layout: "+mode);
+                            await Task.Delay(150);
+                            Check(compact.IsTimeOnly&&await Bool(compact,"document.body.dataset.tiny==='true'"),"The pause update preserves the restored Time-only layout: "+mode);
                         }
+                        session.Engine.Resume();await Until(async()=>await Bool(compact,"document.querySelector('#toggle').getAttribute('aria-label')==='Pause stopwatch'"));
+                        compact.SetCompactMode(false,false);await Until(async()=>await Bool(compact,"document.body.dataset.tiny==='false'"));await Until(()=>Task.FromResult(!compact.Visible));
+                        var compactForeground=WindowActivation.Foreground;session.Engine.Pause();
+                        Check(compact.Visible&&!compact.IsTimeOnly&&WindowActivation.Foreground==compactForeground,"Pausing restores Compact controls without taking focus");
                         app.Open("compact");session.Engine.Resume();await Task.Delay(200);session.Engine.SetViewerAutoHide(false,1);await Task.Delay(1250);
                         Check(compact.Visible,"Disabling immediately cancels pending auto-hide");
                         session.Engine.Pause();session.Engine.SetViewerAutoHide(true,1);
@@ -82,7 +94,14 @@ static class NativeViewerAutoHideSmoke
                         Check(session.Engine.CurrentTimer.IsRunning,"A scheduled start begins the hide delay");
                         app.Open("compact");compact.ClosePermanently();app.Open("compact");compact=Windows(app).Single(w=>w.View=="compact");await Ready(compact);await Task.Delay(1250);
                         Check(compact.Visible,"Creating a viewer for an already-running session does not count as starting it");
+                        compact.SetCompactMode(true,false);session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();compact.ClosePermanently();
                         session.Engine.Pause();
+                        compact=Windows(app).Single(w=>w.View=="compact");await Ready(compact);
+                        Check(compact.Visible&&compact.IsTimeOnly,"Pausing restores the saved layout even when no floating window exists");
+                        session.Engine.SetViewerAutoHide(false,1);session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();session.Engine.Resume();session.Engine.Pause();
+                        Check(!compact.Visible,"With auto-hide disabled, pausing preserves manual hiding");
+                        session.Engine.SetViewerAutoHide(true,1);session.Engine.Resume();session.Engine.Pause();
+                        Check(compact.Visible,"With auto-hide enabled, pausing shows the hidden viewer");
                         var prompt=session.Engine.TestPrompt();app.Open("reflection",prompt);
                         await Until(()=>Task.FromResult(Windows(app).Any(w=>w.View=="reflection"&&w.Visible)));
                         session.Engine.Resume();await Until(()=>Task.FromResult(!compact.Visible));

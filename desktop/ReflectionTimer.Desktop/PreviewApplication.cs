@@ -17,6 +17,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly List<PreviewWindow> windows = [];
     private readonly System.Windows.Forms.Timer pulse = new() { Interval = 1000 };
     private PreviewWindow? active;
+    private TimerState viewerSession;
     private bool closing, tickFailed, keepTimeOnly;
     private bool? publishedAppViewVisible;
     private long lastSync;
@@ -29,6 +30,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
+        viewerSession=session.Engine.CurrentTimer;
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         Services = new(session.Engine, directory); Services.Announcement += Announce;
@@ -45,7 +47,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
-        session.Engine.Changed += () => {ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly });};
+        session.Engine.Changed += () => {var restored=RestoreViewerOnPause();ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly=keepTimeOnly||restored });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
@@ -69,6 +71,26 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(9, _=>CycleCompact(true))
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
+    }
+    private bool RestoreViewerOnPause()
+    {
+        var state=Session.Engine.SettingsSnapshot;
+        var previous=viewerSession;
+        // Update before saving visibility, since that save raises Changed too.
+        viewerSession=state.Timer;
+        if(closing||!state.ViewerAutoHide||state.ShowFloatingTimer||!previous.IsRunning
+            ||state.Timer.Mode!=previous.Mode||state.Timer.SessionId!=previous.SessionId
+            ||!TimerEngine.IsPaused(state.Timer))return false;
+        var previousLayout=keepTimeOnly;
+        keepTimeOnly=true;
+        try {
+            Session.Engine.SetFloatingTimer(true);
+            // Passive Show preserves the saved floating layout and keyboard
+            // focus. This also creates a viewer after a hidden/tray-only launch.
+            ApplyDisplayPreferences();
+            return true;
+        } catch {Announce("The session is paused, but its viewer could not be shown. Try the Compact view shortcut or tray menu.");return false;}
+        finally {keepTimeOnly=previousLayout;}
     }
     private void ApplyTheme()
     {
