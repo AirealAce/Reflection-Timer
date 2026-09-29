@@ -106,6 +106,17 @@ static class NativeResetConfirmationSmoke
                         session.Engine.Start(300,false,0);session.SetDurationDraft(["0","2","3"]);main.Hide();compact.Hide();
                         count=asked;GlobalReset(app);await Until(()=>Task.FromResult(session.Engine.Snapshot.Timer.SessionId is null));await Idle(app);
                         Check(asked==count&&session.Engine.Snapshot.Timer.RemainingSeconds==123&&!main.Visible&&!compact.Visible,"Global reset uses shared duration inputs and keeps hidden windows hidden");
+                        session.Engine.SetViewerAutoHide(true,1);session.Engine.SetConfirmBeforeReset(true);
+                        compact.SetCompactMode(true,false);session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();
+                        session.Engine.Start(300,false,0);session.SetDurationDraft(["0","2","3"]);var hiddenSession=session.Engine.CurrentTimer.SessionId;
+                        count=asked;GlobalReset(app);await Until(()=>Task.FromResult(asked>count));decision!.SetResult(false);await Idle(app);
+                        Check(!main.Visible&&!compact.Visible&&!session.Engine.SettingsSnapshot.ShowFloatingTimer
+                            &&session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==hiddenSession,
+                            "Cancelling reset with auto-hide enabled preserves the hidden running session");
+                        count=asked;GlobalReset(app);await Until(()=>Task.FromResult(asked>count));decision!.SetResult(true);await Idle(app);
+                        Check(!main.Visible&&compact.Visible&&compact.IsTimeOnly&&session.Engine.SettingsSnapshot.ShowFloatingTimer
+                            &&session.Engine.CurrentTimer.SessionId is null&&session.Engine.CurrentTimer.RemainingSeconds==123,
+                            "Confirmed global reset with auto-hide enabled restores Time-only, not App view");
                         Check(session.Engine.Snapshot.Outbox.Count==0&&session.Engine.Snapshot.Connection.WebAppUrl=="","Reset confirmation tests never send reflections or connect to Sheets");
                     }catch(Exception error){failure=error;decision?.TrySetResult(false);}
                     finally{await app.CloseMainAsync();}

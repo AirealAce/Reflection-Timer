@@ -102,6 +102,43 @@ static class NativeViewerAutoHideSmoke
                         Check(!compact.Visible,"With auto-hide disabled, pausing preserves manual hiding");
                         session.Engine.SetViewerAutoHide(true,1);session.Engine.Resume();session.Engine.Pause();
                         Check(compact.Visible,"With auto-hide enabled, pausing shows the hidden viewer");
+                        foreach(var mode in Enum.GetValues<SessionMode>()) {
+                            session.Engine.SwitchMode(mode);session.Engine.Reset();
+                            session.SetDurationDraft(["0","2","3"]);
+                            compact.SetCompactMode(true,false);
+                            if(mode==SessionMode.Timer)session.Engine.Start(123,false,0);else session.Engine.StartStopwatch();
+                            await Until(()=>Task.FromResult(!compact.Visible));
+                            var foreground=WindowActivation.Foreground;
+                            app.KeepingTimeOnly(session.ResetTimerFromShortcut);
+                            Check(compact.Visible&&compact.IsTimeOnly&&WindowActivation.Foreground==foreground
+                                &&!session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId is null
+                                &&(mode==SessionMode.Timer?session.Engine.CurrentTimer.RemainingSeconds==123:session.Engine.CurrentTimer.ElapsedMilliseconds==0),
+                                "Reset restores the auto-hidden viewer, ready at the shared duration or zero: "+mode);
+                            await Task.Delay(1200);
+                            Check(compact.Visible&&compact.IsTimeOnly&&await Bool(compact,"document.body.dataset.tiny==='true'"),
+                                "Reset cancels hiding and preserves Time-only after the page updates: "+mode);
+                            if(mode==SessionMode.Timer)session.Engine.Start(123,false,0);else session.Engine.StartStopwatch();
+                            await Task.Delay(200);app.KeepingTimeOnly(session.ResetTimerFromShortcut);await Task.Delay(1200);
+                            Check(compact.Visible&&!session.Engine.CurrentTimer.IsRunning,
+                                "Reset before the hide deadline cancels the pending timeout: "+mode);
+                            if(mode==SessionMode.Timer)session.Engine.Start(123,false,0);else session.Engine.StartStopwatch();
+                            session.Engine.Pause();session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();
+                            app.KeepingTimeOnly(session.ResetTimerFromShortcut);
+                            Check(compact.Visible,"Reset from a paused session restores the viewer: "+mode);
+                            session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();
+                            app.KeepingTimeOnly(session.ResetTimerFromShortcut);
+                            Check(compact.Visible,"Reset from an already-ready or zero session restores the viewer: "+mode);
+                            session.Engine.SetViewerAutoHide(false,1);session.Engine.SetFloatingTimer(false);app.ApplyDisplayPreferences();
+                            app.KeepingTimeOnly(session.ResetTimerFromShortcut);
+                            Check(!compact.Visible,"With auto-hide disabled, reset preserves manual hiding: "+mode);
+                            session.Engine.SetViewerAutoHide(true,1);
+                            store.Fail=true;
+                            try {session.Engine.Reset();throw new Exception("Failed reset accepted");}catch(IOException){}
+                            store.Fail=false;
+                            session.Engine.SetViewerAutoHide(true,1);
+                            Check(!compact.Visible,"Failed reset does not reveal the viewer on a later settings update: "+mode);
+                        }
+                        session.Engine.StartStopwatch();session.Engine.Pause();
                         var prompt=session.Engine.TestPrompt();app.Open("reflection",prompt);
                         await Until(()=>Task.FromResult(Windows(app).Any(w=>w.View=="reflection"&&w.Visible)));
                         session.Engine.Resume();await Until(()=>Task.FromResult(!compact.Visible));

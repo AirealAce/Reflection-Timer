@@ -18,7 +18,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly System.Windows.Forms.Timer pulse = new() { Interval = 1000 };
     private PreviewWindow? active;
     private TimerState viewerSession;
-    private bool closing, tickFailed, keepTimeOnly;
+    private bool closing, tickFailed, keepTimeOnly, viewerResetCommitted;
     private bool? publishedAppViewVisible;
     private long lastSync;
     private readonly NotifyIcon tray;
@@ -47,7 +47,11 @@ internal sealed partial class PreviewApplication : ApplicationContext
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
-        session.Engine.Changed += () => {var restored=RestoreViewerOnPause();ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly=keepTimeOnly||restored });};
+        // Activity is emitted only after persistence succeeds. A reset can
+        // leave the same ready/zero state, so a timer-state comparison alone
+        // cannot distinguish it from an unrelated settings update.
+        session.Engine.ActivityRecorded += activity => {if(activity.Event=="timer.reset")viewerResetCommitted=true;};
+        session.Engine.Changed += () => {var restored=RestoreIdleViewer();ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly=keepTimeOnly||restored });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
@@ -72,15 +76,19 @@ internal sealed partial class PreviewApplication : ApplicationContext
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
     }
-    private bool RestoreViewerOnPause()
+    private bool RestoreIdleViewer()
     {
         var state=Session.Engine.SettingsSnapshot;
         var previous=viewerSession;
-        // Update before saving visibility, since that save raises Changed too.
+        var resetCommitted=viewerResetCommitted;
+        // Consume the action and update before saving visibility, since that
+        // save raises Changed too. Failed/cancelled resets never set the flag.
+        viewerResetCommitted=false;
         viewerSession=state.Timer;
-        if(closing||!state.ViewerAutoHide||state.ShowFloatingTimer||!previous.IsRunning
-            ||state.Timer.Mode!=previous.Mode||state.Timer.SessionId!=previous.SessionId
-            ||!TimerEngine.IsPaused(state.Timer))return false;
+        var paused=previous.IsRunning&&state.Timer.Mode==previous.Mode
+            &&state.Timer.SessionId==previous.SessionId&&TimerEngine.IsPaused(state.Timer);
+        if(closing||!state.ViewerAutoHide||state.ShowFloatingTimer||state.Timer.IsRunning
+            ||!(resetCommitted||paused))return false;
         var previousLayout=keepTimeOnly;
         keepTimeOnly=true;
         try {
@@ -89,7 +97,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             // focus. This also creates a viewer after a hidden/tray-only launch.
             ApplyDisplayPreferences();
             return true;
-        } catch {Announce("The session is paused, but its viewer could not be shown. Try the Compact view shortcut or tray menu.");return false;}
+        } catch {Announce("The session is not running, but its viewer could not be shown. Try the Compact view shortcut or tray menu.");return false;}
         finally {keepTimeOnly=previousLayout;}
     }
     private void ApplyTheme()
