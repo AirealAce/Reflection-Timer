@@ -6,8 +6,10 @@ internal sealed class ViewerAutoHideDeadline(Func<long>? milliseconds = null)
 {
     private readonly Func<long> now = milliseconds ?? (() => Environment.TickCount64);
     private long? deadline;
-    internal void Cancel() => deadline = null;
-    internal void Restart(int seconds) => deadline = now() + (long)seconds * 1000;
+    private long? startedAt;
+    internal void Cancel() { deadline = null; startedAt = null; }
+    internal void Restart(int seconds) { startedAt = now(); ChangeDelay(seconds); }
+    internal void ChangeDelay(int seconds) { if (startedAt is { } at) deadline = at + (long)seconds * 1000; }
     internal int? RemainingMilliseconds => deadline is { } end
         ? (int)Math.Clamp(end - now(), 0, int.MaxValue) : null;
 }

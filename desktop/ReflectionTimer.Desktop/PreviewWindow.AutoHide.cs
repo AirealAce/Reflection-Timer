@@ -8,16 +8,28 @@ internal sealed partial class PreviewWindow
     private readonly ViewerAutoHideDeadline autoHideDeadline = new();
     private System.Windows.Forms.Timer? autoHideTimer;
     private (bool Enabled, int Seconds)? autoHidePreference;
+    private TimerState? autoHideSession;
     private bool movingViewer;
 
     internal void ConfigureAutoHide()
     {
         if (View != "compact" || IsDisposed) return;
         var state = app.Session.Engine.SettingsSnapshot;
-        var preference = (state.ViewerAutoHide, Math.Clamp(state.ViewerAutoHideSeconds, 1, TimerEngine.MaxDuration));
-        if (autoHidePreference == preference) return;
+        var preference = (Enabled: state.ViewerAutoHide, Seconds: Math.Clamp(state.ViewerAutoHideSeconds, 1, TimerEngine.MaxDuration));
+        var previous = autoHideSession;
+        var preferenceChanged = autoHidePreference != preference;
+        autoHideSession = state.Timer;
         autoHidePreference = preference;
-        RestartAutoHide();
+        if (!preference.Enabled || !state.Timer.IsRunning) { CancelAutoHide(); return; }
+        // Observe committed session transitions, including scheduled/automatic
+        // starts and saving a stopwatch review. Initial load is not a start.
+        if (previous is not null && (!previous.IsRunning || previous.SessionId != state.Timer.SessionId
+            || previous.RunningSince != state.Timer.RunningSince)) RestartAutoHide();
+        else if (preferenceChanged) {
+            // Editing the delay retains the original start/resume timestamp.
+            autoHideDeadline.ChangeDelay(preference.Seconds);
+            ScheduleAutoHide();
+        }
     }
 
     private void CancelAutoHide()
@@ -29,7 +41,7 @@ internal sealed partial class PreviewWindow
     private void RestartAutoHide()
     {
         CancelAutoHide();
-        if (View != "compact" || !Visible || IsDisposed || !interfaceReady.Task.IsCompletedSuccessfully
+        if (View != "compact" || !Visible || IsDisposed
             || autoHidePreference is not { Enabled: true } preference) return;
         autoHideDeadline.Restart(preference.Seconds);
         ScheduleAutoHide();
@@ -49,13 +61,15 @@ internal sealed partial class PreviewWindow
     private void AutoHideViewer()
     {
         autoHideTimer?.Stop();
-        if (IsDisposed || !Visible || !ready || recoveringInterface || autoHidePreference is not { Enabled: true }) {
+        if (IsDisposed || !Visible || !app.Session.Engine.CurrentTimer.IsRunning || autoHidePreference is not { Enabled: true }) {
             CancelAutoHide(); return;
         }
+        // Loading/recovery can finish after the deadline. Keep its original
+        // timestamp and resume the pending timeout when the interface is ready.
+        if (!ready || recoveringInterface) return;
         if (autoHideDeadline.RemainingMilliseconds is not { } remaining) return;
         if (remaining > 0) { ScheduleAutoHide(); return; }
         // Never hide the owner of a confirmation/file dialog or interrupt a drag.
-        // Activation/move-end grants a fresh delay after those interactions.
         if (!WindowActivation.CanReceiveFocus(this) || movingViewer || Capture) {
             autoHideTimer!.Interval = 250; autoHideTimer.Start(); return;
         }

@@ -35,13 +35,17 @@ static class ViewerAutoHideTests
             engine.Pause();
         }
         long now=0;var deadline=new ViewerAutoHideDeadline(()=>now);
-        check(deadline.RemainingMilliseconds is null,"No countdown exists before activation");
+        check(deadline.RemainingMilliseconds is null,"No countdown exists before starting or resuming a session");
         deadline.Restart(3);now=2999;
         check(deadline.RemainingMilliseconds==1,"Auto-hide waits the complete configured delay");
         deadline.Restart(3);now=3000;
-        check(deadline.RemainingMilliseconds==2999,"Reactivation replaces, rather than queues, the old deadline");
+        check(deadline.RemainingMilliseconds==2999,"Resuming replaces, rather than queues, the old deadline");
+        deadline.ChangeDelay(5);
+        check(deadline.RemainingMilliseconds==4999,"Editing a delay retains the original resume timestamp");
+        deadline.ChangeDelay(3);
         now=5999;check(deadline.RemainingMilliseconds==0,"The replacement deadline expires at the expected elapsed time");
         deadline.Cancel();now+=10000;
+        deadline.ChangeDelay(1);
         check(deadline.RemainingMilliseconds is null,"Cancel prevents stale expiry after hiding or disabling");
         deadline.Restart(TimerEngine.MaxDuration);
         check(deadline.RemainingMilliseconds==int.MaxValue,"Long delays safely fit native timer interval limits");

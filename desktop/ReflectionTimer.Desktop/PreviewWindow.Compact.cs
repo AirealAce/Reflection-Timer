@@ -21,7 +21,6 @@ internal sealed partial class PreviewWindow
         focusOnReady=!timeOnly&&focus&&!ready;
         Post(new{type="compactLayout",timeOnly,focus=!timeOnly&&focus,revision=compactRevision});
         if(timeOnly)app.ReleaseFocus(this);
-        RestartAutoHide();
     }
     private void UpdateCompactTitle()=>Text=$"Reflection Timer — {(IsTimeOnly?"Time-only":"Compact")} view · {typeof(PreviewWindow).Assembly.GetName().Version?.ToString(3)}";
 }

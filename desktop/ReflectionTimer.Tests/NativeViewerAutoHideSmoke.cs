@@ -16,7 +16,8 @@ static class NativeViewerAutoHideSmoke
         var thread=new Thread(()=>{
             try {
                 var store=new MemoryStore{State=new(){ShowAppView=false,ShowFloatingTimer=false,LoggingEnabled=false,Timer=new(){Volume=0}}};
-                var session=new PreviewSession(store,isolatedProfile:true);
+                var now=DateTimeOffset.Now;
+                var session=new PreviewSession(store,()=>now,isolatedProfile:true);
                 using var app=new PreviewApplication(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-AutoHide-"+Guid.NewGuid().ToString("N")),
                     startInTray:true,profileName:"auto-hide",shortcutRegistration:new Registration());
                 var main=(PreviewWindow)app.MainForm!;_=main.Handle;
@@ -31,37 +32,60 @@ static class NativeViewerAutoHideSmoke
                         await Script(main,"document.querySelector('#viewerAutoHideSeconds').value='1';document.querySelector('#viewerAutoHideSeconds').dispatchEvent(new Event('change',{bubbles:true}))");
                         await Until(()=>Task.FromResult(store.State.ViewerAutoHideSeconds==1));
                         await Script(main,"document.querySelector('#viewerAutoHide').click()");
-                        await Until(()=>Task.FromResult(!compact.Visible));
-                        Check(store.State.ViewerAutoHide&&!store.State.ShowFloatingTimer,"Checkbox and delay autosave; the real native timeout hides the viewer");
-                        Check(main.Visible&&session.Engine.Snapshot.Prompts.Count==0,"Auto-hide leaves App visible and creates no reflection");
-                        app.Open("compact");await Task.Delay(650);compact.FocusControls();await Task.Delay(650);
-                        Check(compact.Visible,"Focusing already-open Compact replaces its old deadline");
-                        await Until(()=>Task.FromResult(!compact.Visible));
-                        Check(true,"Reactivated viewer hides at its replacement deadline");
-                        app.Open("compact");session.Engine.SetViewerAutoHide(false,1);await Task.Delay(1250);
-                        Check(compact.Visible,"Disabling immediately cancels pending auto-hide");
-                        session.Engine.SetViewerAutoHide(true,1);await Task.Delay(200);session.Engine.SetViewerAutoHide(true,2);await Task.Delay(1000);
-                        Check(compact.Visible,"Changing the delay replaces the current countdown");
-                        await Until(()=>Task.FromResult(!compact.Visible));
+                        await Task.Delay(1250);
+                        Check(store.State.ViewerAutoHide&&store.State.ViewerAutoHideSeconds==1&&compact.Visible,"Settings autosave without hiding an idle viewer");
                         foreach(var mode in Enum.GetValues<SessionMode>()) {
-                            session.Engine.SwitchMode(mode);
+                            session.Engine.SwitchMode(mode);session.Engine.Reset();
+                            app.Open("compact");compact.SetCompactMode(false,false);
                             if(mode==SessionMode.Timer)session.Engine.Start(60,false,0);else session.Engine.StartStopwatch();
-                            session.Engine.SetViewerAutoHide(true,1);app.Open("compact");compact.SetCompactMode(true,false);
                             var id=session.Engine.CurrentTimer.SessionId;
+                            await Task.Delay(650);compact.FocusControls();compact.SetCompactMode(true,false);
+                            await Task.Delay(500);
+                            Check(!compact.Visible,"Focus and floating layout changes do not restart the start deadline: "+mode);
+                            Check(session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==id&&main.Visible&&session.Engine.Snapshot.Prompts.Count==0,
+                                "Auto-hide leaves the selected session running and App visible: "+mode);
+                            app.Open("compact");await Task.Delay(1250);
+                            Check(compact.Visible,"Reopening a running viewer does not start another hide countdown: "+mode);
+                            session.Engine.Pause();session.Engine.Resume();await Task.Delay(400);session.Engine.Pause();await Task.Delay(850);
+                            Check(compact.Visible,"Pausing cancels the pending resume deadline: "+mode);
+                            compact.SetCompactMode(true,false);session.Engine.Resume();
                             await Until(()=>Task.FromResult(!compact.Visible));
-                            Check(session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==id&&session.Engine.Snapshot.Prompts.Count==0,
-                                "Time-only auto-hide leaves the selected session running: "+mode);
+                            Check(session.Engine.CurrentTimer.IsRunning&&session.Engine.CurrentTimer.SessionId==id,"Resuming in Time-only starts a fresh hide delay: "+mode);
                             session.Engine.Pause();
                         }
-                        app.Open("compact");compact.Enabled=false;await Task.Delay(1250);
+                        app.Open("compact");session.Engine.Resume();await Task.Delay(200);session.Engine.SetViewerAutoHide(false,1);await Task.Delay(1250);
+                        Check(compact.Visible,"Disabling immediately cancels pending auto-hide");
+                        session.Engine.Pause();session.Engine.SetViewerAutoHide(true,1);
+                        session.Engine.Resume();await Task.Delay(650);session.Engine.SetViewerAutoHide(true,2);await Task.Delay(900);
+                        Check(compact.Visible,"Editing the delay uses the original resume timestamp");
+                        await Until(()=>Task.FromResult(!compact.Visible));session.Engine.Pause();
+                        app.Open("compact");session.Engine.Resume();
+                        var review=session.Engine.ReviewStopwatch();await Task.Delay(1250);
+                        Check(compact.Visible&&!session.Engine.CurrentTimer.IsRunning,"Opening a stopwatch reflection cancels pending hiding");
+                        session.Engine.SaveReflectionForLater(review,"Synthetic saved review");await Until(()=>Task.FromResult(!compact.Visible));
+                        Check(session.Engine.CurrentTimer.IsRunning,"Saving a stopwatch review resumes and begins the hide delay");
+                        session.Engine.Pause();session.Engine.SkipPrompt(review);
+                        app.Open("compact");compact.Enabled=false;session.Engine.Resume();await Task.Delay(1250);
                         Check(compact.Visible,"A modal-disabled owner is not auto-hidden");
-                        compact.Enabled=true;await Until(()=>Task.FromResult(!compact.Visible));
-                        app.Open("compact");store.Fail=true;await Task.Delay(1300);
+                        compact.Enabled=true;await Until(()=>Task.FromResult(!compact.Visible));session.Engine.Pause();
+                        app.Open("compact");session.Engine.Resume();store.Fail=true;await Task.Delay(1300);
                         Check(compact.Visible&&session.Engine.SettingsSnapshot.ShowFloatingTimer,"A failed visibility save keeps the viewer visible");
-                        store.Fail=false;session.Engine.SetViewerAutoHide(false,1);
+                        store.Fail=false;session.Engine.Pause();
+                        session.Engine.SwitchMode(SessionMode.Timer);session.Engine.Reset();session.Engine.Start(1,true,0);
+                        var beforeRestart=session.Engine.CurrentTimer.SessionId;
+                        await Task.Delay(650);now=now.AddSeconds(1);session.Engine.Advance();await Task.Delay(500);
+                        Check(compact.Visible&&session.Engine.CurrentTimer.SessionId!=beforeRestart,"Automatic restart replaces the previous session's hide deadline");
+                        await Until(()=>Task.FromResult(!compact.Visible));session.Engine.Reset();
+                        foreach(var pending in session.Engine.Snapshot.Prompts)session.Engine.SkipPrompt(pending.Id);
+                        app.Open("compact");session.Engine.SaveSchedule(null,now.AddSeconds(1),60,false,0);now=now.AddSeconds(1);session.Engine.Advance();
+                        await Until(()=>Task.FromResult(!compact.Visible));
+                        Check(session.Engine.CurrentTimer.IsRunning,"A scheduled start begins the hide delay");
+                        app.Open("compact");compact.ClosePermanently();app.Open("compact");compact=Windows(app).Single(w=>w.View=="compact");await Ready(compact);await Task.Delay(1250);
+                        Check(compact.Visible,"Creating a viewer for an already-running session does not count as starting it");
+                        session.Engine.Pause();
                         var prompt=session.Engine.TestPrompt();app.Open("reflection",prompt);
                         await Until(()=>Task.FromResult(Windows(app).Any(w=>w.View=="reflection"&&w.Visible)));
-                        session.Engine.SetViewerAutoHide(true,1);await Until(()=>Task.FromResult(!compact.Visible));
+                        session.Engine.Resume();await Until(()=>Task.FromResult(!compact.Visible));
                         Check(Windows(app).Any(w=>w.View=="reflection"&&w.Visible),"Reflection prompts stay open when the floating viewer auto-hides");
                         await Script(main,"document.querySelector('#save-settings').click()");
                         await Until(async()=>await Bool(main,"document.querySelector('#status').textContent==='Settings saved.'"));

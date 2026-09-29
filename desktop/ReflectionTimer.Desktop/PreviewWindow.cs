@@ -55,9 +55,8 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         browser.Visible=false;
         Controls.Add(browser);
         ConfigureAutoHide();
-        Activated += (_, _) => RestartAutoHide();
         ResizeBegin += (_, _) => { movingViewer = true; };
-        ResizeEnd += (_, _) => { movingViewer = false; RestartAutoHide(); };
+        ResizeEnd += (_, _) => { movingViewer = false; };
         HandleCreated+=(_,_)=>ApplyWindowTheme();
         Shown += async (_, _) => {
             await (initialization??=InitializeAsync());
@@ -93,7 +92,6 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         // Suppress that implicit show without changing the saved preference.
         if(value && View=="main" && !app.AppViewMayShow)value=false;
         var passiveTinyShow=value&&!Visible&&View=="compact"&&IsTimeOnly;
-        var newlyShown=value&&!Visible;
         if(!value)CancelAutoHide();
         if(passiveTinyShow)app.RememberReturnFocus(ReflectionTimer.Desktop.WindowActivation.Foreground);
         // Release while still visible: after Hide(), foreground/visibility
@@ -101,7 +99,6 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         if(!value&&Visible&&View=="compact")app.ReleaseFocus(this);
         base.SetVisibleCore(value);
         if(passiveTinyShow)app.ReleaseFocus(this);
-        if(newlyShown)RestartAutoHide();
     }
     protected override CreateParams CreateParams {get{var value=base.CreateParams;if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;return value;}}
     internal void ApplyTopMost(AppState? preferences = null)
@@ -241,7 +238,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if(action=="interfaceReady") {
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
                 if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
-                interfaceReady.TrySetResult();RestartAutoHide();Reply(requestId);return;
+                interfaceReady.TrySetResult();ScheduleAutoHide();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
             if (action == "settingsShortcutScope") {
@@ -279,7 +276,6 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 if(revision!=compactRevision){Reply(requestId);return;}
                 var width=ReadInt(data,"width",80,700);var height=ReadInt(data,"height",32,1000);
                 var timeOnly=ReadFlag(data,"tiny");
-                var layoutChanged=timeOnly!=IsTimeOnly;
                 var enteringTimeOnly=timeOnly&&!IsTimeOnly;
                 if(IsTimeOnly!=timeOnly)app.Session.Engine.SetFloatingTimeOnly(timeOnly);
                 IsTimeOnly=timeOnly;
@@ -288,7 +284,6 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 ClientSize=new((int)Math.Ceiling(width*DeviceDpi/96d*browser.ZoomFactor),(int)Math.Ceiling(height*DeviceDpi/96d*browser.ZoomFactor));
                 ApplyPosition();Reply(requestId);
                 if(enteringTimeOnly)app.ReleaseFocus(this);
-                if(layoutChanged)RestartAutoHide();
                 return;
             }
             if (action == "main") { app.Open("main"); Reply(requestId); return; }

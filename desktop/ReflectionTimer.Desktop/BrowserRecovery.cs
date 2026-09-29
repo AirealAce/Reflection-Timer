@@ -135,7 +135,7 @@ internal sealed partial class PreviewWindow
     internal void MarkInterfaceUnavailable()
     {
         if(IsDisposed||allowClose)return;
-        CancelAutoHide();
+        autoHideTimer?.Stop();
         ready=false;recoveringInterface=true;
         var error=new IOException("The interface is recovering. Saved drafts are retained.");
         flush?.TrySetException(error);reflectionReady.TrySetException(error);interfaceReady.TrySetException(error);
@@ -170,7 +170,7 @@ internal sealed partial class PreviewWindow
         reflectionLoadError=null;recoveringInterface=false;
         if(recoveryPanel is not null){Controls.Remove(recoveryPanel);recoveryPanel.Dispose();recoveryPanel=null;recoveryText=null;retryInterface=null;}
         browser.Visible=true;browser.BringToFront();
-        RestartAutoHide();
+        ScheduleAutoHide();
         if(Visible&&WindowActivation.IsForeground(this)){browser.Focus();Post(new{type="announcement",message="Interface restored. Saved drafts and settings have been reloaded."});}
     }
     internal void ShowBrowserRecoveryFailure()
