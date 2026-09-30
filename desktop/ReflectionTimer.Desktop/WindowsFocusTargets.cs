@@ -61,7 +61,13 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         foreach (var window in windows.Where(w => w.App is "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera")) {
             try {
                 var position=0;
-                foreach (var tab in TabStrip((nint)window.WindowHandle)) {
+                var strip = BrowserStrip((nint)window.WindowHandle);
+                if (kind == FocusTargetKind.BrowserTabGroup) {
+                    foreach (var group in BrowserTabGroups.Read(strip.Select(slot => slot.Data).ToArray()))
+                        choices.Add(window with { Id = Guid.NewGuid(), Kind = kind, Name = group.Name, TabRuntimeId = group.Id, TabPosition = ++position });
+                    continue;
+                }
+                foreach (var tab in strip.Where(slot => !slot.Data.GroupHeader).Select(slot => slot.Element)) {
                     var name = tab.Current.Name;
                     if (string.IsNullOrWhiteSpace(name)) continue;
                     var id = string.Join(",", tab.GetRuntimeId());
@@ -91,9 +97,11 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         if (window == FocusPresence.Unavailable) return window;
         var handle = (nint)target.WindowHandle;
         try {
+            if (target.Kind == FocusTargetKind.BrowserTabGroup)
+                return BrowserTabGroups.Check(target.TabRuntimeId, BrowserStrip(handle).Select(slot => slot.Data).ToArray(), IsTargetForeground(handle));
             var key = CacheKey(target, target.TabRuntimeId);
             if (!tabs.TryGetValue(key, out var tab)) {
-                tab = TabStrip(handle).FirstOrDefault(t => string.Join(",", t.GetRuntimeId()) == target.TabRuntimeId);
+                tab = BrowserStrip(handle).Where(slot => !slot.Data.GroupHeader).Select(slot => slot.Element).FirstOrDefault(t => string.Join(",", t.GetRuntimeId()) == target.TabRuntimeId);
                 if (tab is null) return FocusPresence.Unavailable;
                 tabs[key] = tab;
             }
@@ -113,16 +121,26 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         catch { return FocusPresence.Unknown; }
     });
     private static string CacheKey(FocusTarget target, string id) => $"{target.ProcessId}:{target.ProcessStartedAt}:{target.WindowHandle}:{id}";
-    private static IEnumerable<AutomationElement> TabStrip(nint handle)
+    private sealed record NativeBrowserSlot(AutomationElement Element, BrowserTabSlot Data);
+    private static IReadOnlyList<NativeBrowserSlot> BrowserStrip(nint handle)
     {
         var walker = TreeWalker.ControlViewWalker;
-        var pending = new Queue<(AutomationElement Element, int Depth)>(); pending.Enqueue((AutomationElement.FromHandle(handle), 0));
+        var slots = new List<NativeBrowserSlot>();
+        var pending = new Queue<(AutomationElement Element, int Depth, string Parent)>(); pending.Enqueue((AutomationElement.FromHandle(handle), 0, ""));
         for (var visited = 0; pending.Count > 0 && visited < 600; visited++) {
-            var (element, depth) = pending.Dequeue(); var type = element.Current.ControlType;
-            if (type == ControlType.TabItem) { yield return element; continue; }
+            var (element, depth, parent) = pending.Dequeue(); var type = element.Current.ControlType;
+            var group = type == ControlType.Tab && element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out _);
+            if (type == ControlType.TabItem || group) {
+                bool? selected = null;
+                if (!group && element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selection)) selected = ((SelectionItemPattern)selection).Current.IsSelected;
+                slots.Add(new(element, new(string.Join(",", element.GetRuntimeId()), parent, element.Current.Name, group, selected)));
+                continue;
+            }
             if (type == ControlType.Document || depth >= 12) continue;
-            for (var child = walker.GetFirstChild(element); child is not null && pending.Count < 600; child = walker.GetNextSibling(child)) pending.Enqueue((child, depth + 1));
+            var id = string.Join(",", element.GetRuntimeId());
+            for (var child = walker.GetFirstChild(element); child is not null && pending.Count < 600; child = walker.GetNextSibling(child)) pending.Enqueue((child, depth + 1, id));
         }
+        return slots;
     }
     private static bool IsTargetForeground(nint target)
     {

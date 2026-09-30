@@ -1,6 +1,6 @@
 namespace ReflectionTimer.Core;
 
-public enum FocusTargetKind { Window, BrowserTab }
+public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup }
 
 // Stored only inside the encrypted profile. Runtime IDs identify the exact tab,
 // rather than confusing duplicate titles or a page that changes its title.

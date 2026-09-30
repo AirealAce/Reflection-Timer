@@ -28,7 +28,7 @@ internal sealed partial class PreviewWindow
         string message = "";
         switch (action) {
             case "focusTargets":
-                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,1);
+                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,2);
                 Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind) });break;
             case "focusSelect":
                 if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");

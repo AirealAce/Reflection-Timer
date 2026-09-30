@@ -9,6 +9,16 @@ internal static class FocusModeTests
     internal static async Task Run(Action<bool,string> check)
     {
         var target=new FocusTarget(Guid.NewGuid(),FocusTargetKind.Window,"Synthetic focus target","synthetic",123,456,789);
+        check(PreviewApplication.MatchesSavedFocusTarget(target with{Id=Guid.NewGuid(),Name="Renamed window"},target),"Reopening the picker retains the saved window despite a new list ID or title");
+        var tab=target with{Kind=FocusTargetKind.BrowserTab,TabRuntimeId="tab-one"};
+        check(PreviewApplication.MatchesSavedFocusTarget(tab with{Id=Guid.NewGuid(),Name="Renamed tab",TabPosition=3},tab),"Navigation and reordering retain the exact saved browser tab in the picker");
+        check(!PreviewApplication.MatchesSavedFocusTarget(tab with{TabRuntimeId="tab-two"},tab),"Another tab with the same title cannot replace the saved target");
+        check(!PreviewApplication.MatchesSavedFocusTarget(tab with{WindowHandle=124},tab)&&!PreviewApplication.MatchesSavedFocusTarget(target with{ProcessStartedAt=790},target),"Moved tabs and reused process identities are never preselected as the saved target");
+        var group=tab with{Kind=FocusTargetKind.BrowserTabGroup,TabRuntimeId="group-one"};
+        check(PreviewApplication.MatchesSavedFocusTarget(group with{Id=Guid.NewGuid(),Name="Renamed group",TabPosition=4},group)&&!PreviewApplication.MatchesSavedFocusTarget(group with{TabRuntimeId="group-two"},group),"Group identity survives renaming and reordering without confusing duplicate names");
+        check(JsonSerializer.Deserialize<FocusTarget>(JsonSerializer.Serialize(group))==group,"A selected browser group survives settings serialization");
+        Groups(check);
+        DisplayBridge(check,target);
         var legacy=JsonSerializer.Deserialize<AppState>("{}")!;
         check(!legacy.FocusMode.Enabled&&legacy.FocusMode.DelaySeconds==5,"Existing profiles gain disabled focus mode with a five-second delay");
         check(AudioSettings.From(legacy).FocusLost is {Track:LibrarySound.TrainerBattle,Behavior:SoundBehavior.Polite},"Focus audio defaults to the existing Trainer Battle MP3 without interrupting other sounds");
@@ -42,6 +52,63 @@ internal static class FocusModeTests
         }
         await Monitor(check,target);
         await Audio(check,target);
+    }
+    private static void DisplayBridge(Action<bool,string> check,FocusTarget target)
+    {
+        var store=new MemoryStore();var session=new PreviewSession(store);
+        var directory=Path.Combine(Path.GetTempPath(),"reflection-focus-display-"+Guid.NewGuid().ToString("N"));
+        try {
+            using var services=new PreviewServices(session.Engine,directory,audio:new HoldingAudio(),speech:new SilentVoice());
+            foreach(var kind in Enum.GetValues<FocusTargetKind>()) {
+                var selected=target with{Kind=kind,WindowName=kind==FocusTargetKind.Window?"":"Browser window",TabPosition=kind==FocusTargetKind.Window?0:2};
+                session.Engine.SetFocusMode(false,5,selected);
+                foreach(var (name,view) in new[]{("Timer state",session.View()),("Settings",services.Settings())}) {
+                    var focus=JsonSerializer.SerializeToElement(view,PreviewSession.Json).GetProperty("focusMode");
+                    check(focus.GetProperty("target").GetString()==selected.Name&&focus.GetProperty("targetApp").GetString()==selected.App
+                        &&focus.GetProperty("targetKind").GetInt32()==(int)kind&&focus.GetProperty("targetWindowName").GetString()==selected.WindowName
+                        &&focus.GetProperty("targetPosition").GetInt32()==selected.TabPosition,
+                        name+" carries the saved "+kind+" app, window and position even when Focus is off");
+                }
+            }
+        }finally {if(Directory.Exists(directory))Directory.Delete(directory,true);}
+    }
+    private static void Groups(Action<bool,string> check)
+    {
+        BrowserTabSlot Header(string id,string name,string parent="strip")=>new(id,parent,"group "+name+" - 2 tabs, • Example - Expanded",true,null);
+        BrowserTabSlot Tab(string id,string name,bool? selected=false,string parent="strip")=>new(id,parent,name,false,selected);
+        BrowserTabSlot[] slots=[Header("work","Work"),Tab("one","Example - Part of group Work",true),Tab("two","Example - Part of group Work - Memory usage - 100 MB"),Tab("outside","Other tab"),Header("other","Work"),Tab("three","Example - Part of group Work")];
+        var groups=BrowserTabGroups.Read(slots);
+        check(groups.Count==2&&groups[0].Members.Select(t=>t.Id).SequenceEqual(new[]{"one","two"})&&groups[1].Members.Single().Id=="three","Duplicate group and tab titles remain distinct; an ungrouped tab is excluded");
+        check(BrowserTabGroups.Check("work",slots,true)==FocusPresence.Focused&&BrowserTabGroups.Check("other",slots,true)==FocusPresence.Away,"Only the group containing the selected tab counts as focused");
+        check(BrowserTabGroups.Check("work",slots,false)==FocusPresence.Away,"Group membership does not count as focus when another window is in front");
+        var changed=slots.Select(t=>t.Id=="one"?t with{Selected=false}:t.Id=="two"?t with{Selected=true}:t).ToArray();
+        check(BrowserTabGroups.Check("work",changed,true)==FocusPresence.Focused,"Switching between member tabs stays focused");
+        changed=slots.Select(t=>t.Id=="one"?t with{Selected=false}:t.Id=="outside"?t with{Selected=true}:t).ToArray();
+        check(BrowserTabGroups.Check("work",changed,true)==FocusPresence.Away,"Switching to an ungrouped tab counts as away");
+        BrowserTabSlot[] added=[slots[0],slots[1] with{Selected=false},slots[2],Tab("added","New - Part of group Work",true),..slots.Skip(3)];
+        check(BrowserTabGroups.Check("work",added,true)==FocusPresence.Focused,"New tabs join the chosen group dynamically without refreshing its saved target");
+        var removed=slots.Select(t=>t.Id=="one"?t with{Name="Example"}:t).ToArray();
+        check(BrowserTabGroups.Check("work",removed,true)==FocusPresence.Away,"A selected tab removed from its group stops counting as a member");
+        var renamed=slots.Select(t=>t.Id is "work" or "one" or "two"?t with{Name=t.Name.Replace("Work","New name")}:t).ToArray();
+        check(BrowserTabGroups.Check("work",renamed,true)==FocusPresence.Focused,"Renaming a live group retains its runtime identity and updates membership");
+        var selectedBoth=slots.Select(t=>t.Id=="outside"?t with{Selected=true}:t).ToArray();
+        check(BrowserTabGroups.Check("work",selectedBoth,true)==FocusPresence.Unknown,"Selections spanning groups fail quietly because they do not identify the active tab");
+        selectedBoth=slots.Select(t=>t.Id=="two"?t with{Selected=true}:t).ToArray();
+        check(BrowserTabGroups.Check("work",selectedBoth,true)==FocusPresence.Focused,"Multiple selected tabs in the same group still identify the chosen group");
+        check(BrowserTabGroups.Check("work",slots.Where(t=>t.Id!="work").ToArray(),true)==FocusPresence.Unavailable,"Closing the chosen group never silently substitutes another group with the same name");
+        BrowserTabSlot[] collapsed=[slots[0] with{Name="group Work - 2 tabs, • Example - Collapsed"},Tab("outside","Other tab",true)];
+        check(BrowserTabGroups.Read(collapsed).Count==1&&BrowserTabGroups.Check("work",collapsed,true)==FocusPresence.Away,"Collapsed groups remain selectable without exposing or activating their hidden tabs");
+        BrowserTabSlot[] nested=[slots[0],Tab("unrelated","Example - Part of group Work",true,"different-strip")];
+        check(BrowserTabGroups.Read(nested)[0].Members.Count==0,"A group cannot acquire tabs from a different accessible container");
+        BrowserTabSlot[] unnamed=[new("unnamed","strip","unnamed group - 1 tab, • Example - Expanded",true,null),Tab("one","Example - Part of unnamed group",true)];
+        check(BrowserTabGroups.Check("unnamed",unnamed,true)==FocusPresence.Focused,"Unnamed groups are recognized by identity and explicit membership labels");
+        BrowserTabSlot[] hyphenated=[Header("hyphen","Work - notes"),Tab("one","Example - Part of group Work - notes",true)];
+        check(BrowserTabGroups.Read(hyphenated).Single().Name=="Work - notes"&&BrowserTabGroups.Check("hyphen",hyphenated,true)==FocusPresence.Focused,"Group names containing separators retain their complete names");
+        BrowserTabSlot[] older=[new("older","strip","Group Work - Example and 1 other tab - Expanded",true,null),slots[1]];
+        check(BrowserTabGroups.Check("older",older,true)==FocusPresence.Focused,"The previous Chromium group-header label format is also recognized");
+        check(BrowserTabGroups.Check("work",slots.Select(t=>t.Id=="one"?t with{Selected=null}:t).ToArray(),true)==FocusPresence.Unknown,"Unreadable tab selection does not produce a false group alert");
+        check(BrowserTabGroups.Read([slots[0] with{Name="Unsupported localized label"},slots[1]]).Count==0,"Unrecognized browser group labels are not offered as usable group targets");
+        check((int)FocusTargetKind.Window==0&&(int)FocusTargetKind.BrowserTab==1&&(int)FocusTargetKind.BrowserTabGroup==2,"Adding groups preserves existing saved window and tab enum values");
     }
     private static async Task Monitor(Action<bool,string> check,FocusTarget target)
     {

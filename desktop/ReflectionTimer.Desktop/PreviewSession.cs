@@ -19,6 +19,11 @@ public sealed class PreviewSession
     internal void SelectScheduleDraft(Guid? id)=>ScheduledLowDraft=id is {} key
         ? Engine.Snapshot.Schedules.SingleOrDefault(s=>s.Id==key)?.LowTime ?? throw new ArgumentException("That schedule is no longer available.") : new();
     internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
+    internal static object FocusView(FocusModeSettings settings)=>new {
+        settings.Enabled, settings.DelaySeconds, target=settings.Target?.Name,
+        targetKind=settings.Target is {} target ? (int?)target.Kind : null,
+        targetApp=settings.Target?.App, targetWindowName=settings.Target?.WindowName, targetPosition=settings.Target?.TabPosition
+    };
     internal static LowTimeOptions ReadLow(JsonElement data,LowTimeOptions previous)
     {
         var low=previous with {Enabled=Flag(data,"enabled"),ThresholdSeconds=Flag(data,"inherit")?null:Number(data,"threshold",1,TimerEngine.MaxDuration)};
@@ -111,7 +116,7 @@ public sealed class PreviewSession
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
             clock = Clock(state.Timer), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
-            focusMode = new { state.FocusMode.Enabled, state.FocusMode.DelaySeconds, target = state.FocusMode.Target?.Name, targetKind = state.FocusMode.Target is {} focus ? (int?)focus.Kind : null },
+            focusMode = FocusView(state.FocusMode),
             timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil,
                 endTime = state.Timer.EndTime is { } end ? Engine.CalendarTimestamp(end) : (long?)null,
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,

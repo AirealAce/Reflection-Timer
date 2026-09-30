@@ -92,7 +92,7 @@ public sealed class PreviewServices : IDisposable
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed, deliveryIssue = DeliveryIssue,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
             s.ViewerAutoHide, s.ViewerAutoHideSeconds,
-            focusMode = new { s.FocusMode.Enabled, s.FocusMode.DelaySeconds, target = s.FocusMode.Target?.Name, targetKind = s.FocusMode.Target is {} focus ? (int?)focus.Kind : null },
+            focusMode = PreviewSession.FocusView(s.FocusMode),
             audio.TimeReachedEnabled,audio.TimeReachedSeconds,s.VoiceAnnouncements,
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.SessionEndPopups, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,

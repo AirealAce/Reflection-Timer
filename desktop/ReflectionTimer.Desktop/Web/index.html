@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.2.25</p>
+    <p class="eyebrow">Reflection Timer 4.2.29</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -33,13 +33,8 @@
           <label>Seconds<input id="seconds" type="number" min="0" step="1" inputmode="numeric" pattern="[0-9]*" maxlength="10" value="0" aria-describedby="duration-help"></label>
         </div><p id="duration-help" class="hint">Whole numbers. Pause to change the duration. Extra seconds and minutes carry into the next unit.</p></fieldset>
         <div class="options"><label class="check"><input id="repeat" type="checkbox">Auto-start next session</label><label class="check"><input id="low-time" type="checkbox" checked>Low-time warning</label><label>Warn with this many seconds remaining<input id="threshold" type="text" inputmode="numeric" pattern="[0-9]*" maxlength="8" value="15"></label></div>
-        <div class="actions"><button id="toggle" class="primary" type="submit">Start timer</button><button id="reset" type="button">Reset timer</button><button id="end" type="button" aria-disabled="true">End early and reflect</button></div>
+        <div class="actions"><button id="toggle" class="primary" type="submit">Start timer</button><button id="reset" type="button">Reset timer</button><button id="focus-enabled" class="main-only" type="button" aria-pressed="false" disabled>Focus</button><button id="choose-focus-target" class="main-only focus-target-button" type="button" aria-haspopup="dialog" aria-controls="focus-target-dialog" aria-describedby="focus-target-name">Choose Window / Tab…</button><span id="focus-target-name" class="sr-only">Choose a window, browser tab, or tab group.</span><button id="end" type="button" aria-disabled="true">End early and reflect</button></div>
       </form>
-      <div id="focus-timer-options" class="focus-mode-options main-only">
-        <div class="option-row"><label class="check"><input id="focus-enabled" type="checkbox" disabled aria-describedby="focus-help">Focus mode</label><button id="choose-focus-target" type="button">Choose window / tab…</button></div>
-        <p id="focus-target-name">No focus target selected.</p><p id="focus-status" aria-live="off">Off</p>
-        <p id="focus-help" class="hint">While Timer or Stopwatch runs, play focus audio after leaving your chosen window or tab. Returning, pausing or finishing stops the alert. Adjust the delay and audio in Settings → Audio → Focus mode.</p>
-      </div>
       <form id="cutoff-form" class="main-only"><div class="option-row"><label class="check"><input id="cutoff-enabled" type="checkbox">Disable auto-start at</label><label><span class="sr-only">Auto-start cutoff date and time</span><input id="cutoff" type="datetime-local" aria-describedby="cutoff-help" disabled></label></div><p id="cutoff-help">Local date/time · MM/DD/YYYY hh:mm AM/PM. The current session still finishes.</p><button type="submit" hidden>Save auto-start cutoff</button></form>
       <div class="actions"><button id="check-in" type="button" aria-disabled="true">Check in</button><button id="open-compact" class="main-only" type="button">Open compact timer</button><button id="open-main" class="compact-only" type="button">Open main window</button><button id="close-compact" class="compact-only" type="button">Close compact window</button></div>
     </section>
@@ -124,8 +119,9 @@
         <button id="preview-voice" type="button" disabled>Preview voice</button>
       </form>
       <div id="focus-audio-options" class="focus-mode-options">
-        <div class="option-row"><label class="check"><input id="focus-settings-enabled" type="checkbox" disabled>Focus mode</label><button id="choose-focus-target-settings" type="button">Choose window / tab…</button></div>
+        <div class="option-row"><button id="focus-settings-enabled" type="button" aria-pressed="false" disabled>Focus</button><button id="choose-focus-target-settings" class="focus-target-button" type="button" aria-haspopup="dialog" aria-controls="focus-target-dialog" aria-describedby="focus-target-name">Choose Window / Tab…</button></div>
         <p id="focus-settings-target">No focus target selected.</p>
+        <p id="focus-status" class="sr-only" aria-live="off">Off</p>
         <div class="option-row"><label for="focus-delay">Start audio after</label><input id="focus-delay" type="number" min="0" max="31536000" step="1" value="5" required aria-label="Focus alert delay in seconds" aria-describedby="focus-audio-help"><span>seconds away</span></div>
         <p id="focus-audio-help" class="hint">Applies to both Timer and Stopwatch while running. Each switch away starts a fresh delay. Returning to the target stops only focus audio. Unfaded tracks repeat until you return; enabling Fade out after plays once per switch away. Closed or unavailable targets stop the alert until you choose again. Battle (Trainer) is the default. Target names stay in your encrypted local settings and are never uploaded.</p>
       </div>
@@ -191,13 +187,15 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.25</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.29</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title">Choose a focus target</h2>
-    <p id="focus-picker-help">Choose one open window, or a specific browser tab. A window permits any tab inside it; a tab requires that exact tab to be selected in the foreground browser window. Navigation and title changes keep the same tab. Closing it or moving it to another window requires choosing again.</p>
-    <div class="option-row"><label>Target type<select id="focus-target-kind"><option value="0">Window</option><option value="1">Browser tab</option></select></label><button id="focus-target-refresh" type="button">Refresh list</button></div>
+    <p id="focus-picker-help">Choose an open window, a Browser Tab, or a Browser Tab Group. A window permits any tab inside it; a tab requires that exact tab; a group permits any of its current tabs. The browser window must be in front. Navigation and title changes keep the same target. Closing it or moving it to another window requires choosing again. Tab groups currently support readable English Chrome/Edge group labels.</p>
+    <label for="focus-target-kind">Target type</label>
+    <div class="option-row focus-target-type-row"><select id="focus-target-kind"><option value="0">Window</option><option value="1">Browser Tab</option><option value="2">Browser Tab Groups</option></select><button id="focus-target-refresh" type="button">Refresh List</button></div>
     <label for="focus-target-list">Open targets</label><select id="focus-target-list" size="8" aria-describedby="focus-picker-status" disabled></select>
     <p id="focus-picker-status" role="status" aria-atomic="true"></p>
+    <p class="hint">Select a target, then press Enter or Space, double-click it, or use the button below.</p>
     <div class="actions"><button id="focus-target-use" type="button" class="primary" disabled>Use selected target</button><button id="focus-target-cancel" type="button">Cancel</button></div>
   </dialog>
 </body>

@@ -100,7 +100,14 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 .viewer-hide-row>input[type=number]{width:110px;margin:0}
 .time-reached-options>p{font-size:14px;color:var(--muted)}
 .focus-mode-options>p{margin:6px 0;font-size:14px;overflow-wrap:anywhere}
-#focus-timer-options{margin:12px 0}
 #focus-delay{width:110px;margin:0}
+.focus-target-button{max-width:min(260px,100%);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.focus-target-button.has-target{padding-top:5px;padding-bottom:5px;font-size:14px;line-height:1.2}
+.focus-target-type,.focus-target-label{display:block}
+.focus-target-type{font-weight:700}
+.focus-target-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#timer-editor>.actions{align-items:center}
 #focus-target-dialog{width:min(720px,92vw);max-height:90vh;overflow:auto}
+.focus-target-type-row>select{flex:0 1 300px;margin:0}
+.focus-target-type-row>button{margin:0}
 #focus-target-list{width:100%;max-width:100%;white-space:normal}

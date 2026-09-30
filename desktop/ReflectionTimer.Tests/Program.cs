@@ -8,9 +8,12 @@ if(args.Contains("--focus-target-scan")){
     using var targets=new WindowsFocusTargets();
     var windows=await targets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(8));
     var tabs=await targets.ListAsync(FocusTargetKind.BrowserTab).WaitAsync(TimeSpan.FromSeconds(15));
+    var groups=await targets.ListAsync(FocusTargetKind.BrowserTabGroup).WaitAsync(TimeSpan.FromSeconds(15));
     var presence=new List<FocusPresence>();
     foreach(var tab in tabs.Take(12))presence.Add(await targets.CheckAsync(tab).WaitAsync(TimeSpan.FromSeconds(3)));
-    Console.WriteLine(JsonSerializer.Serialize(new{Windows=windows.Count,BrowserTabs=tabs.Count,DuplicateTitles=tabs.GroupBy(t=>t.Name).Count(g=>g.Count()>1),DistinctTabIds=tabs.Select(t=>t.TabRuntimeId).Distinct().Count(),ReadableSamples=presence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),UnavailableSamples=presence.Count(p=>p==FocusPresence.Unavailable)}));
+    var groupPresence=new List<FocusPresence>();
+    foreach(var group in groups.Take(12))groupPresence.Add(await targets.CheckAsync(group).WaitAsync(TimeSpan.FromSeconds(3)));
+    Console.WriteLine(JsonSerializer.Serialize(new{Windows=windows.Count,BrowserTabs=tabs.Count,BrowserTabGroups=groups.Count,DuplicateTitles=tabs.GroupBy(t=>t.Name).Count(g=>g.Count()>1),DistinctTabIds=tabs.Select(t=>t.TabRuntimeId).Distinct().Count(),ReadableSamples=presence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),UnavailableSamples=presence.Count(p=>p==FocusPresence.Unavailable),ReadableGroupSamples=groupPresence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),FocusedGroups=groupPresence.Count(p=>p==FocusPresence.Focused)}));
     if(windows.Count==0||tabs.Count==0||presence.All(p=>p is not (FocusPresence.Focused or FocusPresence.Away)))throw new Exception("No usable native focus targets were detected.");
     return;
 }
