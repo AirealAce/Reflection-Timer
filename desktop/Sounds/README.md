@@ -8,7 +8,7 @@ The repository and Windows release include the eight recordings below. The proje
 | pokemon-level-up.mp3 | Level Up | Success |
 | pokemon-healed.mp3 | Pokémon Healed | Optional library selection |
 | pokemon-key-item.mp3 | Obtained a Key Item | Optional library selection |
-| pokemon-battle-trainer.mp3 | Battle (Trainer) | Low on time |
+| pokemon-battle-trainer.mp3 | Battle (Trainer) | Low on time; Focus mode |
 | pokemon-battle-champion.mp3 | Battle (Champion) | Optional library selection |
 | kirby-out-of-health.mp3 | Out of Health | Failure |
 | ../../popup.mp3 | Original extension sound | Session end |

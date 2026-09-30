@@ -216,7 +216,12 @@ public sealed class AlertSoundPlayer : IDisposable
         stopping = Task.WhenAll(targets.Select(x => x.Done.Task).Append(stopping));
         UpdateGains();
     }
-    public void Stop(SoundEvent? kind = null) { lock (gate) CancelVoices(voices.Where(x => kind is null || x.Kind == kind).ToArray()); }
+    public void Stop(SoundEvent? kind = null, bool includePreviews = true) { lock (gate) CancelVoices(voices.Where(x => (kind is null || x.Kind == kind) && (includePreviews || !x.Preview)).ToArray()); }
+    internal Task WaitForInterruptingAudio(SoundEvent kind)
+    {
+        lock (gate) return Task.WhenAll(voices.Where(x => x.Behavior == SoundBehavior.Disruptive && (x.Kind != kind || x.Preview))
+            .Select(x => x.Done.Task));
+    }
     public void FadeOut(SoundEvent kind, Guid sessionId, int seconds)
     {
         TimerEngine.ValidateDuration(seconds);

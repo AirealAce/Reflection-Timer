@@ -2,9 +2,9 @@ import {setOptions,setText,setValue} from './ui.js';
 // Each original sound event keeps its own visible editor and saved settings.
 export function mountAudio({send,run}) {
   const template=document.getElementById('sound-form'),editors=[];let settings;
-  const names=['Session end · timer / stopwatch','Success messages','Failure messages','Low on time audio','Time reached · stopwatch'];
-  const eventNames=['SessionEnd','Success','Failure','LowTime','TimeReached'];
-  for(const kind of [1,2,3,4,0]){
+  const names=['Session end · timer / stopwatch','Success messages','Failure messages','Low on time audio','Time reached · stopwatch','Focus mode · away from selected window or tab'];
+  const eventNames=['SessionEnd','Success','Failure','LowTime','TimeReached','FocusMode'];
+  for(const kind of [1,2,3,4,5,0]){
     const form=template.cloneNode(true);form.id=`sound-form-${kind}`;
     form.querySelectorAll('[id]').forEach(node=>{const old=node.id;node.id=`${old}-${kind}`;form.querySelectorAll('[aria-describedby]').forEach(control=>{if(control.getAttribute('aria-describedby')===old)control.setAttribute('aria-describedby',node.id);});});
     const field=id=>form.querySelector(`#${id}-${kind}`);
@@ -20,6 +20,7 @@ export function mountAudio({send,run}) {
     field('sound-default').classList.add('sr-only');
     const fieldset=document.createElement('fieldset'),legend=document.createElement('legend');legend.textContent=names[kind];fieldset.append(legend,...form.childNodes);form.append(fieldset);
     if(kind===3)legend.after(document.getElementById('settings-low-options'));
+    if(kind===5)legend.after(document.getElementById('focus-audio-options'));
     const save=form.querySelector('button[type=submit]');save.hidden=true;
     template.before(form);
     const editor={kind,form,field,dirty:false,revision:0,saving:Promise.resolve()};editors.push(editor);
@@ -37,8 +38,8 @@ export function mountAudio({send,run}) {
       return editor.saving;
     }
     editor.save=saveSound;
-    form.addEventListener('input',event=>{if(event.target.closest('#settings-low-options,.time-reached-options'))return;editor.dirty=true;editor.revision++;if(event.target===field('sound-volume')){setText(field('sound-volume-caption'),`Volume (${event.target.value}%)`);volumeTimer??=setTimeout(()=>{volumeTimer=undefined;run(saveSound);},150);}});
-    form.addEventListener('change',event=>{if(event.target.closest('#settings-low-options,.time-reached-options'))return;editor.dirty=true;editor.revision++;field('sound-fade-seconds').disabled=!field('sound-fade').checked;if([3,4].includes(kind))field('sound-message-fade-seconds').disabled=!field('sound-message-fade').checked;run(async()=>{await saveSound();if(event.target===field('sound-track'))await send('previewSound',{kind,quiet:true});});});
+    form.addEventListener('input',event=>{if(event.target.closest('#settings-low-options,.time-reached-options,.focus-mode-options'))return;editor.dirty=true;editor.revision++;if(event.target===field('sound-volume')){setText(field('sound-volume-caption'),`Volume (${event.target.value}%)`);volumeTimer??=setTimeout(()=>{volumeTimer=undefined;run(saveSound);},150);}});
+    form.addEventListener('change',event=>{if(event.target.closest('#settings-low-options,.time-reached-options,.focus-mode-options'))return;editor.dirty=true;editor.revision++;field('sound-fade-seconds').disabled=!field('sound-fade').checked;if([3,4].includes(kind))field('sound-message-fade-seconds').disabled=!field('sound-message-fade').checked;run(async()=>{await saveSound();if(event.target===field('sound-track'))await send('previewSound',{kind,quiet:true});});});
     form.addEventListener('submit',event=>{event.preventDefault();run(saveSound);});
     field('browse-sound').addEventListener('click',()=>run(async()=>{if(editor.dirty)await saveSound();await send('browseSound',{kind});renderEditor(editor);}));
     field('preview-sound').addEventListener('click',()=>run(async()=>{if(editor.dirty)await saveSound();await send('previewSound',{kind});}));

@@ -230,6 +230,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             var data = root.GetProperty("data");
             if (action == "ready") {
                 ready = true; Post(new { type = "init", view = View, promptId = PromptId, state = app.Session.View(), appViewVisible = app.AppViewVisible, timeOnly = View=="compact" ? (bool?)IsTimeOnly : null, compactRevision });
+                if(View=="main")Post(new { type="focusStatus", status=app.FocusStatus });
                 if(View=="main" && app.RecoveryNotice is { } notice) { Post(new { type="announcement", message=notice }); app.RecoveryNotice=null; }
                 if(focusOnReady){focusOnReady=false;FocusControls(selectTimerOnReady);}
                 if(View=="main"&&Visible&&app.AppViewMayShow&&!app.StartInTray&&!recoveringInterface)ReflectionTimer.Desktop.WindowActivation.Focus(this);

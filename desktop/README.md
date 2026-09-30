@@ -1,8 +1,10 @@
-# Reflection Timer desktop 4.2.24
+# Reflection Timer desktop 4.2.25
 
 This is the primary accessible desktop app. Build `ReflectionTimer.Desktop/ReflectionTimer.Desktop.csproj`; run `ReflectionTimer.Tests` and its `ui.cjs` browser checks.
 
 The HTML/WebView2 interface retains the four original views and uses the shared C# timer and Sheets engine. Existing installations keep their encrypted desktop profile and connection automatically. Explicit named test profiles remain isolated.
+
+Focus mode works for Timer and Stopwatch, with a keyboard-accessible window/browser-tab selector and independent Settings → Audio controls. It defaults off with a five-second away delay and the existing Battle (Trainer) MP3. Run `ReflectionTimer.Tests --focus-mode` and `ReflectionTimer.Tests/focus-mode.cjs` for focused checks; `--focus-target-scan` reads the current Windows/tab accessibility providers and reports counts without target names.
 
 Use `install.ps1` for a per-user install with backups, or `package-release.ps1` to create a self-contained verified ZIP. Packaging does not publish. The old native desktop source is preserved in `../inaccessible-version-useless/desktop`.
 

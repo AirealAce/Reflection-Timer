@@ -10,6 +10,7 @@
     <ApplicationIcon>../../favicon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
     <ProjectReference Include="../ReflectionTimer.Core/ReflectionTimer.Core.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />
     <PackageReference Include="NAudio" Version="3.0.1" />

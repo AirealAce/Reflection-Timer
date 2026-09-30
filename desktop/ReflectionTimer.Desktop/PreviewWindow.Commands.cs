@@ -22,11 +22,19 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice")) return false;
+        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode")) return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
         switch (action) {
+            case "focusTargets":
+                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,1);
+                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind) });break;
+            case "focusSelect":
+                if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");
+                app.SelectFocusTarget(targetId,ReadFlag(data,"enable"));break;
+            case "focusMode":
+                engine.SetFocusMode(ReadFlag(data,"enabled"),ReadInt(data,"delaySeconds",0,TimerEngine.MaxDuration),state.FocusMode.Target);break;
             case "voiceAnnouncements": engine.SetVoiceAnnouncements(ReadFlag(data,"enabled"));message="Voice announcement preference saved.";break;
             case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;
@@ -140,7 +148,7 @@ internal sealed partial class PreviewWindow
                 message="Display, schedule policy, and diagnostics preferences saved."; break;
             case "volume": engine.SetAppVolume(ReadInt(data,"volume",0,100)); message="App volume saved."; break;
             case "saveSound":
-                var kind = (SoundEvent)ReadInt(data,"kind",0,4); var previous = AudioSettings.From(state).For(kind);
+                var kind = (SoundEvent)ReadInt(data,"kind",0,5); var previous = AudioSettings.From(state).For(kind);
                 engine.SetSound(kind,new() { Track = (LibrarySound)ReadInt(data,"track",0,9),
                     Mp3Path = ReadFlag(data,"keepCustom") ? previous.Mp3Path : "", Behavior = (SoundBehavior)ReadInt(data,"behavior",0,2),
                     Volume = ReadInt(data,"volume",0,100), FadeOutEnabled = ReadFlag(data,"fade"), FadeOutAfterSeconds = ReadInt(data,"fadeSeconds",1,TimerEngine.MaxDuration),
@@ -151,11 +159,11 @@ internal sealed partial class PreviewWindow
                 using (var picker = new OpenFileDialog { Title="Choose a custom MP3", Filter="MP3 audio (*.mp3)|*.mp3", CheckFileExists=true }) {
                     if(picker.ShowDialog(this)==DialogResult.OK) {
                         var path = Mp3AudioBackend.ValidateCustomFile(picker.FileName);
-                        var sound = (SoundEvent)ReadInt(data,"kind",0,4);
+                        var sound = (SoundEvent)ReadInt(data,"kind",0,5);
                         engine.SetSound(sound,AudioSettings.From(state).For(sound) with { Mp3Path=path,Track=LibrarySound.Default }); message="Custom MP3 saved.";
                     }
                 } break;
-            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,4),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview using your sound and fade settings."; break;
+            case "previewSound": _ = services.Play((SoundEvent)ReadInt(data,"kind",0,5),true,announcePreview:!ReadFlag(data,"quiet")); message="Playing audio preview using your sound and fade settings."; break;
             case "stopSound": services.StopAudio(); message="App audio stopped."; break;
             case "markIssue": services.Log.Record("issue.marked"); message="Issue marked in local diagnostics."; break;
             case "diagnostics": Post(new { type="diagnostics", report=services.Log.Report(state,engine.ElapsedNow,engine.Now) }); break;

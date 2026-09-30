@@ -15,6 +15,8 @@ public sealed class PreviewServices : IDisposable
     private readonly CancellationTokenSource stop = new();
     private bool syncing;
     private bool disposed;
+    private readonly object focusAudioGate = new();
+    private CancellationTokenSource? focusAudioLifetime;
     private int connectionRevision;
     private readonly TimeProvider time;
     private int preflightFailures;
@@ -90,6 +92,7 @@ public sealed class PreviewServices : IDisposable
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed, deliveryIssue = DeliveryIssue,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
             s.ViewerAutoHide, s.ViewerAutoHideSeconds,
+            focusMode = new { s.FocusMode.Enabled, s.FocusMode.DelaySeconds, target = s.FocusMode.Target?.Name, targetKind = s.FocusMode.Target is {} focus ? (int?)focus.Kind : null },
             audio.TimeReachedEnabled,audio.TimeReachedSeconds,s.VoiceAnnouncements,
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.SessionEndPopups, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,
@@ -275,7 +278,49 @@ public sealed class PreviewServices : IDisposable
             else if (preview&&announcePreview) Announcement?.Invoke(result == AlertSoundResult.Muted ? "This audio is muted." : "Audio preview finished.");
         } catch { if (!stop.IsCancellationRequested) Announcement?.Invoke("Audio could not play."); }
     }
-    public void StopAudio() { sounds.Stop();voice.Stop(); }
+    internal void SetFocusAlert(bool enabled)
+    {
+        lock (focusAudioGate) {
+            focusAudioLifetime?.Cancel();
+            focusAudioLifetime = null;
+            sounds.Stop(SoundEvent.FocusLost, includePreviews:false);
+            if (!enabled || disposed) return;
+            var lifetime = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+            focusAudioLifetime = lifetime;
+            _ = FocusAudioLoop(lifetime);
+        }
+    }
+    private async Task FocusAudioLoop(CancellationTokenSource lifetime)
+    {
+        try {
+            while (!lifetime.IsCancellationRequested) {
+                var state = engine.SettingsSnapshot;
+                if (!state.Timer.IsRunning || !state.FocusMode.Enabled) return;
+                var sound = AudioSettings.From(state).FocusLost;
+                var result = await sounds.PlayAsync(SoundLibrary.Resolve(SoundEvent.FocusLost, sound), state.Timer.Volume,
+                    sound.Behavior, SoundEvent.FocusLost, SoundLibrary.Fallback(SoundEvent.FocusLost),
+                    fadeOutAfterSeconds:sound.FadeOutEnabled ? sound.FadeOutAfterSeconds : null, soundVolume:sound.Volume, sessionId:state.Timer.SessionId);
+                lifetime.Token.ThrowIfCancellationRequested();
+                if (result == AlertSoundResult.Failed) return;
+                if (result == AlertSoundResult.Cancelled) {
+                    // A disruptive session alert or preview may interrupt this
+                    // track. Resume only after that sound finishes, still away.
+                    await sounds.WaitForInterruptingAudio(SoundEvent.FocusLost).WaitAsync(lifetime.Token);
+                } else if (sound.FadeOutEnabled && result != AlertSoundResult.Muted) return;
+                // Loop an unfaded track while away. Silent/muted selections
+                // stay quiet without spinning; new volume levels still apply.
+                await Task.Delay(result == AlertSoundResult.Muted ? 500 : 200, lifetime.Token);
+            }
+        } catch (OperationCanceledException) { }
+        catch { if(!disposed)Announcement?.Invoke("Focus audio could not play."); }
+        finally {
+            lock (focusAudioGate) {
+                if (ReferenceEquals(focusAudioLifetime, lifetime)) focusAudioLifetime = null;
+                lifetime.Dispose();
+            }
+        }
+    }
+    public void StopAudio() { SetFocusAlert(false);sounds.Stop();voice.Stop(); }
     internal void PollVoiceStatus(){if(voice.PollFailure() is {} message)Announcement?.Invoke(message);}
     internal void PreviewVoice(){voice.Preview();PollVoiceStatus();}
     public void Dispose()

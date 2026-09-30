@@ -33,7 +33,7 @@ static class DefaultsThemeShortcutTests
         check(JsonSerializer.Serialize(newProfile.Audio)==JsonSerializer.Serialize(state.Audio)&&newProfile.Timer.LowTime==state.Timer.LowTime,"A new encrypted profile receives the complete audio preset");
         check(newProfile.Audio is {TimeReachedEnabled:true,TimeReachedSeconds:300}&&newProfile.Timer.Volume==50,"New profile enables the 300-second stopwatch alert with App sound at 50 percent");
         var legacy=JsonSerializer.Deserialize<AppState>("{}",DataJson.Options)!;
-        check(Enum.GetValues<SoundEvent>().All(kind=>AudioSettings.From(legacy).For(kind).Behavior==SoundBehavior.Disruptive),"Existing profiles without audio settings retain their legacy playback behaviors");
+        check(Enum.GetValues<SoundEvent>().Where(kind=>kind!=SoundEvent.FocusLost).All(kind=>AudioSettings.From(legacy).For(kind).Behavior==SoundBehavior.Disruptive),"Existing profiles without audio settings retain their legacy playback behaviors");
         var chosen=legacy with{Audio=new(){SessionEnd=new(){Behavior=SoundBehavior.Polite},LowTime=new(){Behavior=SoundBehavior.Assertive}}};
         var roundTrip=DataJson.Clone(chosen);
         check(AudioSettings.From(roundTrip).SessionEnd.Behavior==SoundBehavior.Polite&&AudioSettings.From(roundTrip).LowTime.Behavior==SoundBehavior.Assertive,"Existing explicit audio choices are never replaced by new-user defaults");

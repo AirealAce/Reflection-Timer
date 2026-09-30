@@ -3,6 +3,18 @@ using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
 
+if(args.Contains("--focus-mode")){var checks=0;await FocusModeTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} focus mode checks passed.");return;}
+if(args.Contains("--focus-target-scan")){
+    using var targets=new WindowsFocusTargets();
+    var windows=await targets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(8));
+    var tabs=await targets.ListAsync(FocusTargetKind.BrowserTab).WaitAsync(TimeSpan.FromSeconds(15));
+    var presence=new List<FocusPresence>();
+    foreach(var tab in tabs.Take(12))presence.Add(await targets.CheckAsync(tab).WaitAsync(TimeSpan.FromSeconds(3)));
+    Console.WriteLine(JsonSerializer.Serialize(new{Windows=windows.Count,BrowserTabs=tabs.Count,DuplicateTitles=tabs.GroupBy(t=>t.Name).Count(g=>g.Count()>1),DistinctTabIds=tabs.Select(t=>t.TabRuntimeId).Distinct().Count(),ReadableSamples=presence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),UnavailableSamples=presence.Count(p=>p==FocusPresence.Unavailable)}));
+    if(windows.Count==0||tabs.Count==0||presence.All(p=>p is not (FocusPresence.Focused or FocusPresence.Away)))throw new Exception("No usable native focus targets were detected.");
+    return;
+}
+
 if(args.Contains("--pauses")){var checks=0;await PauseTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} pause checks passed.");return;}
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
@@ -52,6 +64,7 @@ ClockAccuracyTests.Run(Check);
 PerformanceTests.Run(Check);
 ViewPreferenceTests.Run(Check);
 ViewerAutoHideTests.Run(Check);
+await FocusModeTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);
 ScreenReaderFeedbackTests.Run(Check);
 SessionDraftTests.Run(Check);

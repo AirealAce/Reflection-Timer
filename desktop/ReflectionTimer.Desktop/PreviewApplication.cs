@@ -34,6 +34,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         Services = new(session.Engine, directory); Services.Announcement += Announce;
+        InitializeFocusMode();
         Services.SessionAnnouncement += AnnounceSession;
         Services.DeliveryIssueChanged += () => Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });
         Services.Log.Record("app.started");
@@ -325,5 +326,5 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again."); }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { focusPulse.Dispose();focusMonitor.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }

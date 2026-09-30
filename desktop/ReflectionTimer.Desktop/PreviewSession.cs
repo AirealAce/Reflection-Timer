@@ -111,6 +111,7 @@ public sealed class PreviewSession
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
             clock = Clock(state.Timer), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
+            focusMode = new { state.FocusMode.Enabled, state.FocusMode.DelaySeconds, target = state.FocusMode.Target?.Name, targetKind = state.FocusMode.Target is {} focus ? (int?)focus.Kind : null },
             timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil,
                 endTime = state.Timer.EndTime is { } end ? Engine.CalendarTimestamp(end) : (long?)null,
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,

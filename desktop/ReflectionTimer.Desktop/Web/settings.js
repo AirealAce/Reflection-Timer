@@ -4,6 +4,7 @@ import {mountSetup} from './setup.js';
 import {mountAudio} from './audio.js';
 import {mountLowTime} from './low-time.js';
 import {mountTimeReached} from './time-reached.js';
+import {mountFocusMode} from './focus-mode.js';
 
 export function settingsUI({send, run, bind, view, announce}) {
   const $ = id => document.getElementById(id);
@@ -33,6 +34,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   const updateTheme=mountTheme(view);
   const setup=mountSetup({send,run});
   const audio=mountAudio({send,run});
+  const focus=mountFocusMode({send,run,announce,view});
   const lowTime=mountLowTime({send,run});
   const timeReached=mountTimeReached({send,run});
   const dirty = new Set();
@@ -150,7 +152,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     })().finally(()=>{volumePending=false;});
     return volumeSaving;
   }
-  async function flushAutosaves(retryDisplay=false){await (retryDisplay?displaySaving.catch(()=>{}):displaySaving);await lowTime.flush();await timeReached.flush();await audio.flush();await flushVoice();await flushVolume();}
+  async function flushAutosaves(retryDisplay=false){await (retryDisplay?displaySaving.catch(()=>{}):displaySaving);await focus.flush();await lowTime.flush();await timeReached.flush();await audio.flush();await flushVoice();await flushVolume();}
   for(const id of ['app-volume','settings-volume']){
     $(id).addEventListener('input',()=>{
       const value=Number($(id).value);++volumeRevision;setMasterVolume(value);dirty.add('volume-form');dirty.add('settings-volume-form');
@@ -183,6 +185,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     scheduleLow:()=>lowTime.scheduleData(),timerLow:()=>lowTime.timerData(),resetScheduleLow:()=>lowTime.resetSchedule(),
     load() { return view==='main'?send('settingsLoad'):Promise.resolve(); },
     state(state) {
+      focus.state(state);
       lowTime.state(state);
       updateTheme(state.theme??0);
       if(!dirtyFields.get('appearance-form')?.has('show-compact') && state.showFloatingTimer!==undefined) {
@@ -196,6 +199,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     },
     message(message) {
       if(view!=='main') return;
+      focus.message(message);
       if(message.type==='settings') {
         $('voice-announcements').disabled=false;$('preview-voice').disabled=false;
         if(voiceRevision===voiceSavedRevision)$('voice-announcements').checked=message.settings.voiceAnnouncements===true;

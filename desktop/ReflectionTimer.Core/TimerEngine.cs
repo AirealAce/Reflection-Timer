@@ -555,6 +555,14 @@ public sealed partial class TimerEngine
         if (current.ViewerAutoHide == enabled && current.ViewerAutoHideSeconds == seconds) return;
         Change("settings.saved", s => { s.ViewerAutoHide = enabled; s.ViewerAutoHideSeconds = seconds; });
     }
+    public void SetFocusMode(bool enabled, int seconds, FocusTarget? target)
+    {
+        if (seconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
+        if (enabled && target is null) throw new ArgumentException("Choose a focus window or browser tab first.");
+        var settings = new FocusModeSettings { Enabled = enabled, DelaySeconds = seconds, Target = target };
+        if (SettingsSnapshot.FocusMode == settings) return;
+        Change("settings.saved", s => s.FocusMode = settings);
+    }
     public void SetSessionEndPopups(bool enabled)
     {
         if(SettingsSnapshot.SessionEndPopups==enabled)return;

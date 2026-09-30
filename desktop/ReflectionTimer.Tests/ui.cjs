@@ -14,7 +14,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     let page = await context.newPage();
     await page.context().route('**/*', async route=>{
       const name=new URL(route.request().url()).pathname.slice(1);
-      if (!['index.html','app.js','app.css','ui.js','settings.js','setup.js','audio.js','low-time.js','time-reached.js','layout.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
+      if (!['index.html','app.js','app.css','ui.js','settings.js','setup.js','audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
       await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});
     });
     await page.context().addInitScript(() => {
@@ -275,7 +275,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveAppearance'&&m.data.compactAlwaysOnTop===false&&m.data.timeOnlyAlwaysOnTop===true&&m.data.promptAlwaysOnTop===true));
     check(true,'Save settings keeps Compact, Time-only, and prompt layering independent');
     await page.evaluate(settings=>window.previewDispatch({type:'settings',settings}),settings);
-    check(await page.locator('#audio fieldset legend').allTextContents().then(names=>JSON.stringify(names)===JSON.stringify(['Success messages','Failure messages','Low on time audio','Time reached · stopwatch','Session end · timer / stopwatch'])),'All five audio event sections are present with Time reached below Low on time');
+    check(await page.locator('#audio fieldset legend').allTextContents().then(names=>JSON.stringify(names)===JSON.stringify(['Success messages','Failure messages','Low on time audio','Time reached · stopwatch','Focus mode · away from selected window or tab','Session end · timer / stopwatch'])),'All six audio event sections are present with Time reached below Low on time and separate Focus audio');
     await page.evaluate(()=>{window.savedAudioOption=document.querySelector('#sound-track-0 option');});
     await page.evaluate(settings=>window.previewDispatch({type:'settings',settings}),settings);
     check(await page.evaluate(()=>window.savedAudioOption===document.querySelector('#sound-track-0 option')),'Background settings updates preserve audio option identity for the reader');

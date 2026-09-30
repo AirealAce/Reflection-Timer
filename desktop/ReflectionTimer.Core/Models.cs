@@ -132,6 +132,7 @@ public record AppState
     public bool? SetupDraftUsesExistingReceiver { get; set; }
     public string AlertSoundPath { get; set; } = ""; // Empty means the bundled extension sound.
     public AudioSettings? Audio { get; set; } // Null migrates the existing session-end MP3 without changing it.
+    public FocusModeSettings FocusMode { get; set; } = new();
     public ReflectionPopupPosition PopupPosition { get; set; } = ReflectionPopupPosition.BottomRight;
     public bool ShowFloatingTimer { get; set; } = true;
     // Null preserves legacy launch behavior until the user changes the view.

@@ -1,6 +1,10 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.24**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.25**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+
+**Focus mode** on the Timer page works in Timer and Stopwatch. Choose an open window or a specific browser tab; Settings → Audio → **Focus mode · away from selected window or tab** has the same toggle, an editable away delay, and its own MP3, volume, playback behavior, preview and fade controls. Focus mode starts disabled, with a **5-second** delay and the bundled **Battle (Trainer)** MP3 selected. Each continuous switch away starts a fresh delay. Returning to the selected target, pausing, resetting or finishing stops only the focus alert. An unfaded track repeats while away; enabling Fade out after plays once per switch away. Other disruptive alerts can interrupt it, then focus audio resumes if still needed.
+
+Window targets permit any tab inside that window. Browser-tab targets require the exact tab to be selected in its foreground browser window, including when several tabs share a title. Tab tracking uses the browser's Windows accessibility tab strip; browsers that do not expose it can still be selected as windows. Navigation and title changes keep the same target; closing it, moving a tab to another window or restarting its app requires choosing again. Closed or unreadable targets stop the alert and show a status instead of producing false alarms. The keyboard-accessible selector restores focus when closed. Target names are stored only in the encrypted local profile and are excluded from Sheets uploads and diagnostic exports.
 
 Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app. In the focused App or Compact view, that same press focuses the Stopwatch play button or selects the Timer duration field. It pauses and preserves the current session; switching back does not resume automatically. Hidden windows stay hidden and Time-only stays small. The backtick start/end shortcut is unchanged.
 
@@ -62,6 +66,7 @@ New profiles use these bundled audio selections, with App sound at **50%** and e
 | Failure | Out of Health | Disruptive | Off (10 seconds retained) | Off (3 seconds retained) |
 | Low on time | Battle (Trainer) | Disruptive | On, after 25 seconds | On, over 5 seconds |
 | Time reached · stopwatch | Battle (Champion) | Disruptive | On, after 6 seconds | On, over 5 seconds |
+| Focus mode | Battle (Trainer) | Polite | Off (10 seconds retained) | — |
 
 The stopwatch alert starts enabled at 300 seconds. Timer and Settings share the countdown threshold preference; Scheduler retains its own saved choices and its inherited 15-second threshold. Existing profiles retain their saved audio settings.
 
