@@ -28,7 +28,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     async Task IReflectionPromptWindow.PrepareHandoffAsync(){handoffInProgress=true;await FlushDraftAsync(freeze:true);}
     void IReflectionPromptWindow.ResumeEditing(){handoffInProgress=false;Post(new{type="resumeReflection"});}
     void IReflectionPromptWindow.CloseAfterSave()=>CloseAfterSave();
-    private bool focusOnReady, selectTimerOnReady;
+    private bool focusOnReady, selectTimerOnReady, chooseFocusOnReady;
     private (ReflectionTimer.Core.AppColorTheme Theme,bool Contrast)? appliedTheme;
     private TaskCompletionSource? flush;
     internal PreviewWindow(PreviewApplication app, string view, Guid? prompt)
@@ -108,6 +108,12 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         if(TopMost!=top)TopMost=top;
     }
     internal void FocusControls(bool timerPage=false){if(View=="compact"){SetCompactMode(false,true);return;}if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}Post(new{type=View=="reflection"?"focusReflection":"focusTimer",selectTimer=timerPage});}
+    internal void ChooseFocusTarget()
+    {
+        if(View!="main"||IsDisposed)return;
+        if(!interfaceReady.Task.IsCompletedSuccessfully){chooseFocusOnReady=true;return;}
+        Post(new{type="focusChooseShortcut"});
+    }
     internal async Task PrepareReflectionAsync()
     {
         if(View!="reflection"||IsDisposed)return;
@@ -193,7 +199,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         catch { if(ReferenceEquals(initializingBrowser,browser))ShowFailure("The local web interface could not start. Close and reopen the app. Your saved data is retained."); }
     }
     internal static bool Allowed(string address) => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "reflection-timer.invalid"
-        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
+        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/settings-search.js" or "/audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/focus-mode.js" or "/help.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
     internal void ProcessFailure(CoreWebView2ProcessFailedKind kind,CoreWebView2ProcessFailedReason reason,int exitCode)
     {
         if(IsDisposed||allowClose)return;
@@ -239,7 +245,9 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if(action=="interfaceReady") {
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
                 if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
-                interfaceReady.TrySetResult();ScheduleAutoHide();Reply(requestId);return;
+                interfaceReady.TrySetResult();
+                if(chooseFocusOnReady){chooseFocusOnReady=false;ChooseFocusTarget();}
+                ScheduleAutoHide();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
             if (action == "settingsShortcutScope") {

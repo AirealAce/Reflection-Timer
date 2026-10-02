@@ -40,6 +40,26 @@ main{position:relative}
 body[data-view=main] nav[role=tablist]{gap:8px;flex-wrap:wrap;overflow:visible;padding:3px 0 5px}
 body[data-view=main] nav[role=tablist] button{flex:0 0 auto;min-width:100px;padding:8px 16px;white-space:nowrap;min-height:40px;font-weight:400}
 body[data-view=main] nav[role=tablist] button[aria-selected=true]{font-weight:400}
+/* Section help uses a small circled question mark and native disclosure state. */
+.help-heading{display:flex;align-items:center;gap:8px}
+.help-label{display:block}
+.help-heading>h2,.help-heading>h3{flex:0 1 auto;min-width:0}
+.help-title>.help-button,.help-label>.help-button{margin-left:8px;vertical-align:middle}
+.help-button{flex:none;width:26px;height:26px;min-width:26px;min-height:26px;padding:0;border:1px solid var(--border);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--raised);color:var(--text);font-size:17px;font-weight:700;line-height:1}
+.help-button[aria-expanded=true]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+#help-contents{columns:2;column-gap:32px;padding-left:20px}
+#help-contents li{break-inside:avoid;margin-bottom:6px}
+#help-topics>section{border-top:1px solid var(--border);padding-top:8px}
+#help-topics h3,#help-shortcuts-heading{scroll-margin-top:16px}
+@media(max-width:560px){#help-contents{columns:1}}
+/* Search filters the existing controls without changing saved data or help state. */
+.settings-search{position:sticky;top:-16px;z-index:1;background:var(--background);padding:8px 0 12px;margin:0 0 12px;border-bottom:1px solid var(--border)}
+.settings-search-row{display:flex;align-items:center;gap:8px}
+#settings-search-input{flex:1;min-width:0;width:100%;margin:0}
+#settings-search-clear{flex:none}
+#settings-search-status{margin:6px 0 0;color:var(--muted);font-size:.95rem}
+[data-settings-filtered]{display:none!important}
+#panel-settings :is(input,select,button,textarea,summary,a){scroll-margin-top:96px}
 @media(max-width:560px){body[data-view=main] nav[role=tablist]{gap:6px}body[data-view=main] nav[role=tablist] button{min-width:0;padding:8px 12px}}
 /* Let short list pages use spare height while long pages keep ordinary scrolling. */
 #panel-outbox,#panel-diagnostics{min-height:100%;display:flex;flex-direction:column}
@@ -107,7 +127,33 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 .focus-target-type{font-weight:700}
 .focus-target-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 #timer-editor>.actions{align-items:center}
-#focus-target-dialog{width:min(720px,92vw);max-height:90vh;overflow:auto}
+#focus-target-dialog{width:min(720px,92vw);max-height:90vh;overflow:hidden}
+#focus-target-dialog[open]{display:flex;flex-direction:column}
+#focus-target-dialog>h2{flex:none}
+.focus-picker-body{min-height:0;overflow:auto;scroll-padding:12px 0}
 .focus-target-type-row>select{flex:0 1 300px;margin:0}
 .focus-target-type-row>button{margin:0}
-#focus-target-list{width:100%;max-width:100%;white-space:normal}
+/* A row wrapping/unwrapping on focus must not move Save/Cancel mid-click. */
+#focus-target-list{width:100%;height:32vh;max-height:32vh;margin-top:12px;overflow:auto;border:1px solid var(--border)}
+.focus-idle-row,.focus-away-row{margin:0 0 8px;gap:8px}
+.focus-idle-row>label,.focus-away-row>label{display:inline-flex;flex:0 0 auto;align-items:center;gap:8px;margin:0}
+.focus-idle-row input[type=number],.focus-away-row input[type=number]{width:90px;margin:0}
+#focus-picker-audio{margin:12px 0;border:1px solid var(--border);border-radius:8px;padding:10px}
+#focus-picker-audio>summary{cursor:pointer;font-weight:700}
+#focus-picker-audio-editor form{margin:10px 0;min-width:0}
+#focus-picker-audio-editor fieldset{margin:0;min-inline-size:0}
+#focus-picker-audio-editor .audio-source-row>label{max-width:100%}
+.focus-multiple-row{display:flex;align-items:center;gap:8px;margin:0 0 12px}
+#focus-target-dialog p{font-size:14px;line-height:1.4;margin:8px 0}
+#focus-target-dialog>.actions{flex:none;margin:12px 0 0;background:var(--background);padding:8px 0 0;box-shadow:0 -1px var(--border)}
+#focus-target-list table{table-layout:fixed;margin:0}
+#focus-target-list caption{text-align:left;font-weight:700;padding:8px}
+#focus-target-list th,#focus-target-list td{min-width:0;padding:8px;text-align:left;vertical-align:top}
+#focus-target-list thead{position:sticky;top:0;z-index:1;background:var(--raised)}
+#focus-target-list .focus-cell{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#focus-target-list tr:focus-within .focus-cell{white-space:normal;overflow-wrap:anywhere}
+#focus-target-list tbody tr{cursor:pointer}
+#focus-target-list tbody tr.picked{background:var(--raised);box-shadow:inset 3px 0 var(--accent)}
+#focus-target-list tbody tr:focus-within{outline:2px solid var(--accent);outline-offset:-2px}
+#focus-target-list tbody tr.unavailable{opacity:.65}
+#focus-target-list .focus-selection-cell{padding-left:4px;padding-right:4px}

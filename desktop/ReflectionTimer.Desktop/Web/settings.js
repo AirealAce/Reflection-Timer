@@ -5,8 +5,10 @@ import {mountAudio} from './audio.js';
 import {mountLowTime} from './low-time.js';
 import {mountTimeReached} from './time-reached.js';
 import {mountFocusMode} from './focus-mode.js';
+import {mountHelp} from './help.js';
+import {mountSettingsSearch} from './settings-search.js';
 
-export function settingsUI({send, run, bind, view, announce}) {
+export function settingsUI({send, run, bind, view, announce, selectTab}) {
   const $ = id => document.getElementById(id);
   let settings, volumeRevision=0, volumeSaving=Promise.resolve(), volumeTimer, volumePending=false;
   let deliveryIssue=null, deliveryEnabled=false;
@@ -34,9 +36,11 @@ export function settingsUI({send, run, bind, view, announce}) {
   const updateTheme=mountTheme(view);
   const setup=mountSetup({send,run});
   const audio=mountAudio({send,run});
-  const focus=mountFocusMode({send,run,announce,view});
+  const focus=mountFocusMode({send,run,announce,view,flushAudio:audio.flushFocus,validateAudio:audio.validateFocus});
   const lowTime=mountLowTime({send,run});
   const timeReached=mountTimeReached({send,run});
+  const help=mountHelp({view,selectTab});
+  mountSettingsSearch({view});
   const dirty = new Set();
   const dirtyFields=new Map();
   const displayRevisions=new Map();
@@ -59,6 +63,7 @@ export function settingsUI({send, run, bind, view, announce}) {
       setValue($('reflectionSeparator'),settings.reflectionSeparator??3);
       $('show-compact').checked=settings.showFloatingTimer; $('logging').checked=settings.loggingEnabled;$('start-at-login').checked=!!settings.startAtLogin;
       $('viewerAutoHide').checked=settings.viewerAutoHide===true;
+      $('showAllExplanations').checked=settings.showAllExplanations===true;
       $('viewerAutoHideSeconds').value=settings.viewerAutoHideSeconds??3;
       ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','sessionEndPopups','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).checked=settings[id]!==false);
     } else if(form==='volume-form'&&!dirty.has('settings-volume-form')) setMasterVolume(settings.volume);
@@ -75,7 +80,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   }
   const appearance=()=>({theme:Number($('theme').value),placement:Number($('placement').value),popup:Number($('popup').value),
     overlap:Number($('overlap').value),reflectionSeparator:Number($('reflectionSeparator').value),logging:$('logging').checked,showCompact:$('show-compact').checked,startAtLogin:$('start-at-login').checked,
-    viewerAutoHide:$('viewerAutoHide').checked,viewerAutoHideSeconds:Number($('viewerAutoHideSeconds').value),
+    viewerAutoHide:$('viewerAutoHide').checked,viewerAutoHideSeconds:Number($('viewerAutoHideSeconds').value),showAllExplanations:$('showAllExplanations').checked,
     compactAlwaysOnTop:$('compactAlwaysOnTop').checked,timeOnlyAlwaysOnTop:$('timeOnlyAlwaysOnTop').checked,promptAlwaysOnTop:$('promptAlwaysOnTop').checked,sessionEndPopups:$('sessionEndPopups').checked,autoSendIncompleteReflections:$('autoSendIncompleteReflections').checked,confirmBeforeReset:$('confirmBeforeReset').checked,quiet:true});
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
@@ -104,7 +109,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   let composing=false,nativeScope=false;
   const canSaveFromShortcut=()=>view==='main'&&document.body.dataset.tab==='settings'&&!composing&&!document.querySelector('dialog[open]');
   function syncShortcutScope(){
-    const enabled=canSaveFromShortcut();if(nativeScope===enabled)return;nativeScope=enabled;
+    const enabled=!composing&&(canSaveFromShortcut()||focus.pickerShortcutActive());if(nativeScope===enabled)return;nativeScope=enabled;
     run(()=>send('settingsShortcutScope',{enabled}));
   }
   if(view==='main'){
@@ -138,6 +143,7 @@ export function settingsUI({send, run, bind, view, announce}) {
   $('viewerAutoHideSeconds').addEventListener('change',()=>{if($('viewerAutoHideSeconds').reportValidity())saveDisplay('viewerAutoHideSeconds','viewerAutoHideSeconds',Number($('viewerAutoHideSeconds').value));});
   $('viewerAutoHideSeconds').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.isComposing){event.preventDefault();$('viewerAutoHideSeconds').blur();}});
   ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','sessionEndPopups','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).addEventListener('change',()=>saveDisplay(id,id,$(id).checked?1:0)));
+  $('showAllExplanations').addEventListener('change',()=>{help.render($('showAllExplanations').checked);saveDisplay('showAllExplanations','showAllExplanations',$('showAllExplanations').checked?1:0);});
   function setMasterVolume(value){for(const id of ['app-volume','settings-volume']){$(id).value=value;setText($(id+'-caption'),'App sound ('+value+'%)');}}
   function flushVolume(){
     clearTimeout(volumeTimer);volumeTimer=undefined;
@@ -186,6 +192,7 @@ export function settingsUI({send, run, bind, view, announce}) {
     load() { return view==='main'?send('settingsLoad'):Promise.resolve(); },
     state(state) {
       focus.state(state);
+      if(!dirtyFields.get('appearance-form')?.has('showAllExplanations')&&state.showAllExplanations!==undefined){help.render(state.showAllExplanations);$('showAllExplanations').checked=state.showAllExplanations===true;}
       lowTime.state(state);
       updateTheme(state.theme??0);
       if(!dirtyFields.get('appearance-form')?.has('show-compact') && state.showFloatingTimer!==undefined) {
@@ -199,18 +206,21 @@ export function settingsUI({send, run, bind, view, announce}) {
     },
     message(message) {
       if(view!=='main') return;
-      focus.message(message);
+      if(focus.message(message))return;
       if(message.type==='settings') {
         $('voice-announcements').disabled=false;$('preview-voice').disabled=false;
         if(voiceRevision===voiceSavedRevision)$('voice-announcements').checked=message.settings.voiceAnnouncements===true;
       }
       if(message.type==='settingsSaveShortcut'){if(canSaveFromShortcut())run(saveSettings);return;}
       if(message.type==='deliveryIssue') { deliveryIssue=message.issue;renderDelivery(); }
-      else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form'].forEach(populate);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme. Saves immediately. Windows contrast themes take priority.');updateTheme(settings.theme); }
+      else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form'].forEach(populate);help.render(dirtyFields.get('appearance-form')?.has('showAllExplanations')?$('showAllExplanations').checked:settings.showAllExplanations);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme.');updateTheme(settings.theme); }
       else if(message.type==='shortcuts'){
         const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact; twice within 0.8 seconds for App. Selects the Timer duration or focuses the Stopwatch play button.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming. With viewer auto-hide enabled, pausing shows the saved floating layout again without taking focus.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small. With viewer auto-hide enabled, pausing shows the viewer again.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. In the focused App or Compact view, the same press focuses the Stopwatch play button or selects the Timer duration. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden.",'Ctrl+Alt+R · reset the selected timer or stopwatch from any app. Uses the reset confirmation setting. With viewer auto-hide enabled, shows the saved floating layout without taking focus; otherwise hidden viewers stay hidden. Time-only stays small.'];
         descriptions[2]+=' Entering time-only returns focus to the previous usable window.';
         descriptions.push('Ctrl+Alt+Shift+, · cycle in reverse: compact controls → hidden → time-only → controls. Time-only does not take focus.');
+        descriptions.push('Ctrl+Alt+; · toggle Focus mode from any app for Timer or Stopwatch. Keeps the saved targets and idle settings. Opens the chooser first if no target or idle trigger is configured.');
+        const unavailable=descriptions.map((text,i)=>message.shortcuts[i]?.available===false?text.split(' · ')[0]:null).filter(Boolean);
+        setText($('shortcut-availability'),unavailable.length?'Shortcuts unavailable: '+unavailable.join(', ')+'. Quit the other app using them. Retrying automatically.':'');$('shortcut-availability').hidden=!unavailable.length;
         $('shortcut-notices').replaceChildren(...descriptions.map((text,i)=>{
           const p=document.createElement('p'),key=document.createElement('kbd'),[shortcut,description]=text.split(' · ');
           key.textContent=shortcut;

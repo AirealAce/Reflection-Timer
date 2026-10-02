@@ -93,7 +93,7 @@ public sealed class PreviewServices : IDisposable
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
             s.ViewerAutoHide, s.ViewerAutoHideSeconds,
             focusMode = PreviewSession.FocusView(s.FocusMode),
-            audio.TimeReachedEnabled,audio.TimeReachedSeconds,s.VoiceAnnouncements,
+            audio.TimeReachedEnabled,audio.TimeReachedSeconds,s.VoiceAnnouncements,s.ShowAllExplanations,
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.SessionEndPopups, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,
             placement = (int)s.FloatingPlacement, popup = (int)s.PopupPosition, theme = (int)s.Theme, overlap = (int)s.ScheduleOverlap,

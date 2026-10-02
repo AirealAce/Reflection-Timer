@@ -557,10 +557,19 @@ public sealed partial class TimerEngine
     }
     public void SetFocusMode(bool enabled, int seconds, FocusTarget? target)
     {
-        if (seconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
-        if (enabled && target is null) throw new ArgumentException("Choose a focus window or browser tab first.");
-        var settings = new FocusModeSettings { Enabled = enabled, DelaySeconds = seconds, Target = target };
-        if (SettingsSnapshot.FocusMode == settings) return;
+        SetFocusMode(SettingsSnapshot.FocusMode with { Enabled = enabled, DelaySeconds = seconds, Target = target, Targets = [], MultipleTargets = false });
+    }
+    public void SetFocusMode(FocusModeSettings settings)
+    {
+        if (settings.DelaySeconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
+        if (settings.IdleSeconds is < 1 or > MaxDuration) throw new ArgumentException($"Idle time must be between 1 and {MaxDuration} seconds.");
+        var targets = settings.SelectedTargets.DistinctBy(t => t.Key).ToArray();
+        if (targets.Length > 256 || (!settings.MultipleTargets && targets.Length > 1)) throw new ArgumentException("Enable Multiple Targets to choose more than one target (up to 256).");
+        if (settings.Enabled && targets.Length == 0 && !settings.IdleEnabled) throw new ArgumentException("Choose a focus target or enable Idle for first.");
+        settings = settings with { Target = targets.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(targets) };
+        var previous = SettingsSnapshot.FocusMode;
+        if (previous.Enabled == settings.Enabled && previous.DelaySeconds == settings.DelaySeconds && previous.IdleEnabled == settings.IdleEnabled
+            && previous.IdleSeconds == settings.IdleSeconds && previous.MultipleTargets == settings.MultipleTargets && previous.SelectedTargets.SequenceEqual(targets)) return;
         Change("settings.saved", s => s.FocusMode = settings);
     }
     public void SetSessionEndPopups(bool enabled)
@@ -574,6 +583,11 @@ public sealed partial class TimerEngine
         Change("voice.changed", s => s.VoiceAnnouncements = enabled);
     }
     public void SetConfirmBeforeReset(bool enabled) => Change("settings.saved", s => s.ConfirmBeforeReset = enabled);
+    public void SetShowAllExplanations(bool enabled)
+    {
+        if (SettingsSnapshot.ShowAllExplanations == enabled) return;
+        Change("settings.saved", s => s.ShowAllExplanations = enabled);
+    }
     public void SetReflectionSeparator(ReflectionSeparator separator)
     {
         if (!Enum.IsDefined(separator)) throw new ArgumentException("Choose a saved reflection separator from the list.");

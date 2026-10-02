@@ -1,4 +1,5 @@
 using System.Text.Json;
+using System.Collections.Immutable;
 using System.Threading.Channels;
 using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
@@ -18,6 +19,7 @@ internal static class FocusModeTests
         check(PreviewApplication.MatchesSavedFocusTarget(group with{Id=Guid.NewGuid(),Name="Renamed group",TabPosition=4},group)&&!PreviewApplication.MatchesSavedFocusTarget(group with{TabRuntimeId="group-two"},group),"Group identity survives renaming and reordering without confusing duplicate names");
         check(JsonSerializer.Deserialize<FocusTarget>(JsonSerializer.Serialize(group))==group,"A selected browser group survives settings serialization");
         Groups(check);
+        TabListing(check,target);
         DisplayBridge(check,target);
         var legacy=JsonSerializer.Deserialize<AppState>("{}")!;
         check(!legacy.FocusMode.Enabled&&legacy.FocusMode.DelaySeconds==5,"Existing profiles gain disabled focus mode with a five-second delay");
@@ -45,13 +47,106 @@ internal static class FocusModeTests
             check(!gate.Evaluate(options,timer,FocusPresence.Away,16000).Alert,mode+": resume starts a fresh delay");
             check(!gate.Evaluate(options,timer,FocusPresence.Unavailable,17000).Alert&&!gate.Evaluate(options,timer,FocusPresence.Unknown,18000).Alert,mode+": closed or unreadable targets stop instead of generating false alarms");
             check(!gate.Evaluate(options,timer,FocusPresence.Away,19000).Alert,mode+": target recovery gets a fresh delay");
-            check(!gate.Evaluate(options with{Target=target with{Id=Guid.NewGuid()}},timer,FocusPresence.Away,24000).Alert,mode+": selecting another target resets the grace period");
+            check(!gate.Evaluate(options with{Target=target with{Id=Guid.NewGuid(),WindowHandle=124}},timer,FocusPresence.Away,24000).Alert,mode+": selecting another target resets the grace period");
             check(!gate.Evaluate(options,timer with{SessionId=Guid.NewGuid()},FocusPresence.Away,30000).Alert,mode+": a new session cannot inherit an old away period");
             check(!gate.Evaluate(options with{Enabled=false},timer,FocusPresence.Away,50000).Alert,mode+": turning focus mode off stops monitoring");
             check(gate.Evaluate(options with{DelaySeconds=0},timer,FocusPresence.Away,50001).Alert,mode+": zero delay alerts on the first away sample");
         }
         await Monitor(check,target);
+        await MultipleAndIdle(check,target);
         await Audio(check,target);
+    }
+    private static async Task MultipleAndIdle(Action<bool,string> check,FocusTarget target)
+    {
+        var defaults=JsonSerializer.Deserialize<FocusModeSettings>("{}")!;
+        check(!defaults.MultipleTargets&&!defaults.IdleEnabled&&defaults.IdleSeconds==20,"Multiple Targets and Idle for default unchecked, with 20 seconds retained");
+        var legacy=new FocusModeSettings{Target=target,Enabled=true};
+        check(JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(legacy))!.SelectedTargets.Single()==target,"An older single-target profile migrates without losing its saved target");
+        var tab=target with{Id=Guid.NewGuid(),Kind=FocusTargetKind.BrowserTab,TabRuntimeId="tab",Name="Tab",TabPosition=2};
+        var group=tab with{Id=Guid.NewGuid(),Kind=FocusTargetKind.BrowserTabGroup,TabRuntimeId="group",Name="Group"};
+        var options=new FocusModeSettings{Enabled=true,MultipleTargets=true,Targets=[target,tab,group],IdleEnabled=true,IdleSeconds=20,DelaySeconds=5};
+        var store=new MemoryStore();var engine=new TimerEngine(store);var audio=engine.Snapshot.Audio;var connection=engine.Snapshot.Connection;
+        engine.SetFocusMode(options);var restored=new TimerEngine(store).Snapshot.FocusMode;
+        check(restored.SelectedTargets.SequenceEqual(options.Targets)&&restored.Target==target&&restored.IdleSeconds==20&&restored.IdleEnabled&&restored.MultipleTargets,"Mixed window, tab and group choices and idle options survive profile reload");
+        var jsonRestored=JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(restored))!;
+        check(jsonRestored.SelectedTargets.SequenceEqual(options.Targets)&&jsonRestored.IdleEnabled&&jsonRestored.IdleSeconds==20&&jsonRestored.MultipleTargets,"The profile JSON round-trip preserves immutable targets and both new options");
+        check(engine.Snapshot.Audio==audio&&engine.Snapshot.Connection==connection,"Multiple-target saving leaves audio and Sheets settings intact");
+        engine.SetFocusMode(restored with{Enabled=false,DelaySeconds=8});
+        check(engine.Snapshot.FocusMode.SelectedTargets.Length==3&&engine.Snapshot.FocusMode.IdleEnabled,"Turning Focus off or editing its delay keeps every target and idle preference");
+        engine.SetFocusMode(options with{Targets=[target,target with{Id=Guid.NewGuid()},tab]});
+        check(engine.Snapshot.FocusMode.SelectedTargets.Length==2,"Duplicate runtime targets cannot be stored twice under different list IDs");
+        var before=JsonSerializer.Serialize(engine.Snapshot.FocusMode);
+        foreach(var invalid in new[]{options with{MultipleTargets=false},options with{IdleSeconds=0},options with{IdleSeconds=TimerEngine.MaxDuration+1}}){
+            try{engine.SetFocusMode(invalid);throw new Exception("Invalid focus settings accepted");}catch(ArgumentException){}
+        }
+        check(JsonSerializer.Serialize(engine.Snapshot.FocusMode)==before,"Invalid multiple-target and idle edits are atomic and cannot replace saved choices");
+        var many=Enumerable.Range(0,257).Select(i=>target with{Id=Guid.NewGuid(),WindowHandle=i+1000}).ToImmutableArray();
+        try{engine.SetFocusMode(options with{Targets=many});throw new Exception("Too many targets accepted");}catch(ArgumentException){}
+        check(JsonSerializer.Serialize(engine.Snapshot.FocusMode)==before,"Selections are bounded to 256 targets");
+        engine.SetFocusMode(options with{Targets=[],Target=null});
+        check(engine.Snapshot.FocusMode.Enabled&&engine.Snapshot.FocusMode.SelectedTargets.IsEmpty,"Idle-only focus mode can run without a window target");
+        check(WindowsFocusTargets.InputAge(100,90)==10&&WindowsFocusTargets.InputAge(5,uint.MaxValue-4)==10,"Idle timestamp arithmetic handles the Windows tick counter wrapping");
+        check(WindowsFocusTargets.InputAge(100,101) is null,"A future last-input timestamp fails quietly instead of reporting a huge idle duration");
+        var source=new FakeSource{ByTarget=new(){[target.Key]=FocusPresence.Away,[tab.Key]=FocusPresence.Focused,[group.Key]=FocusPresence.Unavailable}};
+        check(await ((IFocusTargetSource)source).CheckAnyAsync(options.Targets)==FocusPresence.Focused,"Any one selected window, tab or group satisfies multi-target focus");
+        source.ByTarget[tab.Key]=FocusPresence.Away;
+        check(await ((IFocusTargetSource)source).CheckAnyAsync(options.Targets)==FocusPresence.Away,"Closed targets do not block checking other available selected targets");
+        source.ByTarget[tab.Key]=FocusPresence.Unknown;
+        check(await ((IFocusTargetSource)source).CheckAnyAsync(options.Targets)==FocusPresence.Unknown,"An unreadable possible focused target suppresses a false away alert");
+        source.ByTarget[target.Key]=FocusPresence.Focused;
+        check(await ((IFocusTargetSource)source).CheckAnyAsync(options.Targets)==FocusPresence.Focused,"A known focused target wins over unreadable or closed choices");
+        foreach(var mode in Enum.GetValues<SessionMode>()){
+            var timer=new TimerState{Mode=mode,IsRunning=true,SessionId=Guid.NewGuid()};var gate=new FocusModeGate();
+            check(!gate.Evaluate(options,timer,FocusPresence.Focused,0,19999).Alert&&gate.Evaluate(options,timer,FocusPresence.Focused,1,20000).Alert,mode+": inactivity starts audio exactly at the configured threshold even on an allowed target");
+            check(!gate.Evaluate(options,timer,FocusPresence.Focused,2,0).Alert,mode+": fresh input stops an idle alert immediately");
+            check(!gate.Evaluate(options with{IdleEnabled=false},timer,FocusPresence.Focused,3,999999).Alert,mode+": unchecked Idle for ignores inactivity");
+            check(gate.Evaluate(options,timer,FocusPresence.Unknown,4,20000).Alert&&gate.Evaluate(options,timer,FocusPresence.Unavailable,5,20000).Alert,mode+": idle detection works independently of closed or unreadable targets");
+            check(!gate.Evaluate(options,timer with{IsRunning=false},FocusPresence.Away,6,20000).Alert&&!gate.Evaluate(options with{Enabled=false},timer,FocusPresence.Away,7,20000).Alert,mode+": pausing or disabling Focus stops both triggers");
+            check(!gate.Evaluate(options,timer,FocusPresence.Unknown,8,null).Alert,mode+": unreadable last-input time cannot trigger idle audio");
+            gate.Evaluate(options,timer,FocusPresence.Away,1000,0);
+            check(gate.Evaluate(options,timer,FocusPresence.Away,6000,20000).Alert&&gate.Evaluate(options,timer,FocusPresence.Away,6001,0).Alert,mode+": activity does not stop an already due away alert");
+            check(!gate.Evaluate(options,timer,FocusPresence.Focused,6002,0).Alert,mode+": returning with fresh input stops the shared alert");
+            gate.Evaluate(options,timer,FocusPresence.Away,7000,0);
+            check(gate.Evaluate(options with{Targets=[group,tab,target]},timer,FocusPresence.Away,12000,0).Alert,mode+": reordering the same saved targets does not restart the away delay");
+        }
+        var clock=DateTimeOffset.Now;engine=new TimerEngine(new MemoryStore(),()=>clock);engine.SetFocusMode(options);engine.Start(900,false,50);
+        source=new FakeSource{Pending=new(TaskCreationOptions.RunContinuationsAsynchronously),IdleMilliseconds=20000};var transitions=new List<bool>();
+        using var monitor=new FocusModeMonitor(engine,source,transitions.Add);monitor.Poll();
+        check(transitions.LastOrDefault(),"Idle audio starts while a browser's accessibility provider is still answering");
+        source.IdleMilliseconds=0;monitor.Poll();check(!transitions.Last(),"Input stops idle audio without waiting for a hung browser provider");
+        engine.SetFocusMode(options with{Targets=[tab]});monitor.Poll();engine.SetFocusMode(options with{Targets=[group]});clock=clock.AddSeconds(3);monitor.Poll();
+        check(source.Reads==1,"Changing selected targets cannot queue more probes behind a stalled accessibility provider");
+        source.IdleMilliseconds=20000;monitor.Poll();engine.Pause();check(!transitions.Last(),"Pausing synchronously cancels idle audio during an outstanding probe");
+        engine.Resume();source.IdleMilliseconds=20000;monitor.Poll();engine.Reset();check(!transitions.Last(),"Reset cancels idle audio synchronously");
+        var otherClock=DateTimeOffset.Now;var otherEngine=new TimerEngine(new MemoryStore(),()=>otherClock);
+        otherEngine.SetFocusMode(options);otherEngine.Start(900,false,50);
+        var otherSource=new FakeSource{Presence=FocusPresence.Away,IdleMilliseconds=0};var otherTransitions=new List<bool>();
+        using var otherMonitor=new FocusModeMonitor(otherEngine,otherSource,otherTransitions.Add);
+        otherMonitor.Poll();
+        for(var seconds=1;seconds<=5;seconds++){
+            otherClock=otherClock.AddSeconds(1);otherSource.Pending=new(TaskCreationOptions.RunContinuationsAsynchronously);otherMonitor.Poll();
+            otherSource.Pending.TrySetResult(FocusPresence.Away);await Task.Yield();otherMonitor.Poll();
+        }
+        check(otherTransitions.LastOrDefault(),"Normal asynchronous focus reads do not restart the away delay when Idle for is enabled");
+    }
+    private static void TabListing(Action<bool,string> check,FocusTarget target)
+    {
+        var first=target with{Kind=FocusTargetKind.BrowserTab,Name="Same tab title",WindowName="Recent window",TabRuntimeId="first",TabPosition=1};
+        var second=first with{Id=Guid.NewGuid(),TabRuntimeId="second",TabPosition=2};
+        var other=first with{Id=Guid.NewGuid(),WindowHandle=124,TabRuntimeId="other",WindowName="Another window"};
+        var listing=BrowserTabListing.Create([new(first,false),new(second,true),new(second with{Id=Guid.NewGuid()},true),new(other,true)]);
+        check(listing.Targets.Count==3&&listing.Targets.Select(BrowserTabListing.Identity).Distinct().Count()==3,"Repeated native identities appear once while separate same-title tabs remain selectable");
+        check(listing.Current==second&&listing.Targets[0]==second,"The selected tab from the most recent browser window is first, ahead of alphabetical window ordering");
+        check(listing.Targets.Select(t=>t.TabPosition).SequenceEqual(new[]{2,1,1}),"Putting the current tab first preserves original tab positions and identities");
+        var switched=BrowserTabListing.Create([new(first,true),new(second,false),new(other,true)]);
+        check(switched.Current==first&&switched.Targets[0]==first,"Refreshing after a tab switch updates the current tab without reusing a cached title");
+        var ambiguous=BrowserTabListing.Create([new(first,true),new(second,true)]);
+        check(ambiguous.Current is null,"Multiple selected browser tabs without keyboard focus are not falsely labeled current");
+        var focused=BrowserTabListing.Create([new(first,true),new(second,true,true)]);
+        check(focused.Current==second&&focused.Targets[0]==second,"Keyboard focus identifies the current tab among a multi-selection when available");
+        check(BrowserTabListing.Create([new(first,null),new(second,true)]).Current is null,"Unreadable selection in the most recent browser window does not produce a guessed current tab");
+        check(BrowserTabListing.Create([new(first,null),new(other,true)]).Current is null,"An unreadable recent browser window does not label another window's tab current");
+        check(BrowserTabListing.Create([]) is {Targets.Count:0,Current:null},"An empty browser list has no stale current tab");
     }
     private static void DisplayBridge(Action<bool,string> check,FocusTarget target)
     {
@@ -160,8 +255,10 @@ internal static class FocusModeTests
     private sealed class FakeSource:IFocusTargetSource
     {
         internal FocusPresence Presence;internal int Reads;internal TaskCompletionSource<FocusPresence>? Pending;
+        internal Dictionary<string,FocusPresence>? ByTarget;
+        public long? IdleMilliseconds { get; set; }
         public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind)=>Task.FromResult<IReadOnlyList<FocusTarget>>([]);
-        public Task<FocusPresence> CheckAsync(FocusTarget target){Reads++;return Pending?.Task??Task.FromResult(Presence);}
+        public Task<FocusPresence> CheckAsync(FocusTarget target){Reads++;return Pending?.Task??Task.FromResult(ByTarget?.GetValueOrDefault(target.Key)??Presence);}
         public void Dispose(){}
     }
     private sealed record Playback(string Path,AudioLevel Level,CancellationToken Token)

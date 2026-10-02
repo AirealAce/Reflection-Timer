@@ -9,12 +9,12 @@ export function mountLowTime({send,run}){
     if(threshold)threshold.closest('label').remove();else{threshold=document.createElement('input');threshold.id=thresholdId;}
     threshold.type='number';threshold.min='1';threshold.max='31536000';threshold.value='15';threshold.setAttribute('aria-label','Low-time seconds remaining');
     label.lastChild.textContent='Use threshold';
-    const heading=document.createElement('p');heading.textContent='Low on time audio';
+    const heading=document.createElement('p');heading.textContent='Low on time audio';heading.dataset.helpHeading=target+'-low';
     const row=document.createElement('div');row.className='option-row';
     const suffix=document.createElement('span');suffix.textContent='seconds remaining';
     row.append(label,threshold,suffix);
     const caption=document.createElement('p');caption.textContent='Uncheck Use threshold to turn off low-on-time audio. Sound behavior follows Settings → Audio.';
-    caption.id=target+'-low-threshold-help';threshold.setAttribute('aria-describedby',caption.id);
+    caption.id=target+'-low-threshold-help';caption.dataset.help=target+'-low';threshold.setAttribute('aria-describedby',caption.id);
     const source=document.createElement('select');source.id=target+'-low-track';source.setAttribute('aria-label',target==='timer'?'Session low-time sound':'Scheduled low-time sound');
     const actions=document.createElement('div');actions.className='option-row';
     const preview=document.createElement('button'),browse=document.createElement('button');

@@ -13,7 +13,7 @@ if(args.Contains("--focus-target-scan")){
     foreach(var tab in tabs.Take(12))presence.Add(await targets.CheckAsync(tab).WaitAsync(TimeSpan.FromSeconds(3)));
     var groupPresence=new List<FocusPresence>();
     foreach(var group in groups.Take(12))groupPresence.Add(await targets.CheckAsync(group).WaitAsync(TimeSpan.FromSeconds(3)));
-    Console.WriteLine(JsonSerializer.Serialize(new{Windows=windows.Count,BrowserTabs=tabs.Count,BrowserTabGroups=groups.Count,DuplicateTitles=tabs.GroupBy(t=>t.Name).Count(g=>g.Count()>1),DistinctTabIds=tabs.Select(t=>t.TabRuntimeId).Distinct().Count(),ReadableSamples=presence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),UnavailableSamples=presence.Count(p=>p==FocusPresence.Unavailable),ReadableGroupSamples=groupPresence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),FocusedGroups=groupPresence.Count(p=>p==FocusPresence.Focused)}));
+    Console.WriteLine(JsonSerializer.Serialize(new{Windows=windows.Count,BrowserTabs=tabs.Count,BrowserTabGroups=groups.Count,DuplicateTitles=tabs.GroupBy(t=>t.Name).Count(g=>g.Count()>1),DistinctTabIds=tabs.Select(t=>t.TabRuntimeId).Distinct().Count(),RepeatedTabIdentities=tabs.Count-tabs.Select(BrowserTabListing.Identity).Distinct().Count(),CurrentTabs=tabs.Count(targets.IsCurrent),CurrentTabFirst=tabs.Count>0&&targets.IsCurrent(tabs[0]),ReadableSamples=presence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),UnavailableSamples=presence.Count(p=>p==FocusPresence.Unavailable),ReadableGroupSamples=groupPresence.Count(p=>p is FocusPresence.Focused or FocusPresence.Away),FocusedGroups=groupPresence.Count(p=>p==FocusPresence.Focused)}));
     if(windows.Count==0||tabs.Count==0||presence.All(p=>p is not (FocusPresence.Focused or FocusPresence.Away)))throw new Exception("No usable native focus targets were detected.");
     return;
 }
@@ -67,6 +67,7 @@ ClockAccuracyTests.Run(Check);
 PerformanceTests.Run(Check);
 ViewPreferenceTests.Run(Check);
 ViewerAutoHideTests.Run(Check);
+HelpPreferenceTests.Run(Check);
 await FocusModeTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);
 ScreenReaderFeedbackTests.Run(Check);
@@ -140,6 +141,7 @@ try { session.Execute("reset", Data(new { seconds = 10 })); throw new Exception(
 Check(JsonSerializer.Serialize(session.Engine.Snapshot) == before, "Failed persistence does not change live state");
 store.Fail = false;
 Check(PreviewWindow.Allowed("https://reflection-timer.invalid/index.html?view=main"), "Local UI origin allowed");
+Check(Directory.EnumerateFiles(Path.Combine(AppContext.BaseDirectory,"Web")).Where(path=>Path.GetExtension(path) is ".html" or ".js" or ".css").All(path=>PreviewWindow.Allowed(PreviewWindow.Origin+"/"+Path.GetFileName(path))),"Every bundled web interface asset is allowed on the local app origin");
 Check(new[] { "https://evil.example/index.html", "file:///C:/private.txt", "https://reflection-timer.invalid:4430/index.html", "https://reflection-timer.invalid/private.txt", "https://reflection-timer.invalid@evil.example/index.html", "http://reflection-timer.invalid/app.js" }.All(address => !PreviewWindow.Allowed(address)), "Unexpected schemes, origins, ports and paths rejected");
 var directory = Path.Combine(Path.GetTempPath(), "ReflectionTimer-AccessibleTest-" + Guid.NewGuid().ToString("N"));
 try {

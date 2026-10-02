@@ -14,7 +14,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     let page = await context.newPage();
     await page.context().route('**/*', async route=>{
       const name=new URL(route.request().url()).pathname.slice(1);
-      if (!['index.html','app.js','app.css','ui.js','settings.js','setup.js','audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
+      if (!['index.html','app.js','app.css','ui.js','settings.js','settings-search.js','setup.js','audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','help.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
       await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});
     });
     await page.context().addInitScript(() => {
@@ -137,13 +137,13 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     }
     await capture('App-view');
     check(await page.locator('#quick-schedule-form').evaluate(row=>{const [label,input,button]=[row.querySelector('label'),row.querySelector('input'),row.querySelector('button')].map(e=>e.getBoundingClientRect());return label.right<=input.left&&input.right<=button.left&&Math.abs((label.top+label.bottom-input.top-input.bottom)/2)<2&&Math.abs((button.top+button.bottom-input.top-input.bottom)/2)<2;}),'Start timer at keeps its label, input, and button on one centered horizontal row');
-    for(const name of ['Timer','Scheduler','Outbox','Settings','Diagnostics']){await page.getByRole('tab',{name,exact:true}).click();check(await page.getByRole('button',{name:'Save settings',exact:true}).isVisible()===(name==='Settings'),'Save settings visibility matches original on '+name);}
+    for(const name of ['Timer','Scheduler','Outbox','Settings','Diagnostics','Help']){await page.getByRole('tab',{name,exact:true}).click();check(await page.getByRole('button',{name:'Save settings',exact:true}).isVisible()===(name==='Settings'),'Save settings visibility matches original on '+name);}
     await page.getByRole('tab',{name:'Timer',exact:true}).click();
-    check(await page.getByRole('tab').allTextContents().then(t=>JSON.stringify(t)===JSON.stringify(['Timer','Scheduler','Outbox','Settings','Diagnostics'])),'App exposes the five tabs with the renamed Scheduler');
+    check(await page.getByRole('tab').allTextContents().then(t=>JSON.stringify(t)===JSON.stringify(['Timer','Scheduler','Outbox','Settings','Diagnostics','Help'])),'App preserves its five tabs and adds Help');
     await emptyDurationFields(page,'App');
     await completedDuration(page,'App');
     await page.locator('#minutes').fill('12');
-    for(const [chord,names] of [['Control+Tab',['Scheduler','Outbox','Settings','Diagnostics','Timer']],['Control+Shift+Tab',['Diagnostics','Settings','Outbox','Scheduler','Timer']]]){
+    for(const [chord,names] of [['Control+Tab',['Scheduler','Outbox','Settings','Diagnostics','Help','Timer']],['Control+Shift+Tab',['Help','Diagnostics','Settings','Outbox','Scheduler','Timer']]]){
       for(const name of names){
         await page.keyboard.press(chord);
         const tab=page.getByRole('tab',{name,exact:true});
@@ -152,15 +152,15 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     }
     check(await page.locator('#minutes').inputValue()==='12','Cycling App tabs retains an unfinished duration edit');
     await page.evaluate(()=>window.previewDispatch({type:'cycleAppTab',backward:true}));
-    check(await page.getByRole('tab',{name:'Diagnostics',exact:true}).getAttribute('aria-selected')==='true','Native Ctrl+Shift+Tab forwarding wraps from Timer to Diagnostics');
+    check(await page.getByRole('tab',{name:'Help',exact:true}).getAttribute('aria-selected')==='true','Native Ctrl+Shift+Tab forwarding wraps from Timer to Help');
     await page.evaluate(()=>window.previewDispatch({type:'cycleAppTab',backward:false}));
-    check(await page.getByRole('tab',{name:'Timer',exact:true}).getAttribute('aria-selected')==='true','Native Ctrl+Tab forwarding wraps from Diagnostics to Timer');
+    check(await page.getByRole('tab',{name:'Timer',exact:true}).getAttribute('aria-selected')==='true','Native Ctrl+Tab forwarding wraps from Help to Timer');
     await page.locator('#minutes').focus();await page.keyboard.press('Tab');
     check(await page.getByRole('tab',{name:'Timer',exact:true}).getAttribute('aria-selected')==='true'&&await page.locator('#seconds').evaluate(e=>e===document.activeElement),'Ordinary Tab continues moving between input controls');
     await page.evaluate(state=>{window.previewDispatch({type:'durationDraft',parts:null});window.previewDispatch({type:'state',state});},initial);
     for(const width of [940,739,420,336]){
       await page.setViewportSize({width,height:642});
-      for(const name of ['Timer','Scheduler','Outbox','Settings','Diagnostics']){
+      for(const name of ['Timer','Scheduler','Outbox','Settings','Diagnostics','Help']){
         await page.getByRole('tab',{name,exact:true}).click();
         check(await page.locator('nav[role=tablist]').evaluate(nav=>{
           const bounds=nav.getBoundingClientRect();
@@ -175,7 +175,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
       await capture('Diagnostics-'+width);
     }
     await page.getByRole('tab',{name:'Timer',exact:true}).focus();await page.keyboard.press('End');
-    check(await page.getByRole('tab',{name:'Diagnostics',exact:true}).evaluate(e=>e===document.activeElement&&e.getAttribute('aria-selected')==='true'),'End reaches and selects Diagnostics on the wrapped tab row');
+    check(await page.getByRole('tab',{name:'Help',exact:true}).evaluate(e=>e===document.activeElement&&e.getAttribute('aria-selected')==='true'),'End reaches and selects Help on the wrapped tab row');
     await page.keyboard.press('Home');
     check(await page.getByRole('tab',{name:'Timer',exact:true}).evaluate(e=>e===document.activeElement&&e.getAttribute('aria-selected')==='true'),'Home returns to Timer on the wrapped tab row');
     for(const [name,list] of [['Outbox','#outbox .table-scroll'],['Diagnostics','#diagnostic-recent']]){
@@ -252,16 +252,18 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     check(await page.locator('#delivery-status').textContent().then(text=>text.includes('off')&&text.includes('stay saved')),'Paused delivery returns to a clear saved-locally status');
     await page.getByRole('tab',{name:'Settings',exact:true}).click();
     await page.evaluate(settings=>window.previewDispatch({type:'settings',settings}),settings);
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:id!==5}))}));
-    check(await page.locator('#shortcut-notices kbd').allTextContents().then(keys=>keys.length===10&&keys[5]==='Ctrl+Space'&&keys[6]==='Ctrl+Alt+Space'&&keys[7]==="Ctrl+Alt+' (apostrophe)"&&keys[8]==='Ctrl+Alt+R'&&keys[9]==='Ctrl+Alt+Shift+,'),'Settings exposes timer, mode toggle, and reset shortcuts as styled, readable keys');
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==5}))}));
+    check(await page.locator('#shortcut-notices kbd').allTextContents().then(keys=>keys.length===11&&keys[5]==='Ctrl+Space'&&keys[6]==='Ctrl+Alt+Space'&&keys[7]==="Ctrl+Alt+' (apostrophe)"&&keys[8]==='Ctrl+Alt+R'&&keys[9]==='Ctrl+Alt+Shift+,'&&keys[10]==='Ctrl+Alt+;'),'Settings exposes timer, mode toggle, and reset shortcuts as styled, readable keys');
     check(await page.locator('#shortcut-notices p').nth(5).textContent().then(text=>text.includes('any app')&&text.includes('Unavailable:'))&&await page.locator('#shortcut-notices p').nth(6).textContent().then(text=>!text.includes('Unavailable:')),'A Ctrl+Space registration conflict leaves its Ctrl+Alt+Space alias available');
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:id!==6}))}));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==6}))}));
     check(await page.locator('#shortcut-notices p').nth(6).textContent().then(text=>text.includes('any app')&&text.includes('Unavailable:'))&&await page.locator('#shortcut-notices p').nth(5).textContent().then(text=>!text.includes('Unavailable:')),'A Ctrl+Alt+Space registration conflict leaves Ctrl+Space available');
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:id!==7}))}));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==7}))}));
     check(await page.locator('#shortcut-notices p').nth(7).textContent().then(text=>text.includes('Unavailable:')&&text.includes('preserves'))&&await page.locator('#shortcut-notices p').nth(1).textContent().then(text=>!text.includes('Unavailable:')),'Apostrophe mode-switch conflicts are separate from backtick start/end conflicts');
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:id!==8}))}));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==8}))}));
     check(await page.locator('#shortcut-notices p').nth(8).textContent().then(text=>text.includes('Unavailable:')&&text.includes('reset confirmation'))&&await page.locator('#shortcut-notices p').nth(7).textContent().then(text=>!text.includes('Unavailable:')),'Reset shortcut conflicts are reported independently of mode switching');
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:true}))}));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==10}))}));
+    check(await page.locator('#shortcut-notices p').nth(10).textContent().then(text=>text.includes('Ctrl+Alt+;')&&text.includes('Unavailable:'))&&await page.locator('#shortcut-availability').textContent().then(text=>text.includes('Ctrl+Alt+;'))&&await page.locator('#shortcut-notices p').nth(8).textContent().then(text=>!text.includes('Unavailable:')),'Focus shortcut conflicts are visible and independent of reset');
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:true}))}));
     check(await page.locator('#shortcut-notices').textContent().then(text=>!text.includes('Unavailable:')),'Recovered timer shortcuts clear their unavailable notices');
     check(await page.getByRole('combobox',{name:'Compact timer position',exact:true}).inputValue()==='4'&&await page.getByRole('checkbox',{name:'Show compact floating timer',exact:true}).isChecked(),'Display controls expose the intended defaults');
     for(const [id,name] of [['compactAlwaysOnTop','Compact view always on top'],['timeOnlyAlwaysOnTop','Time-only view always on top'],['promptAlwaysOnTop','Reflection prompts always on top']]){
@@ -275,7 +277,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveAppearance'&&m.data.compactAlwaysOnTop===false&&m.data.timeOnlyAlwaysOnTop===true&&m.data.promptAlwaysOnTop===true));
     check(true,'Save settings keeps Compact, Time-only, and prompt layering independent');
     await page.evaluate(settings=>window.previewDispatch({type:'settings',settings}),settings);
-    check(await page.locator('#audio fieldset legend').allTextContents().then(names=>JSON.stringify(names)===JSON.stringify(['Success messages','Failure messages','Low on time audio','Time reached · stopwatch','Focus mode · away from selected window or tab','Session end · timer / stopwatch'])),'All six audio event sections are present with Time reached below Low on time and separate Focus audio');
+    check(await page.locator('#audio fieldset legend').evaluateAll(legends=>legends.map(l=>(l.querySelector('[id^=help-label]')??l).textContent)).then(names=>JSON.stringify(names)===JSON.stringify(['Success messages','Failure messages','Low on time audio','Time reached · stopwatch','Focus mode · away from selected window or tab','Session end · timer / stopwatch'])),'All six audio event sections are present with Time reached below Low on time and separate Focus audio');
     await page.evaluate(()=>{window.savedAudioOption=document.querySelector('#sound-track-0 option');});
     await page.evaluate(settings=>window.previewDispatch({type:'settings',settings}),settings);
     check(await page.evaluate(()=>window.savedAudioOption===document.querySelector('#sound-track-0 option')),'Background settings updates preserve audio option identity for the reader');
@@ -367,9 +369,9 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.getByRole('tab',{name:'Timer',exact:true}).click();
     await themes(page,connected,'App');
     await page.getByRole('tab',{name:'Settings',exact:true}).click();
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:id!==2}))}));
-    check(await page.locator('#shortcut-notices p').count()===10&&(await page.locator('#shortcut-notices p').nth(2).textContent()).includes('Unavailable'),'Settings identifies the particular unavailable global shortcut');
-    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:10},(_,id)=>({id,available:true}))}));
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:id!==2}))}));
+    check(await page.locator('#shortcut-notices p').count()===11&&(await page.locator('#shortcut-notices p').nth(2).textContent()).includes('Unavailable'),'Settings identifies the particular unavailable global shortcut');
+    await page.evaluate(()=>window.previewDispatch({type:'shortcuts',shortcuts:Array.from({length:11},(_,id)=>({id,available:true}))}));
     check(!(await page.locator('#shortcut-notices').textContent()).includes('Unavailable'),'Recovered shortcut availability updates in Settings');
     await page.evaluate(()=>window.previewDispatch({type:'focusTimer',selectTimer:true}));
     check(await page.getByRole('tab',{name:'Timer',exact:true}).getAttribute('aria-selected')==='true'&&await page.locator('#minutes').evaluate(e=>e===document.activeElement),'Double-period action selects Timer and focuses its duration');

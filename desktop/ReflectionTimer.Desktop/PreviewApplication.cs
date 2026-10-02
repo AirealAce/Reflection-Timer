@@ -27,12 +27,14 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly PreviewShortcuts shortcuts;
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
-    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null)
+    private readonly Func<Control?,string,bool,bool> notifyScreenReader;
+    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null, Func<Control?,string,bool,bool>? screenReaderNotification = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
         viewerSession=session.Engine.CurrentTimer;
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
+        notifyScreenReader=screenReaderNotification??ScreenReaderAnnouncements.TryAnnounce;
         Services = new(session.Engine, directory); Services.Announcement += Announce;
         InitializeFocusMode();
         Services.SessionAnnouncement += AnnounceSession;
@@ -73,7 +75,8 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(6, ToggleTimerFromGlobalShortcut),
             Shortcut(7, ToggleModeFromGlobalShortcut),
             Shortcut(8, _=>ResetFromGlobalShortcut()),
-            Shortcut(9, _=>CycleCompact(true))
+            Shortcut(9, _=>CycleCompact(true)),
+            Shortcut(10, _=>ToggleFocusModeFromGlobalShortcut())
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
     }
@@ -306,7 +309,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     }
     private void AnnounceSession(string message,bool supplementary)
     {
-        var delivered=ScreenReaderAnnouncements.TryAnnounce(MainForm,message,supplementary);
+        var delivered=notifyScreenReader(MainForm,message,supplementary);
         Broadcast(new{type="sessionStatus",message}); // Readable, but not a second live event.
         if(!delivered)Announce(message);
     }

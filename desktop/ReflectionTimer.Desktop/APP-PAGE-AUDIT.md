@@ -33,6 +33,22 @@ Compared against the original 3.12.9 `MainWindow.cs`, `Controls.cs`, `AudioContr
 | Settings | Save settings button and Ctrl+Enter | Available only on Settings, matching the original. Visibility checked on all five tabs; shortcut checked outside Settings as well. |
 | Diagnostics | Explanation, recording/event/storage summary, recent history, Mark issue, Refresh, Export, Clear log | Present. Summary/history are readable text. Export uses the existing redaction rules; clearing requires the existing confirmation. |
 
+## Optional guidance in 4.2.34
+
+The five working tabs retain their controls and gain a sixth Help tab. Long explanations are collapsed by default, with a circled question-mark button beside each section heading. Each button supports Enter/Space, has a context-specific accessible name, and exposes its expanded state. Closed guidance is removed from optional input descriptions; essential connection and table status descriptions remain. Help collects section guidance, receiver instructions, reflection actions, and keyboard shortcuts without copying private setup fields or reflection data. Settings → Help and guidance → Show all explanations persists independently of timer/audio settings. Individual sections can still be opened or closed. Compact, Time-only, and reflection-window layouts are unchanged.
+
+## Settings search and help placement in 4.2.37
+
+Settings search in 4.2.37 adds a labeled search landmark at the top of Settings and filters the existing sections without copying controls, indexing typed private values, clearing drafts or changing help disclosure state. Clear search restores all settings and focuses the search field. An invalid pending setting is revealed before validation focuses it. Native Ctrl+S and Ctrl+Enter still save filtered-out edits. Help icons are placed directly after their heading text; the existing full-width heading bars, button styling and accessible heading names are retained.
+
+## Global Focus feedback in 4.2.38
+
+Ctrl+Alt+; sends “Focus mode on” / “Focus mode off” through the same stable native UI Automation notification provider as timer actions. This works without showing App view or moving keyboard focus, independently of optional app voice and volume. Successful native delivery updates readable status without a duplicate live-region event; an unavailable provider retains the live-region fallback. Synthetic host tests cover both Timer and Stopwatch with hidden views, visible-App duplicate suppression and fallback. Windows accepts these notifications; actual JAWS/NVDA/Narrator speech remains a manual acceptance check.
+
+## Focus chooser audio in 4.2.39
+
+Choose Window / Tab now places Start audio after directly above Idle for. Its Focus audio disclosure is collapsed each time the chooser opens, independently of Show all explanations. It contains track, playback behavior, preview, MP3 selection, relative volume, fade timing and Stop audio. The chooser and Settings Audio share one editor revision/save queue and immediately synchronize their controls, retaining pending edits across delayed saves. Ctrl+S and Ctrl+Enter flush audio and away timing before saving targets, with validation and accessible inline failures. Existing audio autosave and preview behavior are retained. The expanded chooser fits all four themes and narrow layouts; native WebView tests cover both save keys from the audio number input.
+
 ## Tab sizing and space in 0.4.1
 
 The Scheduling tab is named Scheduler. All five headings remain visible; the row wraps when needed in narrow windows, with unchanged text size and keyboard navigation. Empty status space collapses outside Settings, while Save settings retains its footer. Outbox and diagnostic history expand into spare page height without rearranging their actions.

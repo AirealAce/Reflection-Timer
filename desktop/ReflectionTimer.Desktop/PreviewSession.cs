@@ -20,7 +20,9 @@ public sealed class PreviewSession
         ? Engine.Snapshot.Schedules.SingleOrDefault(s=>s.Id==key)?.LowTime ?? throw new ArgumentException("That schedule is no longer available.") : new();
     internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
     internal static object FocusView(FocusModeSettings settings)=>new {
-        settings.Enabled, settings.DelaySeconds, target=settings.Target?.Name,
+        settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds,
+        targets=settings.SelectedTargets.Select(t => new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition}),
+        target=settings.Target?.Name,
         targetKind=settings.Target is {} target ? (int?)target.Kind : null,
         targetApp=settings.Target?.App, targetWindowName=settings.Target?.WindowName, targetPosition=settings.Target?.TabPosition
     };
@@ -116,7 +118,7 @@ public sealed class PreviewSession
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
             clock = Clock(state.Timer), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
-            focusMode = FocusView(state.FocusMode),
+            focusMode = FocusView(state.FocusMode), state.ShowAllExplanations,
             timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil,
                 endTime = state.Timer.EndTime is { } end ? Engine.CalendarTimestamp(end) : (long?)null,
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,

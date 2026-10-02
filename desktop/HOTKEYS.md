@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.29. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.39. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -24,6 +24,7 @@ Stopwatch pauses use the queued shortcut's timestamp. Waiting for a busy UI thre
 
 | Shortcut | Action |
 | --- | --- |
+| Ctrl+Alt+; | Toggle Focus mode globally for Timer or Stopwatch, retaining saved targets, delay and idle settings. With no saved target or idle trigger, opens the chooser first; cancel leaves Focus off. |
 | Ctrl+Alt+R | Reset the selected timer to its shared duration inputs, or Stopwatch to zero, from any app. Uses the reset confirmation setting. With viewer auto-hide enabled, shows the saved floating layout without taking focus; otherwise hidden viewers stay hidden. Does not reload pages or expand Time-only. |
 | Ctrl+Alt+' (apostrophe) | Switch Timer ↔ Stopwatch and, in the focused App or Compact view, focus the Stopwatch play button or select the Timer duration field. Pauses and preserves the current session; resume explicitly. |
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
@@ -46,6 +47,8 @@ Space or Ctrl+Enter performs that same timer action from anywhere in the focused
 
 In Compact and Time-only, Escape performs the same action as the top-right minus button. From Compact, either switches to Time-only and releases focus to the previous usable window. Automatic shrink when a session starts does the same. If another window is already focused, it keeps focus. From an explicitly focused Time-only viewer, Escape or minus hides it. The global comma shortcuts work without focusing the viewer. This works while ready, running, paused, or finished and does not change the timer. Holding Escape performs only one step. Time-only controls remain clickable; expanding Compact still focuses the timer controls. Closed, hidden, minimized, or disabled return targets are skipped; an owned modal is not bypassed.
 
+In Choose a focus target, Ctrl+Enter or Ctrl+S saves the selected targets, Multiple Targets option and Idle for option from any control. Arrow Up/Down, Home and End move between table rows. With Multiple Targets unchecked, Enter, Space or double-click confirms the chosen row. With it checked, these gestures toggle the row's checkbox; use Save selected targets or a save shortcut to commit all categories together. Escape or Cancel discards the draft and returns focus to the opener. Held keys and an in-flight save cannot send duplicate selection requests.
+
 Reflection Prev and Next buttons browse pending drafts without sending them and keep only one popup visible. Ctrl+Alt+slash still saves/closes from either focused reflection field. A genuine early-ended reflection retains its smaller reason box, including after reopening or navigation. Natural completion hides that box. To retain older drafts when another session ends, uncheck Settings → Auto-send incomplete reflections when a session ends (on by default).
 
 In a reflection window, Ctrl+Enter or Alt+S sends the response and ends that reflection's own session early if it is still running or paused. Sending an older or completed reflection never stops a newer timer. Actual elapsed time, auto-start, and its cutoff are respected; at or after the deadline, the session is recorded as a normal completion. Ctrl+S saves the draft locally and closes, including empty or partially written drafts. Alt+Enter and Save & send retain their check-in behavior without ending the timer.
@@ -57,9 +60,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.29 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.39 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.29. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.39. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.
@@ -74,10 +77,10 @@ For a source checkout, update origin to `https://github.com/AirealAce/Reflection
 - During a disposable running session with no pending reflection, slash opens a check-in without stopping the countdown. From a reflection button or the page background, slash focuses the first text box. From either text box, it saves the draft locally and closes. A later press reopens the saved draft. Save & send remains the separate submission action.
 - If slash is unavailable, use the App check-in control. Other unavailable shortcuts also have normal app controls as alternatives.
 
-Punctuation bindings currently use Windows US-keyboard virtual keys (OEM grave, slash, period, comma, apostrophe). Different keyboard layouts can label those keys differently; custom remapping is not implemented. No general keyboard hook records typed content. Local diagnostics record each shortcut's registration/usage result, not keystrokes, reflection text, or credentials.
+Punctuation bindings currently use Windows US-keyboard virtual keys (OEM grave, slash, period, comma, apostrophe, semicolon). Different keyboard layouts can label those keys differently; custom remapping is not implemented. No general keyboard hook records typed content. Local diagnostics record each shortcut's registration/usage result, not keystrokes, reflection text, or credentials.
 
 ## Developer regression gate
 
-Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all ten exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, forward/reverse compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
+Run `dotnet run --project desktop/ReflectionTimer.Tests -c Release` on Windows. These isolated tests use synthetic state and an injected registration backend, leaving the running user's timer and real global chords alone. They cover all eleven exact virtual-key/modifier mappings, independent conflicts/disposal, hidden/minimized window behavior, focus selection, forward/reverse compact cycling, early endings, and check-ins. They do not prove that another PC's real chords are free; check that PC's status panel as well.
 
 The public packaging script runs this gate before producing a ZIP, alongside onboarding/install, delivery-safety, receiver, and bundled-audio checks. It includes only the eight hash-verified approved MP3s and excludes local data, credentials, and additional personal audio.

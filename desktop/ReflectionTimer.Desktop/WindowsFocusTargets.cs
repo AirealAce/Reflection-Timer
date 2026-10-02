@@ -11,6 +11,18 @@ internal interface IFocusTargetSource : IDisposable
 {
     Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind);
     Task<FocusPresence> CheckAsync(FocusTarget target);
+    long? IdleMilliseconds => null;
+    async Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)
+    {
+        var away = false; var unknown = false;
+        foreach (var target in targets) {
+            var presence = await CheckAsync(target).ConfigureAwait(false);
+            if (presence == FocusPresence.Focused) return presence;
+            away |= presence == FocusPresence.Away; unknown |= presence == FocusPresence.Unknown;
+        }
+        return unknown ? FocusPresence.Unknown : away ? FocusPresence.Away : FocusPresence.Unavailable;
+    }
+    bool IsCurrent(FocusTarget target) => false;
 }
 
 // Read only the visible window chrome and tab strip. Never inspect page bodies,
@@ -18,9 +30,20 @@ internal interface IFocusTargetSource : IDisposable
 // MTA worker; an unresponsive provider cannot block the timer or its WebView.
 internal sealed class WindowsFocusTargets : IFocusTargetSource
 {
+    public long? IdleMilliseconds {
+        get {
+            var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
+            return GetLastInputInfo(ref input) ? InputAge(unchecked((uint)Environment.TickCount), input.Time) : null;
+        }
+    }
+    // DWORD ticks wrap every 49.7 days. A future/synthetic timestamp fails quiet.
+    internal static long? InputAge(uint now, uint last) { var age = unchecked(now - last); return age <= int.MaxValue ? age : null; }
+    [StructLayout(LayoutKind.Sequential)] private struct LastInputInfo { internal uint Size, Time; }
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInputInfo input);
     private readonly BlockingCollection<Action> jobs = new();
     private readonly Dictionary<string, AutomationElement> tabs = [];
     private readonly Thread worker;
+    private string? currentTabKey;
     private bool disposed;
     internal WindowsFocusTargets()
     {
@@ -41,7 +64,8 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         EnumWindows((handle, _) => {
             if (windows.Count >= 256 || !IsWindowVisible(handle) || Cloaked(handle) || ((long)GetWindowLongPtr(handle,-20) & 0x08000080L) != 0) return true;
             GetWindowThreadProcessId(handle, out var pid);
-            if (pid == Environment.ProcessId || pid == 0) return true;
+            // The App view is a valid target; floating/tool windows were filtered above.
+            if (pid == 0) return true;
             var caption = new StringBuilder(2049); GetWindowText(handle, caption, caption.Capacity);
             if (caption.Length == 0) return true;
             try {
@@ -52,13 +76,14 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
             } catch { /* A closing/inaccessible window is not a selectable target. */ }
             return true;
         }, 0);
-        return windows.OrderBy(w => w.App).ThenBy(w => w.Name).ToArray();
+        return windows;
     }
     public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Window
-        ? Task.Run(OpenWindows) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
+        ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
         var windows = OpenWindows();
         var choices = new List<FocusTarget>();
-        foreach (var window in windows.Where(w => w.App is "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera")) {
+        var tabChoices = new List<BrowserTabChoice>();
+        foreach (var window in windows.Where(w => w.App is "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera").OrderBy(w => IsIconic((nint)w.WindowHandle))) {
             try {
                 var position=0;
                 var strip = BrowserStrip((nint)window.WindowHandle);
@@ -67,20 +92,29 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
                         choices.Add(window with { Id = Guid.NewGuid(), Kind = kind, Name = group.Name, TabRuntimeId = group.Id, TabPosition = ++position });
                     continue;
                 }
-                foreach (var tab in strip.Where(slot => !slot.Data.GroupHeader).Select(slot => slot.Element)) {
-                    var name = tab.Current.Name;
+                foreach (var slot in strip.Where(slot => !slot.Data.GroupHeader)) {
+                    var tab = slot.Element;
+                    if (!BelongsToWindow(tab, (nint)window.WindowHandle)) continue;
+                    var name = slot.Data.Name;
                     if (string.IsNullOrWhiteSpace(name)) continue;
-                    var id = string.Join(",", tab.GetRuntimeId());
+                    var id = slot.Data.Id;
                     tabs[CacheKey(window, id)] = tab;
-                    choices.Add(window with { Id = Guid.NewGuid(), Kind = kind, Name = name.Length > 2048 ? name[..2048] : name, TabRuntimeId = id, TabPosition=++position });
+                    var target = window with { Id = Guid.NewGuid(), Kind = kind, Name = name.Length > 2048 ? name[..2048] : name, TabRuntimeId = id, TabPosition=++position };
+                    tabChoices.Add(new(target, slot.Data.Selected, tab.Current.HasKeyboardFocus));
                 }
             } catch { /* Browser does not expose a usable accessible tab strip. */ }
+        }
+        if (kind == FocusTargetKind.BrowserTab) {
+            var listing = BrowserTabListing.Create(tabChoices);
+            choices.AddRange(listing.Targets);
+            Volatile.Write(ref currentTabKey, listing.Current is {} current ? BrowserTabListing.Identity(current) : null);
         }
         // Bound retained accessibility objects to current choices.
         var keys = choices.Select(t => CacheKey(t, t.TabRuntimeId)).ToHashSet();
         foreach (var key in tabs.Keys.Where(k => !keys.Contains(k)).ToArray()) tabs.Remove(key);
-        return choices.OrderBy(t => t.App).ThenBy(t => t.WindowName).ThenBy(t=>t.TabPosition).ToArray();
+        return kind == FocusTargetKind.BrowserTab ? choices : choices.OrderBy(t => t.App).ThenBy(t => t.WindowName).ThenBy(t=>t.TabPosition).ToArray();
     });
+    public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.BrowserTab && BrowserTabListing.Identity(target) == Volatile.Read(ref currentTabKey);
     private static FocusPresence CheckWindow(FocusTarget target)
     {
         var handle = (nint)target.WindowHandle;
@@ -105,13 +139,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
                 if (tab is null) return FocusPresence.Unavailable;
                 tabs[key] = tab;
             }
-            var ancestor = tab;
-            var inWindow = false;
-            for (var i = 0; ancestor is not null && i < 20; i++, ancestor = TreeWalker.ControlViewWalker.GetParent(ancestor)) {
-                var nativeHandle = (nint)ancestor.Current.NativeWindowHandle;
-                if(nativeHandle != 0 && GetAncestor(nativeHandle, 2) == handle) { inWindow = true; break; }
-            }
-            if (!inWindow) return FocusPresence.Unavailable;
+            if (!BelongsToWindow(tab, handle)) return FocusPresence.Unavailable;
             if (tab.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var pattern)) {
                 var selected = ((SelectionItemPattern)pattern).Current.IsSelected;
                 return selected && IsTargetForeground(handle) ? FocusPresence.Focused : FocusPresence.Away;
@@ -120,24 +148,34 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         } catch (ElementNotAvailableException) { tabs.Remove(CacheKey(target, target.TabRuntimeId)); return FocusPresence.Unavailable; }
         catch { return FocusPresence.Unknown; }
     });
+    private static bool BelongsToWindow(AutomationElement element, nint handle)
+    {
+        for (var i = 0; element is not null && i < 20; i++, element = TreeWalker.ControlViewWalker.GetParent(element)) {
+            var nativeHandle = (nint)element.Current.NativeWindowHandle;
+            if (nativeHandle != 0) return GetAncestor(nativeHandle, 2) == handle;
+        }
+        return false;
+    }
     private static string CacheKey(FocusTarget target, string id) => $"{target.ProcessId}:{target.ProcessStartedAt}:{target.WindowHandle}:{id}";
     private sealed record NativeBrowserSlot(AutomationElement Element, BrowserTabSlot Data);
     private static IReadOnlyList<NativeBrowserSlot> BrowserStrip(nint handle)
     {
         var walker = TreeWalker.ControlViewWalker;
         var slots = new List<NativeBrowserSlot>();
+        var identities = new HashSet<string>();
         var pending = new Queue<(AutomationElement Element, int Depth, string Parent)>(); pending.Enqueue((AutomationElement.FromHandle(handle), 0, ""));
         for (var visited = 0; pending.Count > 0 && visited < 600; visited++) {
             var (element, depth, parent) = pending.Dequeue(); var type = element.Current.ControlType;
+            var id = string.Join(",", element.GetRuntimeId());
+            if (!identities.Add(id)) continue;
             var group = type == ControlType.Tab && element.TryGetCurrentPattern(ExpandCollapsePattern.Pattern, out _);
             if (type == ControlType.TabItem || group) {
                 bool? selected = null;
                 if (!group && element.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var selection)) selected = ((SelectionItemPattern)selection).Current.IsSelected;
-                slots.Add(new(element, new(string.Join(",", element.GetRuntimeId()), parent, element.Current.Name, group, selected)));
+                slots.Add(new(element, new(id, parent, element.Current.Name, group, selected)));
                 continue;
             }
             if (type == ControlType.Document || depth >= 12) continue;
-            var id = string.Join(",", element.GetRuntimeId());
             for (var child = walker.GetFirstChild(element); child is not null && pending.Count < 600; child = walker.GetNextSibling(child)) pending.Enqueue((child, depth + 1, id));
         }
         return slots;
@@ -154,6 +192,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     [DllImport("user32.dll")] private static extern bool EnumWindows(WindowCallback callback, nint data);
     [DllImport("user32.dll")] private static extern bool IsWindow(nint handle);
     [DllImport("user32.dll")] private static extern bool IsWindowVisible(nint handle);
+    [DllImport("user32.dll")] private static extern bool IsIconic(nint handle);
     [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint handle, out uint processId);
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern int GetWindowText(nint handle, StringBuilder text, int max);
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();

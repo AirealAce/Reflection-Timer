@@ -1,4 +1,6 @@
-# Reflection Timer 4.2.29
+# Reflection Timer 4.2.39
+
+Long explanations are collapsed by default. Use the circled question mark beside a section heading to open or close its guidance with a click, Enter, or Space. The Help tab collects instructions and keyboard shortcuts; Ctrl+Tab and Ctrl+Shift+Tab include Help. Settings → Help and guidance → Show all explanations keeps the explanations open by default and saves immediately. Labels, current state, delivery issues, and errors stay visible. Compact, Time-only, and reflection-popup layouts are unchanged.
 
 Stopwatch: use Ctrl+Alt+' (apostrophe) from any app, S/T beside the Compact or Time-only minus button, or Switch to Stopwatch/Timer in App view. Switching pauses and preserves the other session; resume explicitly. The regular start/pause/reset controls and global start/pause shortcuts act on the selected mode. Stopwatch has no duration inputs or auto-start. Ctrl+Alt+/ pauses it, plays session-end audio, and opens its reflection. Save / Ctrl+S resumes the same selected stopwatch and keeps the response; Save & send finishes it with active elapsed time only. A parked draft never resumes a second clock. Time reached audio sits below Low on time in Settings and defaults to Battle (Champion), with one alert at 300 active seconds. Existing profiles without a separate stopwatch sound keep inheriting their low-time sound until edited. Scheduled sessions remain countdowns.
 

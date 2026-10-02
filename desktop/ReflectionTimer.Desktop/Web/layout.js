@@ -1,10 +1,10 @@
-// Keep the original five App tabs. Native HTML supplies the reading structure
+// Keep the original App tabs and an optional Help page. Native HTML supplies the reading structure
 // underneath the familiar layout; it must not add App controls to compact mode.
 export function arrangeApp(view) {
   const $=id=>document.getElementById(id);
   if(view!=='main') return {select(){},cycle(){}};
   const nav=document.querySelector('nav'),main=$('main');nav.replaceChildren();nav.setAttribute('role','tablist');nav.setAttribute('aria-label','App views');
-  const definitions=[['timer','Timer'],['schedules','Scheduler'],['outbox','Outbox'],['settings','Settings'],['diagnostics','Diagnostics']];
+  const definitions=[['timer','Timer'],['schedules','Scheduler'],['outbox','Outbox'],['settings','Settings'],['diagnostics','Diagnostics'],['help','Help']];
   const panels=new Map(),buttons=new Map(),scroll=new Map();let current='timer';
   for(const [id,label] of definitions){const button=document.createElement('button');button.type='button';button.id=`tab-${id}`;button.textContent=label;button.setAttribute('role','tab');button.setAttribute('aria-controls',`panel-${id}`);nav.append(button);buttons.set(id,button);
     const panel=document.createElement('div');panel.id=`panel-${id}`;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',button.id);panels.set(id,panel);
@@ -31,7 +31,7 @@ export function arrangeApp(view) {
   document.querySelector('.page-header>.main-only').classList.add('sr-only');
   document.querySelector('.eyebrow').classList.add('sr-only');
   const timer=$('timer');$('timer-heading').classList.add('sr-only');$('timer-state').after($('time-snapshot'));
-  const notice=document.createElement('p');notice.className='timer-notice';notice.textContent='Desktop timer active · Use only one timer app per session';timer.prepend(notice);
+  const notice=document.createElement('p');notice.className='timer-notice';notice.dataset.helpHeading='timer';notice.textContent='Desktop timer active · Use only one timer app per session';timer.prepend(notice);
   notice.after($('timer-state'));$('time-snapshot').classList.add('sr-only');
   timer.querySelector('.hint').classList.add('sr-only');$('read-time').classList.add('sr-only');
   const editor=$('timer-editor'),actions=editor.querySelector('.actions'),options=editor.querySelector('.options');editor.querySelector('legend').classList.add('sr-only');$('duration-help').classList.add('sr-only');
@@ -46,7 +46,7 @@ export function arrangeApp(view) {
   editor.after(options);$('repeat').closest('label').after($('cutoff-form'));$('end').hidden=true;$('check-in').classList.add('sr-only');
   const quick=document.createElement('form');quick.id='quick-schedule-form';quick.className='option-row';quick.innerHTML='<label for="quick-start">Start timer at</label><input id="quick-start" type="datetime-local" required><button type="submit">Schedule session</button>';
   const later=new Date(Date.now()+3600000);quick.querySelector('input').value=new Date(later-later.getTimezoneOffset()*60000).toISOString().slice(0,16);
-  editor.after(quick);const help=document.createElement('p');help.id='quick-schedule-help';help.textContent='Uses the duration and options on this page. View or cancel it in Scheduler.';quick.after(help);
+  editor.after(quick);const help=document.createElement('p');help.id='quick-schedule-help';help.dataset.help='timer';help.textContent='Uses the duration and options on this page. View or cancel it in Scheduler.';quick.after(help);
   options.after($('volume-form'));
   const pending=$('pending');pending.querySelector('h2').classList.add('sr-only');pending.querySelectorAll('p')[1].hidden=true;$('pending-list').hidden=true;
   const buttonsRow=document.createElement('div');buttonsRow.className='actions';buttonsRow.append($('practice'));
@@ -54,8 +54,8 @@ export function arrangeApp(view) {
   const mark=document.createElement('button');mark.id='timer-mark-issue';mark.type='button';mark.textContent='Mark issue';buttonsRow.append(mark);pending.prepend(buttonsRow);
   timer.append(pending,$('open-compact'));
   const quit=document.createElement('button');quit.id='quit';quit.type='button';quit.textContent='Quit desktop app';
-  const hint=document.createElement('p');hint.textContent='Closing this window keeps the timer running in the tray. Right-click its tray icon to quit. Test reflections only go to the test tab.';timer.append(hint,quit);
-  const guide=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Accessibility preview review guide';guide.append(summary,$('review'));panels.get('diagnostics').append(guide);
+  const hint=document.createElement('p');hint.dataset.help='timer';hint.textContent='Closing this window keeps the timer running in the tray. Right-click its tray icon to quit. Test reflections only go to the test tab.';timer.append(hint,quit);
+  const guide=document.createElement('details'),summary=document.createElement('summary');summary.textContent='Accessibility review guide';guide.append(summary,$('review'));panels.get('help').append(guide);
   ['schedule-heading','outbox-heading','diagnostics-heading'].forEach(id=>$(id).classList.add('sr-only'));
   $('appearance-heading').textContent='App theme';$('audio-heading').textContent='Audio';
   $('practice').textContent='Test reflection prompt';$('open-compact').textContent='Show / hide floating timer';

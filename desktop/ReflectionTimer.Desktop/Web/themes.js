@@ -25,7 +25,7 @@ export function mountTheme(view){
     ][current];
     setText(document.getElementById('theme-preview-title'),name+' · preview');
     setText(document.getElementById('theme-preview-description'),description);
-    setText(document.getElementById('theme-notice'),name+' theme. Saves immediately. Windows contrast themes take priority.');
+    setText(document.getElementById('theme-notice'),name+' theme.');
     const label=name+' theme preview. '+description+' Sample reflection field and save button. This preview is not interactive.';
     if(preview.getAttribute('aria-label')!==label)preview.setAttribute('aria-label',label);
   }

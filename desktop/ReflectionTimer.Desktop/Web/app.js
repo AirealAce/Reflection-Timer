@@ -306,7 +306,7 @@ bridge?.addEventListener('message', event => {
   } else if(message.type==='resumeReflection') {setReflectionBusy(false);
   } else settings.message(message);
 });
-const settings=settingsUI({send,run,bind,view,announce});
+const settings=settingsUI({send,run,bind,view,announce,selectTab:layout.select});
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>state&&(view!=='reflection'||(loadedPrompt&&!queued&&!reflectionBusy&&!savingAndClosing)),selectTab:layout.select});
 bind('delivery-confirm',async()=>{
   const decision=deliveryDecision;await send(decision.action,{id:decision.id,confirmed:true});$('delivery-dialog').close();

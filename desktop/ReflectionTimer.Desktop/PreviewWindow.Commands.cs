@@ -29,12 +29,19 @@ internal sealed partial class PreviewWindow
         switch (action) {
             case "focusTargets":
                 var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,2);
-                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind) });break;
+                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")) });break;
             case "focusSelect":
-                if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");
-                app.SelectFocusTarget(targetId,ReadFlag(data,"enable"));break;
+                if (data.TryGetProperty("ids",out var targetIds)) {
+                    if(targetIds.ValueKind != JsonValueKind.Array || targetIds.GetArrayLength() > 256) throw new ArgumentException("Choose up to 256 listed targets.");
+                    var ids = targetIds.EnumerateArray().Select(value => value.ValueKind == JsonValueKind.String && value.TryGetGuid(out var id) ? id : throw new ArgumentException("Choose listed targets.")).ToArray();
+                    app.SelectFocusTargets(ids,ReadFlag(data,"enable"),ReadFlag(data,"multipleTargets"),ReadFlag(data,"idleEnabled"),ReadInt(data,"idleSeconds",1,TimerEngine.MaxDuration));
+                } else {
+                    if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");
+                    app.SelectFocusTarget(targetId,ReadFlag(data,"enable"));
+                }
+                _=services.Play(SoundEvent.Success);break;
             case "focusMode":
-                engine.SetFocusMode(ReadFlag(data,"enabled"),ReadInt(data,"delaySeconds",0,TimerEngine.MaxDuration),state.FocusMode.Target);break;
+                engine.SetFocusMode(state.FocusMode with {Enabled=ReadFlag(data,"enabled"),DelaySeconds=ReadInt(data,"delaySeconds",0,TimerEngine.MaxDuration)});break;
             case "voiceAnnouncements": engine.SetVoiceAnnouncements(ReadFlag(data,"enabled"));message="Voice announcement preference saved.";break;
             case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;
@@ -77,6 +84,7 @@ internal sealed partial class PreviewWindow
                     case "sessionEndPopups":engine.SetSessionEndPopups(ReadInt(data,"value",0,1)==1);break;
                     case "autoSendIncompleteReflections":engine.SetAutoSendIncompleteReflections(ReadInt(data,"value",0,1)==1);break;
                     case "confirmBeforeReset":engine.SetConfirmBeforeReset(ReadInt(data,"value",0,1)==1);break;
+                    case "showAllExplanations":engine.SetShowAllExplanations(ReadInt(data,"value",0,1)==1);break;
                     case "reflectionSeparator":engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"value",0,3));break;
                     default:throw new ArgumentException("Choose an available display preference.");
                 }break;
@@ -143,6 +151,7 @@ internal sealed partial class PreviewWindow
                 engine.SetAutoSendIncompleteReflections(ReadFlag(data,"autoSendIncompleteReflections"));
                 if(data.TryGetProperty("sessionEndPopups",out _))engine.SetSessionEndPopups(ReadFlag(data,"sessionEndPopups"));
                 engine.SetConfirmBeforeReset(ReadFlag(data,"confirmBeforeReset"));
+                if(data.TryGetProperty("showAllExplanations",out _))engine.SetShowAllExplanations(ReadFlag(data,"showAllExplanations"));
                 engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"reflectionSeparator",0,3));
                 app.ApplyDisplayPreferences();
                 message="Display, schedule policy, and diagnostics preferences saved."; break;

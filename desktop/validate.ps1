@@ -16,6 +16,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Pause editor checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/viewer-auto-hide.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Viewer auto-hide settings checks failed.' }
+    & $Node desktop/ReflectionTimer.Tests/help.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'Collapsible help checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/focus-mode.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Focus mode settings checks failed.' }
     & $Node --test test/apps-script.test.js test/receiver-setup.test.js test/release-assets.test.js test/version.test.cjs

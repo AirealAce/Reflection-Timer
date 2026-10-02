@@ -141,6 +141,7 @@ public record AppState
     public bool ViewerAutoHide { get; set; }
     public int ViewerAutoHideSeconds { get; set; } = 3;
     public bool VoiceAnnouncements { get; set; }
+    public bool ShowAllExplanations { get; set; }
     public bool CompactAlwaysOnTop { get; set; } = true;
     public bool TimeOnlyAlwaysOnTop { get; set; } = true;
     public bool PromptAlwaysOnTop { get; set; } = true;
