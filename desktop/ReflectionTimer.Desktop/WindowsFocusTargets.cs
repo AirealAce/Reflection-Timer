@@ -11,12 +11,14 @@ internal interface IFocusTargetSource : IDisposable
 {
     Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind);
     Task<FocusPresence> CheckAsync(FocusTarget target);
+    FocusTarget? CaptureForeground() => null;
+    Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds) => Task.FromResult<IReadOnlyList<FocusTarget>>([]);
     long? IdleMilliseconds => null;
     async Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)
     {
         var away = false; var unknown = false;
         foreach (var target in targets) {
-            var presence = await CheckAsync(target).ConfigureAwait(false);
+            var presence = target.UseFocused ? FocusPresence.Unknown : await CheckAsync(target).ConfigureAwait(false);
             if (presence == FocusPresence.Focused) return presence;
             away |= presence == FocusPresence.Away; unknown |= presence == FocusPresence.Unknown;
         }
@@ -78,6 +80,41 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         }, 0);
         return windows;
     }
+    public FocusTarget? CaptureForeground()
+    {
+        // Snapshot the native identity synchronously at start/resume, before a
+        // viewer or accessibility announcement can move focus elsewhere.
+        var handle = GetAncestor(GetForegroundWindow(), 2);
+        if (handle == 0 || !IsWindow(handle)) return null;
+        GetWindowThreadProcessId(handle, out var pid);
+        var caption = new StringBuilder(2049); GetWindowText(handle, caption, caption.Capacity);
+        try {
+            using var process = Process.GetProcessById((int)pid);
+            return new(Guid.NewGuid(), FocusTargetKind.Window, caption.ToString(), process.ProcessName,
+                handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName = caption.ToString() };
+        } catch { return null; }
+    }
+    public Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds)
+    {
+        var selectedKinds = kinds.Distinct().ToArray();
+        var windows = selectedKinds.Contains(FocusTargetKind.Window) ? new[] { window } : [];
+        if (selectedKinds.All(k => k == FocusTargetKind.Window) || window.App is not ("chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera"))
+            return Task.FromResult<IReadOnlyList<FocusTarget>>(windows);
+        return Enqueue<IReadOnlyList<FocusTarget>>(() => {
+            // Never substitute another browser's selected tab when activation
+            // happened outside a browser, or focus moved while UIA was queued.
+            if (CheckWindow(window) != FocusPresence.Focused) return windows;
+            try {
+                var position = 0;
+                var strip = BrowserStrip((nint)window.WindowHandle);
+                var choices = strip.Where(slot => !slot.Data.GroupHeader && BelongsToWindow(slot.Element, (nint)window.WindowHandle))
+                    .Select(slot => new BrowserTabChoice(window with { Kind = FocusTargetKind.BrowserTab, Name = slot.Data.Name,
+                        TabRuntimeId = slot.Data.Id, TabPosition = ++position }, slot.Data.Selected, slot.Element.Current.HasKeyboardFocus)).ToArray();
+                var captured = FocusedBrowserTargets.Capture(window, selectedKinds, choices, strip.Select(s => s.Data).ToArray());
+                return CheckWindow(window) == FocusPresence.Focused ? captured : windows;
+            } catch { return windows; }
+        });
+    }
     public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Window
         ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
         var windows = OpenWindows();
@@ -125,7 +162,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         catch { return FocusPresence.Unavailable; }
         return IsTargetForeground(handle) ? FocusPresence.Focused : FocusPresence.Away;
     }
-    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.Kind == FocusTargetKind.Window
+    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
         ? Task.FromResult(CheckWindow(target)) : Enqueue(() => {
         var window = CheckWindow(target);
         if (window == FocusPresence.Unavailable) return window;

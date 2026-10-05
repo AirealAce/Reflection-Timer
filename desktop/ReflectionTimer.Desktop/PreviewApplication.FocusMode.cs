@@ -47,16 +47,18 @@ internal sealed partial class PreviewApplication
         var saved = Session.Engine.SettingsSnapshot.FocusMode.SelectedTargets;
         foreach (var target in saved) focusChoices[target.Id] = target;
         if (focusChoices.Count > 4096) throw new ArgumentException("Reopen the target chooser to refresh its saved choices.");
-        var choices = list.DistinctBy(t => t.Key).Select(t => t with { Id = new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(t.Key)).AsSpan(0,16)) }).ToArray();
+        var choices = FocusChoices(kind, list);
         foreach (var target in choices) focusChoices[target.Id] = target;
         return choices.Select(t => new { id = t.Id, key = FocusTargetKey(t), kind=(int)t.Kind,name = t.Name, app = t.App, windowName=t.WindowName,tabPosition=t.TabPosition,
-            selected = saved.Any(s => MatchesSavedFocusTarget(t,s)), current = focusTargets.IsCurrent(t) }).ToArray();
+            t.UseFocused, selected = saved.Any(s => MatchesSavedFocusTarget(t,s)), current = !t.UseFocused && focusTargets.IsCurrent(t) }).ToArray();
     }
+    internal static FocusTarget[] FocusChoices(FocusTargetKind kind, IReadOnlyList<FocusTarget> list) => new[] { FocusTarget.Focused(kind) }.Concat(list)
+        .DistinctBy(t => t.Key).Select(t => t with { Id = new Guid(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(t.Key)).AsSpan(0,16)) }).ToArray();
     internal static string FocusTargetKey(FocusTarget target) => Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(target.Key)));
     internal static bool MatchesSavedFocusTarget(FocusTarget listed, FocusTarget? saved) => saved is not null
-        && listed.Kind==saved.Kind && listed.WindowHandle==saved.WindowHandle
+        && listed.Kind==saved.Kind && listed.UseFocused==saved.UseFocused && (listed.UseFocused || (listed.WindowHandle==saved.WindowHandle
         && listed.ProcessId==saved.ProcessId && listed.ProcessStartedAt==saved.ProcessStartedAt
-        && (listed.Kind==FocusTargetKind.Window || listed.TabRuntimeId==saved.TabRuntimeId);
+        && (listed.Kind==FocusTargetKind.Window || listed.TabRuntimeId==saved.TabRuntimeId)));
     internal void SelectFocusTarget(Guid id, bool enable)
     {
         if (!focusChoices.TryGetValue(id, out var target)) throw new ArgumentException("That target list expired. Refresh it and choose again.");

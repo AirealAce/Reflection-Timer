@@ -53,6 +53,7 @@ internal static class FocusModeTests
             check(gate.Evaluate(options with{DelaySeconds=0},timer,FocusPresence.Away,50001).Alert,mode+": zero delay alerts on the first away sample");
         }
         await Monitor(check,target);
+        await DynamicFocusTests.Run(check,target);
         await MultipleAndIdle(check,target);
         await Audio(check,target);
     }

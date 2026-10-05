@@ -12,7 +12,11 @@ public record FocusTarget(Guid Id, FocusTargetKind Kind, string Name, string App
 {
     public string WindowName { get; init; } = "";
     public int TabPosition { get; init; }
-    [JsonIgnore] public string Key => $"{(int)Kind}:{ProcessId}:{ProcessStartedAt}:{WindowHandle}:{(Kind == FocusTargetKind.Window ? "" : TabRuntimeId)}";
+    // This choice stays in the profile; its captured native target is session-only.
+    public bool UseFocused { get; init; }
+    public static FocusTarget Focused(FocusTargetKind kind) => new(Guid.Empty, kind,
+        "Use focused " + (kind == FocusTargetKind.Window ? "window" : kind == FocusTargetKind.BrowserTab ? "tab" : "tab group"), "", 0, 0, 0) { UseFocused = true };
+    [JsonIgnore] public string Key => UseFocused ? $"focused:{(int)Kind}" : $"{(int)Kind}:{ProcessId}:{ProcessStartedAt}:{WindowHandle}:{(Kind == FocusTargetKind.Window ? "" : TabRuntimeId)}";
 }
 
 public record FocusModeSettings

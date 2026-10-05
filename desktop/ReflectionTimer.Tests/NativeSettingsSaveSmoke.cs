@@ -41,6 +41,20 @@ static class NativeSettingsSaveSmoke
                             Check(own is not null&&own.ProcessId==Environment.ProcessId,"The native focus chooser lists its own visible App view");
                             Check(await source.CheckAsync(own!) is FocusPresence.Focused or FocusPresence.Away,"The App view is a usable native focus target");
                             var choices=JsonSerializer.SerializeToElement(await app.ListFocusTargetsAsync(FocusTargetKind.Window),PreviewSession.Json);
+                            Check(choices[0].GetProperty("useFocused").GetBoolean()&&choices[0].GetProperty("name").GetString()=="Use focused window",
+                                "The real host prepends the dynamic Window choice to its target list");
+                            app.SelectFocusTarget(choices[0].GetProperty("id").GetGuid(),enable:false);
+                            Check(store.State.FocusMode.Target is {UseFocused:true,WindowHandle:0},"The host cache saves the dynamic choice without a stale native identity");
+                            var savedChoice=store.State.FocusMode;
+                            try {app.SelectFocusTarget(Guid.NewGuid(),enable:false);throw new Exception("An unlisted target was accepted");} catch(ArgumentException){}
+                            Check(store.State.FocusMode==savedChoice,"An unlisted target ID cannot change the saved dynamic choice");
+                            var foregroundHandle=WindowActivation.RootWindow(WindowActivation.Foreground);
+                            var foreground=source.CaptureForeground();
+                            Check(foreground?.WindowHandle==foregroundHandle.ToInt64(),
+                                "Native foreground capture reads the current desktop window's exact native identity");
+                            var captured=await source.CaptureAsync(own!,Enum.GetValues<FocusTargetKind>());
+                            Check(captured.Count==1&&captured[0]==own&&!captured[0].UseFocused,
+                                "Native capture outside a browser resolves only Window, without substituting a background browser tab");
                             var choice=choices.EnumerateArray().Single(t=>t.GetProperty("name").GetString()==main.Text);
                             app.SelectFocusTarget(choice.GetProperty("id").GetGuid(),enable:false);
                             Check(store.State.FocusMode.Target?.WindowHandle==main.Handle.ToInt64(),"The chooser can save the App view through its host cache");

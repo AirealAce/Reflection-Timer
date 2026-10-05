@@ -18,6 +18,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             if(m.data.reset){window.choices.clear();for(const t of window.settings.focusMode.targets)window.choices.set(t.id,t);}
             const kind=m.data.kind;
             let targets=window.emptyTargets?[]:['a','b'].map((suffix,index)=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,name:window.longNames?'A long target name '.repeat(25):kind===2?'Work group':kind===1?'Same tab title':suffix==='a'?'Work window':'Other window',app:suffix==='a'&&kind===0?'EXCEL':'chrome',windowName:'Browser window',tabPosition:index+1,current:kind===1&&`${kind}-${suffix}`===window.currentTabId,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)}));
+            targets.unshift({id:`${kind}-focused`,key:`${kind}-focused`,kind,useFocused:true,name:'Use focused '+['window','tab','tab group'][kind],app:'',tabPosition:0,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-focused`)});
             for(const t of targets)window.choices.set(t.id,t);
             if(window.repeatTarget&&targets.length)targets.push({...targets[0],id:'repeated-native-id'});
             window.dispatchBridge({type:'focusTargets',kind,targets});
@@ -76,7 +77,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.evaluate(()=>{const s=document.querySelector('#focus-target-kind').getBoundingClientRect(),r=document.querySelector('#focus-target-refresh').getBoundingClientRect();return r.x>=s.right&&Math.abs(s.y+s.height/2-r.y-r.height/2)<1;}),'Refresh List remains vertically aligned');
     await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
     check(await saves()===0&&await pressed()==='false'&&await page.locator('#choose-focus-target').evaluate(el=>el===document.activeElement),'Escape cancels the draft and restores opener focus');
-    await open('#focus-enabled');await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});
+    await open('#focus-enabled');await row(0,'a').focus();await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});
     check(await pressed()==='true'&&await page.locator('#focus-enabled').evaluate(el=>el===document.activeElement),'Focus enables after selecting its first target');
     check(await page.locator('#choose-focus-target .focus-target-type').textContent()==='Window'&&await page.locator('#choose-focus-target .focus-target-label').textContent()==='EXCEL','A single window button displays only its app name below Window');
     check(await page.locator('#choose-focus-target').getAttribute('aria-label')==='Window: EXCEL'&&await page.locator('#choose-focus-target').getAttribute('title').then(x=>x.includes('Work window')),'The button has an accessible short label and full window tooltip');
@@ -104,12 +105,12 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Tab #|Tab Name|App'),'Tabs have number, name and app headers');
     check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=65),'Tab # uses a compact 64-pixel column');
     check(await table.evaluate(el=>el.getBoundingClientRect().top-document.querySelector('.focus-target-type-row').getBoundingClientRect().bottom>=12),'The table has clear spacing below Target type');
-    check(await table.locator('tbody tr').first().getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab is listed first, with its own name and actual tab number');
+    check(await table.locator('tbody tr').nth(1).getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab follows the dynamic option with its own name and actual tab number');
     await row(1,'a').focus();await row(1,'a').press('Enter');await dialog.waitFor({state:'hidden'});
     check(await page.locator('#choose-focus-target-settings .focus-target-label').textContent()==='1 - Same tab title','A single tab button displays Tab # - Tab Name');
     await open('#choose-focus-target-settings');check(await row(1,'a').evaluate(el=>el.classList.contains('picked')),'Reopening retains the saved tab rather than replacing it with the current tab');
     await page.evaluate(()=>{window.currentTabId='1-a';window.repeatTarget=true;});await page.locator('#focus-target-refresh').click();await ready();
-    check(await table.locator('tbody tr').count()===2&&await table.locator('tbody tr').first().getAttribute('data-key')==='1-a','Refresh reorders the current tab and deduplicates repeated native keys without merging same-title tabs');
+    check(await table.locator('tbody tr').count()===3&&await table.locator('tbody tr').nth(1).getAttribute('data-key')==='1-a','Refresh keeps the dynamic option first and deduplicates repeated native keys without merging same-title tabs');
     await close();await page.evaluate(()=>window.repeatTarget=false);
     for(const [k,gesture,expected] of [[0,'Enter','chrome'],[1,'Space','2 - Same tab title'],[2,'Double-click','Work group']]){
       await open('#choose-focus-target-settings');await kind(k);await row(k,'b').focus();const count=await saves();
@@ -136,7 +137,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.locator('#tab-timer').click();await open();count=await saves();await page.evaluate(()=>window.dispatchBridge({type:'settingsSaveShortcut'}));await dialog.waitFor({state:'hidden'});
     check(await saves()===count+1,'The native WebView save shortcut also saves the picker when opened from Timer');
     await open();await page.locator('#focus-multiple-targets').check();
-    check(await table.getByRole('checkbox').count()===2&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled checkboxes and an explicit Save button');
+    check(await table.getByRole('checkbox').count()===3&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled checkboxes and an explicit Save button');
     await kind(0);await row(0,'a').getByRole('checkbox').check();await kind(1);await row(1,'a').getByRole('checkbox').check();await kind(2);
     check(await row(2,'a').getByRole('checkbox').isChecked(),'Changing categories retains the group selection');
     await kind(0);check(await row(0,'a').getByRole('checkbox').isChecked(),'The window checkbox remains checked after visiting other categories');
@@ -224,6 +225,27 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       check(fit.content<=fit.width+1&&fit.bodyContent<=fit.bodyWidth+1,'Chooser audio stays within the window at '+width+' pixels: '+JSON.stringify(fit));
       check(await page.locator('#focus-target-use').isVisible(),'Save remains available in the narrow chooser at '+width+' pixels');await close();
     }
+    await page.setViewportSize({width:739,height:642});
+    await page.evaluate(()=>{window.settings.focusMode={...window.settings.focusMode,enabled:false,targets:[],multipleTargets:false};window.dispatchBridge({type:'settings',settings:window.settings});});
+    for(const [k,gesture] of [[0,'Enter'],[1,'Space'],[2,'Double-click']]){
+      await open();await kind(k);
+      check(await table.locator('tbody tr').first().getAttribute('data-key')===`${k}-focused`&&await row(k,'focused').getAttribute('aria-label')==='Use focused '+['window','tab','tab group'][k],'Dynamic '+k+' is first with its own accessible name');
+      check(await row(k,'focused').locator('td').allTextContents().then(x=>x.includes('Use focused '+['window','tab','tab group'][k])&&!x.includes('0')&&!x.includes('?')),'Dynamic '+k+' has no invented tab number or app name');
+      await row(k,'focused').focus();if(gesture==='Double-click')await row(k,'focused').dblclick();else await row(k,'focused').press(gesture);await dialog.waitFor({state:'hidden'});
+      check(await page.evaluate(k=>window.settings.focusMode.targets.length===1&&window.settings.focusMode.targets[0].useFocused&&window.settings.focusMode.targets[0].kind===k,k),'Keyboard/mouse confirmation saves dynamic '+k+' as a choice rather than an ordinary target');
+      check(await page.locator('#choose-focus-target').getAttribute('aria-label')==='Use focused '+['window','tab','tab group'][k],'The button identifies the saved dynamic '+k+' choice');
+      await open();check(await row(k,'focused').evaluate(e=>e.classList.contains('picked')),'Reopening retains dynamic '+k+' instead of the current ordinary target');await close();
+    }
+    await open();await page.locator('#focus-multiple-targets').check();
+    for(const k of [0,1,2]){await kind(k);await row(k,'focused').getByRole('checkbox').check();}
+    await kind(0);await row(0,'a').getByRole('checkbox').check();await page.locator('#focus-target-kind').press('Control+s');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.targets.length===4&&window.settings.focusMode.targets.filter(t=>t.useFocused).length===3),'Ctrl+S saves all three dynamic categories together with an ordinary target');
+    check(await page.locator('#choose-focus-target').getAttribute('aria-label')==='Window, Tab, Tab Group','Mixed dynamic choices retain the category-only multi-target button');
+    await open();for(const k of [0,1,2]){await kind(k);check(await row(k,'focused').getByRole('checkbox').isChecked(),'Reopening keeps dynamic '+k+' checked across categories');}
+    await page.evaluate(()=>window.emptyTargets=true);await page.locator('#focus-target-refresh').click();await ready();
+    check(await table.locator('tbody tr').count()===1&&await row(2,'focused').getByRole('checkbox').isChecked()&&!await row(2,'focused').evaluate(e=>e.classList.contains('unavailable')),'Dynamic choices remain selectable when no ordinary targets are open');
+    await page.locator('#focus-target-cancel').press('Control+Enter');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.targets.filter(t=>t.useFocused).length===3),'Ctrl+Enter retains all dynamic choices from an empty ordinary list');
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}
