@@ -69,8 +69,8 @@ function renderDuration(clock=state?.clock){
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
 function reflectionInputs(){return [$('reflection-text'),$('early-reason'),...document.querySelectorAll('#pause-reasons textarea')];}
-function preservePromptWidth(){const main=$('main');main.style.setProperty('--pause-gutter',`${Math.max(0,main.offsetWidth-main.clientWidth)}px`);}
-if(view==='reflection')new ResizeObserver(preservePromptWidth).observe($('main'));
+function preservePromptWidth(){const fields=$('reflection-fields');fields.style.setProperty('--pause-gutter',`${Math.max(0,fields.offsetWidth-fields.clientWidth)}px`);}
+if(view==='reflection')new ResizeObserver(preservePromptWidth).observe($('reflection-fields'));
 function draft() { return {id: promptId, text: $('reflection-text').value, reason: $('early-reason').value,
   pauseReasons:[...document.querySelectorAll('#pause-reasons textarea')].map(input=>({id:input.dataset.pauseId,reason:input.value}))}; }
 function renderPauses(prompt){

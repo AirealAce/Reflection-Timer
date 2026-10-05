@@ -85,12 +85,14 @@ body[data-view=reflection] #reason-group,body[data-view=reflection] .reflection-
 .reflection-status-row{display:flex;align-items:baseline;gap:12px;margin:8px 0;font-size:14px}
 .reflection-status-row>p{min-width:0;max-width:none;margin:0;overflow-wrap:anywhere}
 #reflection-timestamp{margin-left:auto;text-align:right;color:var(--accent)}
-/* Extra pause fields follow the original full-height prompt. Its initial
-   controls retain their dimensions and coordinates; only main scrolls. */
-body[data-view=reflection][data-pauses=true] main{padding-right:calc(10px - var(--pause-gutter,0px));scrollbar-width:auto}
-body[data-view=reflection][data-pauses=true] main::-webkit-scrollbar{width:8px}
-body[data-view=reflection][data-pauses=true] main::-webkit-scrollbar-thumb{background:var(--border)}
-body[data-view=reflection] #pause-reasons{padding-top:16px;margin:0}
+/* Scroll fields in reading/tab order while the original action row stays fixed.
+   The first page fills the same writing area, including its saved-draft line. */
+body[data-view=reflection] main{overflow:hidden}
+body[data-view=reflection] #reflection-fields{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;scrollbar-width:auto;width:calc(100% + var(--pause-gutter,0px))}
+body[data-view=reflection] #reflection-original{height:100%;min-height:100%;display:flex;flex-direction:column}
+body[data-view=reflection] #reflection-fields::-webkit-scrollbar{width:8px}
+body[data-view=reflection] #reflection-fields::-webkit-scrollbar-thumb{background:var(--border)}
+body[data-view=reflection] #pause-reasons{margin:0}
 .pause-reason{margin-bottom:16px}
 .pause-reason textarea{height:52px;min-height:52px;line-height:1.25;padding:5px 8px}
 .pause-reason .pause-timestamp{color:var(--accent);text-align:right;margin-left:auto}

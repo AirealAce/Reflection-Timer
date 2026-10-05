@@ -27,6 +27,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     }
     const bounds=page=>page.evaluate(()=>Object.fromEntries(['reflection-text','early-reason','reflection-timestamp','later','skip-reflection'].map(id=>{
       const r=document.getElementById(id).getBoundingClientRect();return[id,{x:r.x,y:r.y,width:r.width,height:r.height}];})));
+    const actions=page=>page.locator('.reflection-actions').evaluate(e=>{const r=e.getBoundingClientRect();return{x:r.x,y:r.y,width:r.width,height:r.height};});
     for(const early of [false,true])for(const [width,height] of [[544,early?486:401],[432,early?381:313],[357,early?311:254]]){
       const page=await open({showEarlyEndReason:early});await page.setViewportSize({width,height});
       for(const theme of [0,1,2,3]){
@@ -37,16 +38,28 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
         const after=await bounds(page);
         if(JSON.stringify(before)!==JSON.stringify(after))console.log({before,after});
         check(JSON.stringify(before)===JSON.stringify(after),`Original fields/actions keep exact bounds at ${width}×${height}, early=${early}, theme=${theme}`);
-        check(await page.locator('main').evaluate(e=>e.scrollHeight>e.clientHeight&&e.scrollWidth===e.clientWidth),`Pause fields scroll vertically without horizontal overflow at ${width}×${height}, theme=${theme}`);
+        check(await page.locator('#reflection-fields').evaluate(e=>e.scrollHeight>e.clientHeight&&e.scrollWidth===e.clientWidth)&&await page.locator('main').evaluate(e=>e.scrollHeight===e.clientHeight),`Only the fields scroll vertically without horizontal overflow at ${width}×${height}, theme=${theme}`);
+        const fixedActions=await actions(page);
+        await page.locator(early?'#early-reason':'#reflection-text').focus();await page.keyboard.press('Tab');
+        check(await page.locator('#pause-reasons textarea').first().evaluate(e=>e===document.activeElement&&e.getBoundingClientRect().bottom<=document.getElementById('reflection-fields').getBoundingClientRect().bottom+1),`Tab from the original message fields reveals the first pause reason at ${width}×${height}, early=${early}, theme=${theme}`);
+        check(JSON.stringify(fixedActions)===JSON.stringify(await actions(page)),`Prev and save actions remain fixed while viewing the first pause at ${width}×${height}, theme=${theme}`);
+        await page.locator('#pause-reasons textarea').last().focus();
+        check(JSON.stringify(fixedActions)===JSON.stringify(await actions(page)),`The action row remains fixed while viewing the last pause at ${width}×${height}, theme=${theme}`);
+        await page.keyboard.press('Tab');
+        check(await page.locator('#reflection-prev').evaluate(e=>e===document.activeElement),'Tab from the final pause reaches Prev in the fixed action row');
+        await page.locator('#reflection-fields').evaluate(e=>e.scrollTop=0);
       }
       await page.close();
     }
     const page=await open({pauses});
     check(await page.getByRole('textbox',{name:'Reason for pause 1 (optional)',exact:true}).count()===1,'Each pause has a separately labelled optional textbox');
     check(await page.locator('#pause-reasons textarea').first().getAttribute('aria-describedby')===await page.locator('.pause-timestamp').first().getAttribute('id'),'Pause time is associated with its field for screen readers');
+    check(await page.locator('#pause-reasons').evaluate(e=>Boolean(document.getElementById('draft-status').compareDocumentPosition(e)&Node.DOCUMENT_POSITION_FOLLOWING)&&Boolean(e.compareDocumentPosition(document.querySelector('.reflection-actions'))&Node.DOCUMENT_POSITION_FOLLOWING)),'Pause reasons follow the saved-draft status and precede the action row in reading order');
     const field=page.locator('#pause-reasons textarea').first();await field.fill('Phone call');await field.focus();
+    const scrollBeforeUpdate=await page.locator('#reflection-fields').evaluate(e=>e.scrollTop);
     await page.evaluate(({base,prompt,pauses})=>window.previewDispatch({type:'state',state:{...base,prompts:[{...prompt,pauses:[...pauses,{id:'new-pause',reason:'',paused:'9/28/2026 10:28 AM',duration:'Still paused'}]}]}}),{base,prompt,pauses});
     check(await field.inputValue()==='Phone call'&&await field.evaluate(e=>e===document.activeElement),'A new pause or stale snapshot preserves typing and focus in existing reason fields');
+    check(await page.locator('#reflection-fields').evaluate(e=>e.scrollTop)===scrollBeforeUpdate,'A new pause does not move the scroll position while writing an existing reason');
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='draft'&&m.data.pauseReasons?.[0]?.reason==='Phone call'));
     await page.keyboard.press('Control+s');await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='saveForLater'));
     check(await page.evaluate(()=>window.previewMessages.findLast(m=>m.action==='saveForLater').data.pauseReasons[0].reason==='Phone call'),'Ctrl+S flushes all pause reasons with the reflection');await page.close();
