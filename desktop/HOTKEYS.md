@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.42. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.2.43. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -24,7 +24,7 @@ Stopwatch pauses use the queued shortcut's timestamp. Waiting for a busy UI thre
 
 | Shortcut | Action |
 | --- | --- |
-| Ctrl+Alt+; | Toggle Focus mode globally for Timer or Stopwatch, retaining saved targets, delay and idle settings. With no saved target or idle trigger, opens the chooser first; cancel leaves Focus off. |
+| Ctrl+Alt+; | Toggle Focus mode globally for Timer or Stopwatch, retaining saved targets, delay and idle settings. Announces on/off through optional app voice and screen-reader notifications. With no saved target or idle trigger, opens the chooser with spoken guidance; cancel leaves Focus off. |
 | Ctrl+Alt+R | Reset the selected timer to its shared duration inputs, or Stopwatch to zero, from any app. Uses the reset confirmation setting. With viewer auto-hide enabled, shows the saved floating layout without taking focus; otherwise hidden viewers stay hidden. Does not reload pages or expand Time-only. |
 | Ctrl+Alt+' (apostrophe) | Switch Timer ↔ Stopwatch and, in the focused App or Compact view, focus the Stopwatch play button or select the Timer duration field. Pauses and preserves the current session; resume explicitly. |
 | Ctrl+Space or Ctrl+Alt+Space | Start, resume, or pause globally, including from another app or with every timer window hidden. Uses the shared duration inputs, like Compact; editing a paused duration starts that new duration. Holding the keys toggles only once. Normal toggling keeps focus in the current app and does not submit a reflection. |
@@ -60,9 +60,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.2.42 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.2.43 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.42. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.2.43. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

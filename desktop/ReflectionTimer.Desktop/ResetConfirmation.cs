@@ -37,7 +37,7 @@ internal sealed partial class PreviewApplication
                     Announce(result);return Task.CompletedTask;
                 },requireReady:false);
             } catch(Exception error) {
-                Announce(error is ArgumentException or InvalidOperationException?error.Message:"The timer could not be reset. Your saved session and drafts are retained.");
+                Services.AnnounceFeedback(error is ArgumentException or InvalidOperationException?error.Message:"The timer could not be reset. Your saved session and drafts are retained.");
             }
         });
     }
