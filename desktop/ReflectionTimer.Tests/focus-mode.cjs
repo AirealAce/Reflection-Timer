@@ -103,7 +103,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await close();
     await open('#choose-focus-target-settings');await kind(1);
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Tab #|Tab Name|App'),'Tabs have number, name and app headers');
-    check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=65),'Tab # uses a compact 64-pixel column');
+    check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=49&&getComputedStyle(el).textAlign==='left'&&el.scrollWidth<=el.clientWidth),'Tab # is narrow and left aligned without clipping its header');
     check(await table.evaluate(el=>el.getBoundingClientRect().top-document.querySelector('.focus-target-type-row').getBoundingClientRect().bottom>=12),'The table has clear spacing below Target type');
     check(await table.locator('tbody tr').nth(1).getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab follows the dynamic option with its own name and actual tab number');
     await row(1,'a').focus();await row(1,'a').press('Enter');await dialog.waitFor({state:'hidden'});
@@ -121,6 +121,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     }
     await open('#choose-focus-target-settings');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Grp #|Group Name|App'),'Tab groups have number, group name and app headers');
+    check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=49&&getComputedStyle(el).textAlign==='left'&&el.scrollWidth<=el.clientWidth),'Grp # is narrow and left aligned without clipping its header');
     await row(2,'b').focus();await row(2,'b').press('ArrowUp');check(await row(2,'a').evaluate(el=>el===document.activeElement)&&await dialog.isVisible(),'Arrow keys move between rows without confirming');
     let count=await saves();await page.keyboard.down('Space');await page.keyboard.down('Space');check(await saves()===count&&await dialog.isVisible(),'Holding Space waits for release');await page.keyboard.up('Space');await dialog.waitFor({state:'hidden'});check(await saves()===count+1,'Space saves once on release');
     await open('#choose-focus-target-settings');await row(2,'a').focus();count=await saves();await page.keyboard.down('Enter');await dialog.waitFor({state:'hidden'});await page.keyboard.down('Enter');await page.keyboard.up('Enter');check(await saves()===count+1&&!await dialog.isVisible(),'Held Enter cannot repeatedly save or reopen the picker');

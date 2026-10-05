@@ -69,11 +69,11 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function draw(){
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:['Grp #','Group Name','App'];
-    const widths=kind===0?['30%','']:kind===1?['64px','','24%']:['16%','','24%'];
+    const widths=kind===0?['30%','']:['48px','','24%'];
     if(multiple.checked){headers.unshift('');widths.unshift('24px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
-    const head=document.createElement('tr');for(const text of headers){const th=document.createElement('th');th.scope='col';th.textContent=text;if(!text){th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');}head.append(th);}list.querySelector('thead').replaceChildren(head);
+    const head=document.createElement('tr');for(const text of headers){const th=document.createElement('th');th.scope='col';th.textContent=text;if(text.endsWith(' #'))th.className='focus-number-cell';if(!text){th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');}head.append(th);}list.querySelector('thead').replaceChildren(head);
     const body=list.querySelector('tbody');body.replaceChildren();
     for(const target of rows){
       const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
@@ -84,7 +84,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         checkbox.addEventListener('change',()=>{choose(target);});checkbox.addEventListener('click',event=>{if(event.detail>1)event.preventDefault();});td.append(checkbox);row.append(td);
       }
       const values=target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
-      for(const value of values){const td=document.createElement('td'),text=document.createElement('span');text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
+      for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if(kind!==0&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
       row.addEventListener('focusin',()=>{
         activeKey=key(target);for(const other of body.children){other.tabIndex=!multiple.checked&&other===row?0:-1;const checkbox=other.querySelector('input');if(checkbox)checkbox.tabIndex=other===row?0:-1;}
         if(!multiple.checked&&!loading&&!selecting){picked.clear();picked.set(key(target),target);syncSelection();status();}
