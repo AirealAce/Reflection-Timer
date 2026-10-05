@@ -15,10 +15,16 @@ const rules = [
   ['private build path', /[A-Z]:\\Users\\[A-Za-z0-9._-]+\\/i]
 ];
 const tracks = approvedTracks();
-const approvedAudio = new Set(tracks.flatMap(track => [track.repositoryPath, 'inaccessible-version-useless/' + track.repositoryPath]));
+// Archived versions retain their original eight clips, rather than acquiring
+// every track newly added to the active app.
+const archivedNames = new Set(['popup.mp3','pokemon-obtained-item.mp3','pokemon-level-up.mp3','pokemon-healed.mp3',
+  'pokemon-key-item.mp3','pokemon-battle-trainer.mp3','pokemon-battle-champion.mp3','kirby-out-of-health.mp3']);
+const archivedTracks = tracks.filter(track => archivedNames.has(track.file));
+if (archivedTracks.length !== archivedNames.size) throw new Error('Missing original archived audio catalog entry.');
+const approvedAudio = new Set([...tracks.map(track => track.repositoryPath), ...archivedTracks.map(track => 'inaccessible-version-useless/' + track.repositoryPath)]);
 approvedAudio.add('extension-version-useless/popup.mp3');
 const findings = validateBundledAudio();
-for (const track of tracks) {
+for (const track of archivedTracks) {
   for (const relative of ['inaccessible-version-useless/' + track.repositoryPath, ...(track.file === 'popup.mp3' ? ['extension-version-useless/popup.mp3'] : [])]) {
     if (!fs.readFileSync(path.join(root, relative)).equals(fs.readFileSync(path.join(root, track.repositoryPath))))
       findings.push({file:relative, problem:'archived audio differs from reviewed catalog'});

@@ -17,6 +17,7 @@
     <PackageReference Include="System.Numerics.Tensors" Version="9.0.0" GeneratePathProperty="true" />
     <Content Include="../../popup.mp3" Link="popup.mp3" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../Sounds/pokemon-obtained-item.mp3;../Sounds/pokemon-level-up.mp3;../Sounds/pokemon-key-item.mp3;../Sounds/pokemon-healed.mp3;../Sounds/pokemon-battle-trainer.mp3;../Sounds/pokemon-battle-champion.mp3;../Sounds/kirby-out-of-health.mp3" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="../Sounds/pokemon-rgby-trainer-battle.mp3;../Sounds/pokemon-rgby-wild-battle.mp3;../Sounds/pokemon-gsc-wild-johto-day.mp3;../Sounds/pokemon-gsc-wild-johto-night.mp3;../Sounds/pokemon-rgby-gym-leader.mp3;../Sounds/pokemon-dpp-regi-battle.mp3" Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../Sounds/AUDIO-NOTICES.txt" Link="AUDIO-NOTICES.txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="../../google-sheets-script.gs" Link="google-sheets-script.gs" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <EmbeddedResource Include="../../google-sheets-script.gs" LogicalName="ReflectionTimer.Receiver.gs" />

@@ -97,10 +97,11 @@ public sealed class PreviewServices : IDisposable
             s.CompactAlwaysOnTop, s.TimeOnlyAlwaysOnTop, s.PromptAlwaysOnTop, s.SessionEndPopups, s.AutoSendIncompleteReflections, s.ConfirmBeforeReset,
             reflectionSeparator = (int)s.ReflectionSeparator,
             placement = (int)s.FloatingPlacement, popup = (int)s.PopupPosition, theme = (int)s.Theme, overlap = (int)s.ScheduleOverlap,
-            tracks = new[] { LibrarySound.Default, LibrarySound.None }.Concat(SoundLibrary.Tracks).Select(t => new { id = (int)t, name = SoundLibrary.Name(t) }),
+            tracks = new[] { LibrarySound.Random, LibrarySound.Default, LibrarySound.None }.Concat(SoundLibrary.Tracks).Select(t => new { id = (int)t, name = SoundLibrary.Name(t), song = RandomAudio.IsSong(t) }),
             sounds = Enum.GetValues<SoundEvent>().Select(kind => new { kind = (int)kind, name = kind.ToString(), track = (int)audio.For(kind).Track,
                 behavior = (int)audio.For(kind).Behavior, audio.For(kind).Volume, audio.For(kind).FadeOutEnabled, audio.For(kind).FadeOutAfterSeconds,
                 audio.For(kind).FadeOutAfterMessageSent, audio.For(kind).MessageSentFadeSeconds,
+                audio.For(kind).RandomTracks,
                 custom = audio.For(kind).Mp3Path.Length > 0, customName=Path.GetFileName(audio.For(kind).Mp3Path), defaultName = SoundLibrary.DefaultName(kind) }) };
     }
     public void SaveConnection(ConnectionSettings connection, bool enabled)

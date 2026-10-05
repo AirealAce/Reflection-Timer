@@ -199,7 +199,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         catch { if(ReferenceEquals(initializingBrowser,browser))ShowFailure("The local web interface could not start. Close and reopen the app. Your saved data is retained."); }
     }
     internal static bool Allowed(string address) => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "reflection-timer.invalid"
-        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/settings-search.js" or "/audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/focus-mode.js" or "/help.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
+        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/settings-search.js" or "/audio.js" or "/random-audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/focus-mode.js" or "/help.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
     internal void ProcessFailure(CoreWebView2ProcessFailedKind kind,CoreWebView2ProcessFailedReason reason,int exitCode)
     {
         if(IsDisposed||allowClose)return;

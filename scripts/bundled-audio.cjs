@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const root = path.join(__dirname, '..');
 
 function approvedTracks(catalog = JSON.parse(fs.readFileSync(path.join(root, 'desktop/Sounds/sources.json'), 'utf8'))) {
-  if (catalog.formatVersion !== 1 || !Array.isArray(catalog.tracks) || catalog.tracks.length !== 8)
+  if (catalog.formatVersion !== 1 || !Array.isArray(catalog.tracks) || catalog.tracks.length !== 14)
     throw new Error('Invalid bundled audio catalog.');
   const names = new Set();
   for (const track of catalog.tracks) {
@@ -54,5 +54,5 @@ module.exports = {approvedTracks, validateBundledAudio};
 if (require.main === module) {
   const errors = validateBundledAudio(process.argv[2] ?? root, Boolean(process.argv[2]));
   if (errors.length) { console.error(JSON.stringify({findings:errors}, null, 2)); process.exitCode = 1; }
-  else console.log('Verified all 8 approved bundled MP3s against the audio catalog.');
+  else console.log(`Verified all ${approvedTracks().length} bundled MP3s against the audio catalog.`);
 }

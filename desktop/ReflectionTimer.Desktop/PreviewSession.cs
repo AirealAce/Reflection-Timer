@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Collections.Immutable;
 using System.Text.Json;
 using ReflectionTimer.Core;
 
@@ -18,7 +19,7 @@ public sealed class PreviewSession
     internal LowTimeOptions ScheduledLowDraft { get; set; }=new();
     internal void SelectScheduleDraft(Guid? id)=>ScheduledLowDraft=id is {} key
         ? Engine.Snapshot.Schedules.SingleOrDefault(s=>s.Id==key)?.LowTime ?? throw new ArgumentException("That schedule is no longer available.") : new();
-    internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
+    internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,low.RandomTracks,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
     internal static object FocusView(FocusModeSettings settings)=>new {
         settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds,
         targets=settings.SelectedTargets.Select(t => new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused}),
@@ -29,8 +30,19 @@ public sealed class PreviewSession
     internal static LowTimeOptions ReadLow(JsonElement data,LowTimeOptions previous)
     {
         var low=previous with {Enabled=Flag(data,"enabled"),ThresholdSeconds=Flag(data,"inherit")?null:Number(data,"threshold",1,TimerEngine.MaxDuration)};
-        if(data.TryGetProperty("track",out _))low=low with{Track=(LibrarySound)Number(data,"track",0,9),Mp3Path=Flag(data,"keepCustom")?previous.Mp3Path:""};
+        if(data.TryGetProperty("track",out _))low=low with{Track=(LibrarySound)Number(data,"track",0,(int)LibrarySound.RegiBattle),Mp3Path=Flag(data,"keepCustom")?previous.Mp3Path:""};
+        low=low with{RandomTracks=ReadRandomTracks(data,previous.RandomTracks)};
+        AudioSettings.Validate(low);
         return low;
+    }
+    internal static ImmutableList<RandomTrackWeight>? ReadRandomTracks(JsonElement data,ImmutableList<RandomTrackWeight>? previous)
+    {
+        if(!data.TryGetProperty("randomTracks",out var tracks))return previous;
+        if(tracks.ValueKind==JsonValueKind.Null)return null;
+        if(tracks.ValueKind!=JsonValueKind.Array||tracks.GetArrayLength()>Enum.GetValues<LibrarySound>().Count(RandomAudio.IsTrack))
+            throw new ArgumentException("Choose valid Random track probabilities.");
+        var result=tracks.Deserialize<ImmutableList<RandomTrackWeight>>(Json);
+        RandomAudio.Validate(result);return result;
     }
     internal void SetDurationDraft(string[]? parts)
     {

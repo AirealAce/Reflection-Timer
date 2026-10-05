@@ -22,6 +22,12 @@ private-setup*
 !/desktop/Sounds/pokemon-battle-trainer.mp3
 !/desktop/Sounds/pokemon-battle-champion.mp3
 !/desktop/Sounds/kirby-out-of-health.mp3
+!/desktop/Sounds/pokemon-rgby-trainer-battle.mp3
+!/desktop/Sounds/pokemon-rgby-wild-battle.mp3
+!/desktop/Sounds/pokemon-gsc-wild-johto-day.mp3
+!/desktop/Sounds/pokemon-gsc-wild-johto-night.mp3
+!/desktop/Sounds/pokemon-rgby-gym-leader.mp3
+!/desktop/Sounds/pokemon-dpp-regi-battle.mp3
 
 # Dependencies
 node_modules/

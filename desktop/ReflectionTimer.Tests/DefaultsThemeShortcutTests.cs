@@ -41,7 +41,7 @@ static class DefaultsThemeShortcutTests
             var path=Path.Combine(AppContext.BaseDirectory,SoundLibrary.FileName(track));
             check(Mp3AudioBackend.ValidateCustomFile(path)==path,"Packaged audio decodes: "+SoundLibrary.FileName(track));
         }
-        check(SoundLibrary.Tracks.Count()==8,"All eight MP3 library tracks ship with the preview");
+        check(SoundLibrary.Tracks.Count()==14,"All fourteen MP3 library tracks ship with the app");
         foreach(var theme in Enum.GetValues<AppColorTheme>()){
             session.Engine.SetTheme(theme);
             check(new PreviewSession(store).Engine.Snapshot.Theme==theme,"Theme preference survives restart: "+theme);

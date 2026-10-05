@@ -1,7 +1,7 @@
 Reflection Timer - bundled audio notices
 
-The project maintainer confirmed redistribution permission on 2026-09-09
-for including these recordings in the Reflection Timer repository and app.
+The original eight recordings were included after the project maintainer's
+confirmation on 2026-09-09 for the Reflection Timer repository and app.
 This notice does not grant an additional standalone license to the music,
 recordings, artwork, or other third-party material. Software-library licenses
 in THIRD-PARTY-NOTICES.txt do not apply to these audio assets.
@@ -24,6 +24,14 @@ Flagship, HAL Laboratory, and Nintendo. Existing metadata is retained.
 Original extension session-end sound
 - popup.mp3 - default Session end sound
 The existing recording was supplied by the project maintainer.
+
+Additional local recordings supplied by the project maintainer on 2026-10-05
+- Pokemon Red Green Blue Yellow: 10. Battle! (Trainer Battle),
+  14 Battle! (Wild Pokemon), 28. Battle! (Gym Leader)
+- Pokemon Gold Silver Crystal: 17. Battle! (Wild Pokemon - Johto - Day),
+  18. Battle! (Wild Pokemon - Johto - Night)
+- Pokemon Diamond Pearl Platinum: 200. Battle! (Regirock - Regice - Registeel)
+The original audio bytes, embedded credits and metadata are retained.
 
 Provenance, filenames, and SHA-256 checksums are recorded in
 desktop/Sounds/sources.json in the source repository. The app does not download

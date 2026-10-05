@@ -14,6 +14,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Browser accessibility tests failed.' }
     & $Node desktop/ReflectionTimer.Tests/pause-reasons.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Pause editor checks failed.' }
+    & $Node desktop/ReflectionTimer.Tests/random-audio.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'Random audio editor checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/viewer-auto-hide.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Viewer auto-hide settings checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/help.cjs

@@ -71,6 +71,60 @@
       "source": "Existing extension session-end audio supplied by the project maintainer",
       "bytes": 29568,
       "sha256": "01714f0bf6ec9f13dfbe0cbeaf02c3f499a39681bc8de28c6c2e4ad9cd3ffbfa"
+    },
+    {
+      "file": "pokemon-rgby-trainer-battle.mp3",
+      "originalFilename": "Pokemon Red Green Blue Yellow - 10. Battle! (Trainer Battle).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-rgby-trainer-battle.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "3b6d2471d230afabb78854360266fccad1d9d778b8eedbf5103180b1a08d05db",
+      "addedOn": "2026-10-05",
+      "bytes": 4028867
+    },
+    {
+      "file": "pokemon-rgby-wild-battle.mp3",
+      "originalFilename": "Pokemon Red Green Blue Yellow - 14 Battle! (Wild Pokémon).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-rgby-wild-battle.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "3a9baa3accb6b6d6d2f219e515800921f3f915d264212c5c9411b23c139e3ac5",
+      "addedOn": "2026-10-05",
+      "bytes": 3253858
+    },
+    {
+      "file": "pokemon-gsc-wild-johto-day.mp3",
+      "originalFilename": "Pokemon Gold Silver Crystal - 17. Battle! (Wild Pokémon - Johto - Day).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-gsc-wild-johto-day.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "a0d01fff89a2f058f2bbb88316cbe2e60ac1535d8bc4d98a8a26dbdf2914900c",
+      "addedOn": "2026-10-05",
+      "bytes": 1612786
+    },
+    {
+      "file": "pokemon-gsc-wild-johto-night.mp3",
+      "originalFilename": "Pokemon Gold Silver Crystal - 18. Battle! (Wild Pokémon - Johto - Night).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-gsc-wild-johto-night.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "b689f26156d4edf910bdda3b7dc3d91d4e31348010ce0b3136d2d6e449dc7ffc",
+      "addedOn": "2026-10-05",
+      "bytes": 1588548
+    },
+    {
+      "file": "pokemon-rgby-gym-leader.mp3",
+      "originalFilename": "Pokemon Red Green Blue Yellow - 28. Battle! (Gym Leader).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-rgby-gym-leader.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "5732296a0da7677ab454fa2f5ee190624a18ea2a7d8d31e53c1e2a246366569e",
+      "addedOn": "2026-10-05",
+      "bytes": 3966518
+    },
+    {
+      "file": "pokemon-dpp-regi-battle.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 200. Battle! (Regirock - Regice - Registeel).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-regi-battle.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "b4be5f76ad0be48106103f9af4e9bbd900aaeb43504cfa4fffcd2662674d5b84",
+      "addedOn": "2026-10-05",
+      "bytes": 2979899
     }
   ],
   "formatVersion": 1,

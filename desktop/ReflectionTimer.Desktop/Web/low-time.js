@@ -1,4 +1,5 @@
 import {setOptions} from './ui.js';
+import {mountRandomTracks,randomChoices,randomTrack} from './random-audio.js';
 export function mountLowTime({send,run}){
   const $=id=>document.getElementById(id);let settings;
   const controls=[];
@@ -20,9 +21,10 @@ export function mountLowTime({send,run}){
     const preview=document.createElement('button'),browse=document.createElement('button');
     preview.type=browse.type='button';preview.textContent='Preview audio';browse.textContent='Choose MP3…';
     actions.append(source,preview,browse);options.append(heading,row,caption,actions);
+    const random=mountRandomTracks({after:actions,id:target+'-low-random',kind:3,name:target==='timer'?'Session low-time sound':'Scheduled low-time sound'});
     const fields=[{enabled,threshold}];
     if(target==='timer')fields.push({enabled:$('settings-low-time'),threshold:$('default-threshold')});
-    const c={target,enabled,threshold,source,fields,value:{enabled:true,inherit:true,threshold:15,track:0,custom:false},dirty:false,revision:0,saving:Promise.resolve()};controls.push(c);
+    const c={target,enabled,threshold,source,random,fields,value:{enabled:true,inherit:true,threshold:15,track:0,custom:false},dirty:false,revision:0,saving:Promise.resolve()};controls.push(c);
     function mirror(origin=fields[0]){
       for(const field of fields){
         if(field!==origin){field.enabled.checked=origin.enabled.checked;field.threshold.value=origin.threshold.value;}
@@ -36,7 +38,7 @@ export function mountLowTime({send,run}){
         if(enabled.checked)throw new Error('Enter a low-time threshold between 1 and 31,536,000 whole seconds.');
         threshold.value=c.value.threshold;mirror();
       }
-      return{enabled:enabled.checked,inherit:false,threshold:Number(threshold.value),track:source.value==='custom'?0:Number(source.value||0),keepCustom:source.value==='custom'};
+      return{enabled:enabled.checked,inherit:false,threshold:Number(threshold.value),track:source.value==='custom'?0:Number(source.value||0),keepCustom:source.value==='custom',randomTracks:random.data()};
     };
     c.save=()=>{
       const data=c.data(),revision=c.revision;
@@ -49,11 +51,13 @@ export function mountLowTime({send,run}){
       node.addEventListener('input',()=>edit(field));
       node.addEventListener('change',()=>{edit(field);if(target==='timer')run(c.save);});
     }
-    source.addEventListener('input',()=>{c.dirty=true;c.revision++;});
+    source.addEventListener('input',()=>{c.dirty=true;c.revision++;random.show(source.value===String(randomTrack));});
     source.addEventListener('change',()=>{c.dirty=true;c.revision++;run(async()=>{
+      random.show(source.value===String(randomTrack));
       if(target==='timer')await c.save();
       await send('previewLowSound',{target,options:c.data(),quiet:true});
     });});
+    for(const event of ['input','change'])document.getElementById(target+'-low-random').addEventListener(event,()=>{c.dirty=true;c.revision++;if(event==='change'&&target==='timer')run(c.save);});
     preview.addEventListener('click',()=>run(()=>send('previewLowSound',{target,options:c.data()})));
     browse.addEventListener('click',()=>run(async()=>{
       if(target==='timer'&&c.dirty)await c.save();
@@ -65,9 +69,10 @@ export function mountLowTime({send,run}){
     const seconds=value.inherit?(settings?.threshold??value.threshold):value.threshold;
     for(const field of c.fields){field.enabled.checked=value.enabled;field.threshold.value=seconds;field.threshold.disabled=!value.enabled;}
     if(settings){
-      const choices=settings.tracks.map(t=>({label:t.id===0?'Use Audio settings sound':t.name,value:t.id}));
+      const choices=randomChoices(settings.tracks,'Use Audio settings sound');
       if(value.custom)choices.push({label:value.customName?'Custom MP3 · '+value.customName:'Custom MP3',value:'custom'});
       setOptions(c.source,choices,value.custom?'custom':value.track);
+      c.random.render(settings.tracks,value.randomTracks,value.track===randomTrack&&!value.custom);
     }
   }
   return{

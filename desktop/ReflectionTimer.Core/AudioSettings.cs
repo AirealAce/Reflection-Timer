@@ -1,14 +1,20 @@
+using System.Collections.Immutable;
+
 namespace ReflectionTimer.Core;
 
 public enum SoundEvent { SessionEnd, Success, Failure, LowTime, TimeReached, FocusLost }
 public enum SoundBehavior { Disruptive = 0, Assertive = 1, Polite = 2 }
 // Append new values: existing encrypted selections use these stable IDs.
-public enum LibrarySound { Default, SessionEnd, ObtainedItem, LevelUp, PokemonHealed, KeyItem, TrainerBattle, ChampionBattle, OutOfHealth, None }
+public enum LibrarySound { Default, SessionEnd, ObtainedItem, LevelUp, PokemonHealed, KeyItem, TrainerBattle, ChampionBattle, OutOfHealth, None,
+    Random, RgbyTrainerBattle, RgbyWildBattle, JohtoWildDay, JohtoWildNight, RgbyGymLeader, RegiBattle }
+
+public record RandomTrackWeight(LibrarySound Track, bool Enabled = true, int Weight = 1);
 
 public record SoundSetting
 {
     public string Mp3Path { get; init; } = "";
     public LibrarySound Track { get; init; }
+    public ImmutableList<RandomTrackWeight>? RandomTracks { get; init; } // Null uses the event's equal-weight preset.
     public SoundBehavior Behavior { get; init; } = SoundBehavior.Disruptive;
     public int Volume { get; init; } = 100; // Relative to App sound; legacy settings keep their existing loudness.
     public bool FadeOutEnabled { get; init; }
@@ -23,6 +29,7 @@ public record LowTimeOptions
     public int? ThresholdSeconds { get; init; } // Null follows Settings, including future changes.
     public string Mp3Path { get; init; } = "";
     public LibrarySound Track { get; init; } // Default follows the global low-time sound.
+    public ImmutableList<RandomTrackWeight>? RandomTracks { get; init; }
 }
 
 public record AudioSettings
@@ -66,7 +73,7 @@ public record AudioSettings
         _ => throw new ArgumentException("Choose a sound event.")
     };
     public SoundSetting ForLowTime(LowTimeOptions options) => options.Mp3Path.Length > 0 || options.Track != LibrarySound.Default
-        ? LowTime with { Mp3Path = options.Mp3Path, Track = options.Track } : LowTime;
+        ? LowTime with { Mp3Path = options.Mp3Path, Track = options.Track, RandomTracks = options.RandomTracks } : LowTime;
 
     public static void ValidateSource(string path, LibrarySound track)
     {
@@ -78,6 +85,7 @@ public record AudioSettings
     public static void Validate(SoundSetting setting)
     {
         ValidateSource(setting.Mp3Path, setting.Track);
+        RandomAudio.Validate(setting.RandomTracks);
         if (!Enum.IsDefined(setting.Behavior)) throw new ArgumentException("Choose Disruptive, Assertive, or Polite.");
         if (setting.Volume is < 0 or > 100) throw new ArgumentException("Audio volume must be between 0 and 100 percent.");
         if (setting.FadeOutAfterSeconds is < 1 or > TimerEngine.MaxDuration)
@@ -88,6 +96,7 @@ public record AudioSettings
     public static void Validate(LowTimeOptions options)
     {
         ValidateSource(options.Mp3Path, options.Track);
+        RandomAudio.Validate(options.RandomTracks);
         if (options.ThresholdSeconds is { } seconds) TimerEngine.ValidateDuration(seconds);
     }
 }

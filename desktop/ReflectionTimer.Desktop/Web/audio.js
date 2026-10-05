@@ -1,4 +1,5 @@
 import {setOptions,setText,setValue} from './ui.js';
+import {mountRandomTracks,randomChoices,randomTrack} from './random-audio.js';
 // Each original sound event keeps its own visible editor and saved settings.
 export function mountAudio({send,run}) {
   const template=document.getElementById('sound-form'),editors=[];let settings;
@@ -37,18 +38,21 @@ export function mountAudio({send,run}) {
       instances.push({form:copy,field:id=>copy.querySelector(`#${id}-${kind}-picker`)});
     }
     const editor={kind,form,field,instances,dirty:false,revision:0,saving:Promise.resolve()};editors.push(editor);
+    for(const instance of instances)instance.random=mountRandomTracks({after:instance.form.querySelector('.audio-source-row'),id:instance.form.id+'-random',kind,name:names[kind]});
     function syncControls(source){
       for(const target of instances){
         if(target!==source)for(const id of ['sound-track','sound-behavior','sound-volume','sound-fade','sound-fade-seconds',...([3,4].includes(kind)?['sound-message-fade','sound-message-fade-seconds']:[])]){
           const from=source.field(id),to=target.field(id);to.value=from.value;if(from.type==='checkbox')to.checked=from.checked;
         }
+        if(target!==source)target.random.set(source.random.data(false));
+        target.random.show(target.field('sound-track').value===String(randomTrack));
         setText(target.field('sound-volume-caption'),`Volume (${target.field('sound-volume').value}%)`);
         target.field('sound-fade-seconds').disabled=!target.field('sound-fade').checked;
         if([3,4].includes(kind))target.field('sound-message-fade-seconds').disabled=!target.field('sound-message-fade').checked;
       }
     }
     const data=()=>({kind,track:field('sound-track').value==='custom'?0:Number(field('sound-track').value),keepCustom:field('sound-track').value==='custom',
-      behavior:Number(field('sound-behavior').value),volume:Number(field('sound-volume').value),fade:field('sound-fade').checked,fadeSeconds:Number(field('sound-fade-seconds').value),quiet:true,
+      randomTracks:instances[0].random.data(),behavior:Number(field('sound-behavior').value),volume:Number(field('sound-volume').value),fade:field('sound-fade').checked,fadeSeconds:Number(field('sound-fade-seconds').value),quiet:true,
       ...([3,4].includes(kind)?{fadeAfterMessageSent:field('sound-message-fade').checked,messageSentFadeSeconds:Number(field('sound-message-fade-seconds').value)}:{})});
     let volumeTimer;
     function saveSound(){
@@ -73,11 +77,12 @@ export function mountAudio({send,run}) {
   template.remove();for(const id of ['stop-all-audio','focus-picker-stop-audio'])document.getElementById(id).addEventListener('click',()=>run(()=>send('stopSound')));
   function renderEditor(editor){if(!settings||editor.dirty)return;const sound=settings.sounds.find(s=>s.kind===editor.kind)??(editor.kind===4?settings.sounds.find(s=>s.kind===3):undefined);
     if(!sound)return;
-    const choices=settings.tracks.map(t=>({label:t.id===0?`Default · ${sound.defaultName}`:t.name,value:t.id}));
+    const choices=randomChoices(settings.tracks,`Default · ${sound.defaultName}`);
     if(sound.custom)choices.push({label:sound.customName?`Custom MP3 · ${sound.customName}`:'Custom MP3',value:'custom'});
     if(!sound.custom&&!choices.some(c=>c.value===sound.track))choices.push({label:'Unavailable on this PC · '+sound.track,value:sound.track});
-    for(const {field} of editor.instances){
+    for(const {field,random} of editor.instances){
       setOptions(field('sound-track'),choices,sound.custom?'custom':sound.track);
+      random.render(settings.tracks,sound.randomTracks,sound.track===randomTrack&&!sound.custom);
       setValue(field('sound-behavior'),sound.behavior);field('sound-volume').value=sound.volume;field('sound-fade').checked=sound.fadeOutEnabled;field('sound-fade-seconds').value=sound.fadeOutAfterSeconds;field('sound-fade-seconds').disabled=!sound.fadeOutEnabled;setText(field('sound-volume-caption'),`Volume (${sound.volume}%)`);
       if([3,4].includes(editor.kind)){field('sound-message-fade').checked=!!sound.fadeOutAfterMessageSent;field('sound-message-fade-seconds').value=sound.messageSentFadeSeconds??3;field('sound-message-fade-seconds').disabled=!sound.fadeOutAfterMessageSent;}
       setText(field('sound-default'),`Default: ${sound.defaultName}`);

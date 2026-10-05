@@ -14,7 +14,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     let page = await context.newPage();
     await page.context().route('**/*', async route=>{
       const name=new URL(route.request().url()).pathname.slice(1);
-      if (!['index.html','app.js','app.css','ui.js','settings.js','settings-search.js','setup.js','audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','help.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
+      if (!['index.html','app.js','app.css','ui.js','settings.js','settings-search.js','setup.js','audio.js','random-audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','help.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
       await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});
     });
     await page.context().addInitScript(() => {
@@ -340,7 +340,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.waitForFunction(()=>window.previewMessages.some(m=>m.action==='lowTime'&&m.data.track===3));
     check(await page.evaluate(()=>{const options=window.previewMessages.findLast(m=>m.action==='lowTime').data;return !options.inherit&&options.threshold===27&&options.track===3;}),'Session low-time changes retain the explicit threshold and sound');
     await page.getByRole('tab',{name:'Scheduler',exact:true}).click();
-    check(await page.locator('#schedules thead th').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Start time','Duration','Auto-start','Auto-start cutoff','Sound','Low on time','Status'])),'Scheduling columns match the original');
+    check(await page.locator('#schedules>.table-scroll thead th').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Start time','Duration','Auto-start','Auto-start cutoff','Sound','Low on time','Status'])),'Scheduling columns match the original');
     check(await page.locator('#schedules>.actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Edit selected','Remove selected','Import extension schedules…']))&&await page.locator('#schedule-rows button').count()===0,'Scheduling actions are below the table and act on the selected entry');
     await page.getByRole('button',{name:'Edit selected',exact:true}).click();
     check(await page.locator('#schedule-start').evaluate(e=>document.activeElement===e)&&await page.locator('#schedule-minutes').inputValue()==='15','Schedule editing moves focus to a populated labeled form');
