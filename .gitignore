@@ -28,6 +28,23 @@ private-setup*
 !/desktop/Sounds/pokemon-gsc-wild-johto-night.mp3
 !/desktop/Sounds/pokemon-rgby-gym-leader.mp3
 !/desktop/Sounds/pokemon-dpp-regi-battle.mp3
+!/desktop/Sounds/pokemon-rgby-final-rival.mp3
+!/desktop/Sounds/pokemon-hgss-ho-oh.mp3
+!/desktop/Sounds/pokemon-gsc-wild-kanto.mp3
+!/desktop/Sounds/pokemon-gsc-gym-leader-kanto.mp3
+!/desktop/Sounds/pokemon-gsc-trainer-kanto.mp3
+!/desktop/Sounds/pokemon-dpp-dialga-palkia.mp3
+!/desktop/Sounds/pokemon-dpp-giratina.mp3
+!/desktop/Sounds/pokemon-dpp-lake-trio.mp3
+!/desktop/Sounds/pokemon-dpp-elite-four.mp3
+!/desktop/Sounds/pokemon-dpp-champion.mp3
+!/desktop/Sounds/pokemon-frlg-trainer.mp3
+!/desktop/Sounds/pokemon-frlg-wild.mp3
+!/desktop/Sounds/pokemon-frlg-gym-leader.mp3
+!/desktop/Sounds/pokemon-frlg-legendary.mp3
+!/desktop/Sounds/pokemon-frlg-mewtwo.mp3
+!/desktop/Sounds/pokemon-frlg-final-rival.mp3
+!/desktop/Sounds/pokemon-frlg-deoxys.mp3
 
 # Dependencies
 node_modules/

@@ -160,7 +160,7 @@ internal sealed partial class PreviewWindow
             case "volume": engine.SetAppVolume(ReadInt(data,"volume",0,100)); message="App volume saved."; break;
             case "saveSound":
                 var kind = (SoundEvent)ReadInt(data,"kind",0,5); var previous = AudioSettings.From(state).For(kind);
-                engine.SetSound(kind,new() { Track = (LibrarySound)ReadInt(data,"track",0,(int)LibrarySound.RegiBattle),
+                engine.SetSound(kind,new() { Track = (LibrarySound)ReadInt(data,"track",0,AudioSettings.MaxTrackId),
                     RandomTracks = PreviewSession.ReadRandomTracks(data,previous.RandomTracks),
                     Mp3Path = ReadFlag(data,"keepCustom") ? previous.Mp3Path : "", Behavior = (SoundBehavior)ReadInt(data,"behavior",0,2),
                     Volume = ReadInt(data,"volume",0,100), FadeOutEnabled = ReadFlag(data,"fade"), FadeOutAfterSeconds = ReadInt(data,"fadeSeconds",1,TimerEngine.MaxDuration),

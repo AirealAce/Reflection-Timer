@@ -7,8 +7,8 @@ const {execFileSync} = require('node:child_process');
 const {approvedTracks, validateBundledAudio} = require('../scripts/bundled-audio.cjs');
 const root = path.join(__dirname, '..');
 
-test('all fourteen catalogued MP3s exist and match their recorded hashes', () => {
-  assert.equal(approvedTracks().length, 14);
+test('all 31 catalogued MP3s exist and match their recorded hashes', () => {
+  assert.equal(approvedTracks().length, 31);
   assert.deepEqual(validateBundledAudio(), []);
 });
 

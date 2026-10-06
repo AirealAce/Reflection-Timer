@@ -125,6 +125,159 @@
       "sha256": "b4be5f76ad0be48106103f9af4e9bbd900aaeb43504cfa4fffcd2662674d5b84",
       "addedOn": "2026-10-05",
       "bytes": 2979899
+    },
+    {
+      "file": "pokemon-rgby-final-rival.mp3",
+      "originalFilename": "Pokemon Red Green Blue Yellow - 51 Final Battle! (Rival).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-rgby-final-rival.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "1e2492e8a91a8bbebb809047d48269ce6fe696645ac274b97380873df0857f1b",
+      "addedOn": "2026-10-06",
+      "bytes": 3141512
+    },
+    {
+      "file": "pokemon-hgss-ho-oh.mp3",
+      "originalFilename": "Pokemon HeartGold SoulSilver - 111. Battle! (Ho-Oh).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-hgss-ho-oh.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "f344330225cb2eecfc6d63f1ac7d525c3f7f54b72fde1fcf9b1ff2a99abdd886",
+      "addedOn": "2026-10-06",
+      "bytes": 5568999
+    },
+    {
+      "file": "pokemon-gsc-wild-kanto.mp3",
+      "originalFilename": "Pokemon Gold Silver Crystal - 108. Battle! (Wild Pokémon - Kanto).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-gsc-wild-kanto.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "829d745aa08d130356d11830f0808fa4894545b9a6769125fa62f1883b78aed0",
+      "addedOn": "2026-10-06",
+      "bytes": 1425103
+    },
+    {
+      "file": "pokemon-gsc-gym-leader-kanto.mp3",
+      "originalFilename": "Pokemon Gold Silver Crystal - 106. Battle! (Gym Leader - Kanto).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-gsc-gym-leader-kanto.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "1d10cac1f56afc5c06f2ee3d998c4e0c8d93b5ae61cbe045cb7cc6cf6325363e",
+      "addedOn": "2026-10-06",
+      "bytes": 1421411
+    },
+    {
+      "file": "pokemon-gsc-trainer-kanto.mp3",
+      "originalFilename": "Pokemon Gold Silver Crystal - 105. Battle! (Trainer Battle - Kanto).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-gsc-trainer-kanto.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "2cbd42c10261193d73f352653c47e4abd66cb6b0dd8e3716374908b84f6764e4",
+      "addedOn": "2026-10-06",
+      "bytes": 1845248
+    },
+    {
+      "file": "pokemon-dpp-dialga-palkia.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 85. Battle! (Dialga - Palkia).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-dialga-palkia.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "26526ec1752ae77d70622c81ddc36e67222bf8828d4c08d17c3b6390f282cd90",
+      "addedOn": "2026-10-06",
+      "bytes": 9684643
+    },
+    {
+      "file": "pokemon-dpp-giratina.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 89. Battle! (Giratina).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-giratina.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "061da4c94586799a558f27bc2c5c268cc9d310b809d398a3f9b0e8728291489b",
+      "addedOn": "2026-10-06",
+      "bytes": 7733914
+    },
+    {
+      "file": "pokemon-dpp-lake-trio.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 134. Battle! (Azelf - Mesprit - Uxie).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-lake-trio.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "25e5c474f5a4ed65c9df3c6b518f563e122503424b5907a2d4b9bf2d89dcae4a",
+      "addedOn": "2026-10-06",
+      "bytes": 6672053
+    },
+    {
+      "file": "pokemon-dpp-elite-four.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 165. Battle! (Elite Four).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-elite-four.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "0f86ede9bf7d6b7a91c8b8c7758e65f50e678109b59991f1fb51c689c2bae4e9",
+      "addedOn": "2026-10-06",
+      "bytes": 5939211
+    },
+    {
+      "file": "pokemon-dpp-champion.mp3",
+      "originalFilename": "Pokemon Diamond Pearl Platinum - 168. Battle! (Champion).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-dpp-champion.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "9a178dd6eb204997b24510b16ce492422fcbb6790cbe375eee3af9fbd9519b58",
+      "addedOn": "2026-10-06",
+      "bytes": 5267739
+    },
+    {
+      "file": "pokemon-frlg-trainer.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-11. Battle! (Trainer).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-trainer.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "6c3e66f82af8b34688ca0308d887f44c95469c9cce13b89bbf481dbe8c6adaa4",
+      "addedOn": "2026-10-06",
+      "bytes": 6285752
+    },
+    {
+      "file": "pokemon-frlg-wild.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-18. Battle! (Wild Pokémon).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-wild.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "137ce6601be412b6667b3a364feadb1d0fda662db2d5d9930c1e30d3ce396dc3",
+      "addedOn": "2026-10-06",
+      "bytes": 2825124
+    },
+    {
+      "file": "pokemon-frlg-gym-leader.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-27. Battle! (Gym Leader).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-gym-leader.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "795de7ed64dfb4da7455f9a785ab50db6754be1b719db5eba1b5723dadf62f00",
+      "addedOn": "2026-10-06",
+      "bytes": 4280605
+    },
+    {
+      "file": "pokemon-frlg-legendary.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-53. Battle! (Legendary Pokémon).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-legendary.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "50cf63864721e7407438f71878d0ea3e4c2cc8fdb9024b5dff7f422668548c57",
+      "addedOn": "2026-10-06",
+      "bytes": 1811674
+    },
+    {
+      "file": "pokemon-frlg-mewtwo.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-68. Battle! (Mewtwo).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-mewtwo.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "15038048dca83110af578c545802d1c383bbd90b1c71899de7954ca6e4f7a6b5",
+      "addedOn": "2026-10-06",
+      "bytes": 1827451
+    },
+    {
+      "file": "pokemon-frlg-final-rival.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 1-70. Final Battle! (Rival).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-final-rival.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "8cde9ead2d3d62824c4725c2b6dff4391812c677764272b12f0f9ce2bafe3868",
+      "addedOn": "2026-10-06",
+      "bytes": 4940365
+    },
+    {
+      "file": "pokemon-frlg-deoxys.mp3",
+      "originalFilename": "Pokemon FireRed LeafGreen - 2-02. Battle! (Deoxys).mp3",
+      "repositoryPath": "desktop/Sounds/pokemon-frlg-deoxys.mp3",
+      "source": "Local recording supplied by the project maintainer",
+      "sha256": "74641d66c4f22fdd393b57b5b6ea51ec0c92a940731f03f00aaaecda8585c554",
+      "addedOn": "2026-10-06",
+      "bytes": 5519033
     }
   ],
   "formatVersion": 1,

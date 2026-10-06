@@ -10,11 +10,13 @@ static class RandomAudioTests
     {
         var tracks=SoundLibrary.Tracks.ToArray();
         check((int)LibrarySound.TrainerBattle==6&&(int)LibrarySound.ChampionBattle==7&&(int)LibrarySound.None==9,"Adding Random and new songs preserves every previous saved track ID");
-        check(tracks.Length==14&&tracks.Count(RandomAudio.IsSong)==8,"The library distinguishes eight songs from six notification sounds");
+        check((int)LibrarySound.RegiBattle==16&&(int)LibrarySound.RgbyFinalRival==17&&(int)LibrarySound.FrlgDeoxys==33,
+            "The expanded music library appends new IDs without changing previously saved tracks");
+        check(tracks.Length==31&&tracks.Count(RandomAudio.IsSong)==25,"The library distinguishes 25 songs from six notification sounds");
         foreach(var kind in Enum.GetValues<SoundEvent>()) {
             var songs=kind is SoundEvent.LowTime or SoundEvent.TimeReached or SoundEvent.FocusLost;
             var pool=tracks.Where(t=>RandomAudio.For(kind,t,null).Enabled).ToArray();
-            check(pool.All(t=>RandomAudio.IsSong(t)==songs)&&pool.Length==(songs?8:6),"Random defaults exclude the other audio category: "+kind);
+            check(pool.All(t=>RandomAudio.IsSong(t)==songs)&&pool.Length==(songs?25:6),"Random defaults exclude the other audio category: "+kind);
             check(pool.Select((track,index)=>RandomAudio.Select(kind,null,tracks,(index+.5)/pool.Length)==track).All(x=>x),"Every default eligible track has exactly the same chance: "+kind);
         }
         var weighted=tracks.Select(t=>new RandomTrackWeight(t,t is LibrarySound.TrainerBattle or LibrarySound.ChampionBattle,t==LibrarySound.ChampionBattle?3:1)).ToImmutableList();
@@ -35,6 +37,13 @@ static class RandomAudioTests
         var reopened=new TimerEngine(store);var saved=AudioSettings.From(reopened.Snapshot).FocusLost;
         check(saved.Track==LibrarySound.Random&&saved.RandomTracks!.SequenceEqual(weighted)&&saved.Volume==37&&saved.FadeOutAfterSeconds==9,"Random choices, weights, volume and fade preferences survive profile reload");
         var low=PreviewSession.ReadLow(JsonSerializer.SerializeToElement(new{enabled=true,inherit=false,threshold=12,track=(int)LibrarySound.Random,randomTracks=weighted},PreviewSession.Json),new());
+        foreach(var track in tracks.Where(t=>(int)t>=17)) {
+            var selected=PreviewSession.ReadLow(JsonSerializer.SerializeToElement(new{enabled=true,inherit=false,threshold=12,track=(int)track},PreviewSession.Json),new());
+            check(selected.Track==track,"Timer and Scheduler inputs accept the expanded library track: "+track);
+            foreach(var kind in Enum.GetValues<SoundEvent>())engine.SetSound(kind,new(){Track=track});
+            check(Enum.GetValues<SoundEvent>().All(kind=>AudioSettings.From(new TimerEngine(store).Snapshot).For(kind).Track==track),
+                "All audio events retain the selected new recording after reopening: "+track);
+        }
         var id=engine.SaveSchedule(null,DateTimeOffset.Now.AddHours(1),120,false,50,lowTime:low);
         check(engine.Snapshot.Schedules.Single(s=>s.Id==id).LowTime.RandomTracks!.SequenceEqual(weighted),"A scheduled session keeps its own Random probabilities");
         var inherited=new AudioSettings{LowTime=new(){Track=LibrarySound.Random,RandomTracks=empty}};

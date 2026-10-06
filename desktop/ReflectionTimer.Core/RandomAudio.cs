@@ -8,7 +8,11 @@ public static class RandomAudio
     public static bool IsTrack(LibrarySound track) => Enum.IsDefined(track) && track is not (LibrarySound.Default or LibrarySound.None or LibrarySound.Random);
     public static bool IsSong(LibrarySound track) => track is LibrarySound.TrainerBattle or LibrarySound.ChampionBattle
         or LibrarySound.RgbyTrainerBattle or LibrarySound.RgbyWildBattle or LibrarySound.JohtoWildDay
-        or LibrarySound.JohtoWildNight or LibrarySound.RgbyGymLeader or LibrarySound.RegiBattle;
+        or LibrarySound.JohtoWildNight or LibrarySound.RgbyGymLeader or LibrarySound.RegiBattle
+        or LibrarySound.RgbyFinalRival or LibrarySound.HgssHoOh or LibrarySound.KantoWild or LibrarySound.KantoGymLeader or LibrarySound.KantoTrainer
+        or LibrarySound.DppDialgaPalkia or LibrarySound.DppGiratina or LibrarySound.DppLakeTrio or LibrarySound.DppEliteFour or LibrarySound.DppChampion
+        or LibrarySound.FrlgTrainer or LibrarySound.FrlgWild or LibrarySound.FrlgGymLeader or LibrarySound.FrlgLegendary
+        or LibrarySound.FrlgMewtwo or LibrarySound.FrlgFinalRival or LibrarySound.FrlgDeoxys;
     public static RandomTrackWeight For(SoundEvent kind, LibrarySound track, ImmutableList<RandomTrackWeight>? saved)
         => saved?.FirstOrDefault(x => x.Track == track)
             ?? new(track, IsSong(track) == (kind is SoundEvent.LowTime or SoundEvent.TimeReached or SoundEvent.FocusLost));

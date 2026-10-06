@@ -33,6 +33,21 @@ Additional local recordings supplied by the project maintainer on 2026-10-05
 - Pokemon Diamond Pearl Platinum: 200. Battle! (Regirock - Regice - Registeel)
 The original audio bytes, embedded credits and metadata are retained.
 
+Additional local recordings supplied by the project maintainer on 2026-10-06
+- Pokemon Red Green Blue Yellow: 51 Final Battle! (Rival)
+- Pokemon HeartGold SoulSilver: 111. Battle! (Ho-Oh)
+- Pokemon Gold Silver Crystal: 108. Battle! (Wild Pokemon - Kanto),
+  106. Battle! (Gym Leader - Kanto), 105. Battle! (Trainer Battle - Kanto)
+- Pokemon Diamond Pearl Platinum: 85. Battle! (Dialga - Palkia),
+  89. Battle! (Giratina), 134. Battle! (Azelf - Mesprit - Uxie),
+  165. Battle! (Elite Four), 168. Battle! (Champion)
+- Pokemon FireRed LeafGreen: 1-11. Battle! (Trainer),
+  1-18. Battle! (Wild Pokemon), 1-27. Battle! (Gym Leader),
+  1-53. Battle! (Legendary Pokemon), 1-68. Battle! (Mewtwo),
+  1-70. Final Battle! (Rival), 2-02. Battle! (Deoxys)
+These exact local audio bytes, embedded credits and metadata are retained.
+The original restored Champion recording remains a separate library entry.
+
 Provenance, filenames, and SHA-256 checksums are recorded in
 desktop/Sounds/sources.json in the source repository. The app does not download
 audio at runtime. Users can select different local MP3s or None in Settings.

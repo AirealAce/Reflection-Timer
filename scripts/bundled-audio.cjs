@@ -5,7 +5,7 @@ const crypto = require('node:crypto');
 const root = path.join(__dirname, '..');
 
 function approvedTracks(catalog = JSON.parse(fs.readFileSync(path.join(root, 'desktop/Sounds/sources.json'), 'utf8'))) {
-  if (catalog.formatVersion !== 1 || !Array.isArray(catalog.tracks) || catalog.tracks.length !== 14)
+  if (catalog.formatVersion !== 1 || !Array.isArray(catalog.tracks) || catalog.tracks.length !== 31)
     throw new Error('Invalid bundled audio catalog.');
   const names = new Set();
   for (const track of catalog.tracks) {

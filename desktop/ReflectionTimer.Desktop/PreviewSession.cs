@@ -32,7 +32,7 @@ public sealed class PreviewSession
     internal static LowTimeOptions ReadLow(JsonElement data,LowTimeOptions previous)
     {
         var low=previous with {Enabled=Flag(data,"enabled"),ThresholdSeconds=Flag(data,"inherit")?null:Number(data,"threshold",1,TimerEngine.MaxDuration)};
-        if(data.TryGetProperty("track",out _))low=low with{Track=(LibrarySound)Number(data,"track",0,(int)LibrarySound.RegiBattle),Mp3Path=Flag(data,"keepCustom")?previous.Mp3Path:""};
+        if(data.TryGetProperty("track",out _))low=low with{Track=(LibrarySound)Number(data,"track",0,AudioSettings.MaxTrackId),Mp3Path=Flag(data,"keepCustom")?previous.Mp3Path:""};
         low=low with{RandomTracks=ReadRandomTracks(data,previous.RandomTracks)};
         AudioSettings.Validate(low);
         return low;

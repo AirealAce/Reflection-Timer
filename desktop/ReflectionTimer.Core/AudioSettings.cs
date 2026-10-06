@@ -6,7 +6,10 @@ public enum SoundEvent { SessionEnd, Success, Failure, LowTime, TimeReached, Foc
 public enum SoundBehavior { Disruptive = 0, Assertive = 1, Polite = 2 }
 // Append new values: existing encrypted selections use these stable IDs.
 public enum LibrarySound { Default, SessionEnd, ObtainedItem, LevelUp, PokemonHealed, KeyItem, TrainerBattle, ChampionBattle, OutOfHealth, None,
-    Random, RgbyTrainerBattle, RgbyWildBattle, JohtoWildDay, JohtoWildNight, RgbyGymLeader, RegiBattle }
+    Random, RgbyTrainerBattle, RgbyWildBattle, JohtoWildDay, JohtoWildNight, RgbyGymLeader, RegiBattle,
+    RgbyFinalRival, HgssHoOh, KantoWild, KantoGymLeader, KantoTrainer,
+    DppDialgaPalkia, DppGiratina, DppLakeTrio, DppEliteFour, DppChampion,
+    FrlgTrainer, FrlgWild, FrlgGymLeader, FrlgLegendary, FrlgMewtwo, FrlgFinalRival, FrlgDeoxys }
 
 public record RandomTrackWeight(LibrarySound Track, bool Enabled = true, int Weight = 1);
 
@@ -34,6 +37,7 @@ public record LowTimeOptions
 
 public record AudioSettings
 {
+    public static int MaxTrackId { get; } = Enum.GetValues<LibrarySound>().Max(track => (int)track);
     // Apply the installation preset only to a new profile. Record initializers
     // below also deserialize older profiles, so their legacy fallbacks stay put.
     public static AudioSettings CreateDefault() => new() {

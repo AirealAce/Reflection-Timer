@@ -3,6 +3,8 @@ const {chromium}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
 (async()=>{
+  const catalog=JSON.parse(await fs.readFile(path.resolve(__dirname,'../Sounds/sources.json'),'utf8'));
+  const addedSongs=catalog.tracks.filter(t=>t.originalFilename).map(t=>t.originalFilename.replace(/\.mp3$/i,''));
   const browser=await chromium.launch({channel:'msedge',headless:true});let passed=0;
   const check=(value,label)=>{assert.ok(value,label);passed++;console.log('PASS '+label);};
   try{
@@ -11,12 +13,9 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       if(!/\.(html|js|css)$/.test(name))return route.abort();
       await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});
     });
-    await page.addInitScript(()=>{
+    await page.addInitScript(songs=>{
       const handlers=[];window.messages=[];window.dispatchBridge=m=>handlers.forEach(h=>h({data:m}));
       const names=['Original extension sound','Obtained an Item','Level Up','Pokémon Healed','Obtained a Key Item','Battle (Trainer)','Battle (Champion)','Out of Health'];
-      const songs=['Pokemon Red Green Blue Yellow - 10. Battle! (Trainer Battle)','Pokemon Red Green Blue Yellow - 14 Battle! (Wild Pokémon)',
-        'Pokemon Gold Silver Crystal - 17. Battle! (Wild Pokémon - Johto - Day)','Pokemon Gold Silver Crystal - 18. Battle! (Wild Pokémon - Johto - Night)',
-        'Pokemon Red Green Blue Yellow - 28. Battle! (Gym Leader)','Pokemon Diamond Pearl Platinum - 200. Battle! (Regirock - Regice - Registeel)'];
       window.settings=JSON.parse(sessionStorage.getItem('random-settings')||'null')??{sheetUrl:'',webAppUrl:'',sheetMode:'date',sheetName:'',connected:false,
         volume:50,threshold:15,showFloatingTimer:true,theme:0,popup:4,placement:4,overlap:2,focusMode:{enabled:false,delaySeconds:5,targets:[],multipleTargets:false,idleEnabled:false,idleSeconds:20},
         tracks:[{id:10,name:'Random'},{id:0,name:'Default'},{id:9,name:'None'},...names.map((name,i)=>({id:i+1,name,song:[5,6].includes(i)})),...songs.map((name,i)=>({id:i+11,name,song:true}))],
@@ -32,12 +31,12 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
           window.dispatchBridge({type:'reply',requestId:m.requestId,...(m.action==='focusTargets'?{targets:[]}:{} )});
         });
       }}};
-    });
+    },addedSongs);
     async function load(){await page.goto('https://reflection-timer.invalid/index.html?view=main');await page.waitForFunction(()=>window.messages.some(m=>m.action==='ready'));await page.evaluate(()=>{window.dispatchBridge({type:'init',state:window.state});window.dispatchBridge({type:'settings',settings:window.settings});});}
     await load();await page.locator('#tab-settings').click();
     for(const id of ['sound-track-0','sound-track-1','sound-track-2','sound-track-3','sound-track-4','sound-track-5','sound-track-5-picker','timer-low-track','schedule-low-track']){
       check(await page.locator('#'+id+' option').first().textContent()==='Random',`Random is first in ${id}`);
-      check(await page.locator('#'+id+' option').evaluateAll(options=>[11,12,13,14,15,16].every(id=>options.some(o=>o.value===String(id)))),`All six added songs appear in ${id}`);
+      check(await page.locator('#'+id+' option').evaluateAll((options,names)=>names.every((name,index)=>options.some(o=>o.value===String(index+11)&&o.textContent===name)),addedSongs),`Every added recording appears with its full name in ${id}`);
     }
     check(await page.locator('#sound-track-1').inputValue()==='3'&&await page.locator('#sound-track-3').inputValue()==='6','Adding Random does not replace existing selected sounds');
     for(const kind of [0,1,2,3,4,5]){
@@ -46,9 +45,9 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       const details=page.locator(`#sound-form-${kind}-random`);
       check(await details.isVisible()&&!await details.evaluate(e=>e.open),`Random probabilities appear collapsed for event ${kind}`);
       await details.locator('summary').click();
-      check(await details.locator('input[type=checkbox]:checked').count()===([3,4,5].includes(kind)?8:6),`Event ${kind} starts with only its intended song/notification pool checked`);
+      check(await details.locator('input[type=checkbox]:checked').count()===([3,4,5].includes(kind)?25:6),`Event ${kind} starts with only its intended song/notification pool checked`);
       check(await details.locator('tbody tr').evaluateAll((rows,songs)=>rows.every(row=>{const checkbox=row.querySelector('input[type=checkbox]'),weight=row.querySelector('input[type=number]'),song=[6,7].includes(Number(checkbox.id.split('-').at(-2)))||Number(checkbox.id.split('-').at(-2))>=11;return checkbox.checked===(song===songs)&&weight.value==='1'&&weight.disabled===!checkbox.checked;}),[3,4,5].includes(kind)),`Event ${kind} has equal weights and editable enabled tracks`);
-      check(await details.locator('input[type=checkbox]:checked').first().evaluate(e=>document.getElementById(e.getAttribute('aria-describedby')).textContent)===(kind<3?'16.67%':'12.5%'),`Event ${kind} exposes the normalized percentage to screen readers`);
+      check(await details.locator('input[type=checkbox]:checked').first().evaluate(e=>document.getElementById(e.getAttribute('aria-describedby')).textContent)===(kind<3?'16.67%':'4%'),`Event ${kind} exposes the normalized percentage to screen readers`);
     }
     const successWeight=page.locator('#sound-form-1-random-3-weight');await successWeight.fill('4');
     await page.keyboard.press('Control+s');
@@ -65,7 +64,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.locator('#tab-timer').click();await page.locator('#timer-low-track').selectOption('10');await page.locator('#timer-low-random summary').click();
     await page.locator('#timer-low-random-11-weight').fill('3');await page.locator('#timer-low-random-12-weight').focus();
     await page.waitForFunction(()=>window.messages.some(m=>m.action==='lowTime'&&m.data.track===10&&m.data.randomTracks.find(t=>t.track===11).weight===3));
-    check(await page.locator('#timer-low-random-11-chance').textContent()==='30%','Timer low-time Random has its own editable pool and normalized chances');
+    check(await page.locator('#timer-low-random-11-chance').textContent()==='11.11%','Timer low-time Random has its own editable pool and normalized chances');
     await page.locator('#tab-schedules').click();await page.locator('#schedule-low-track').selectOption('10');await page.locator('#schedule-low-random summary').click();
     await page.locator('#schedule-low-random-12-weight').fill('4');await page.locator('#schedule-start').fill('2027-01-01T10:00');await page.locator('#schedule-save').click();
     await page.waitForFunction(()=>window.messages.some(m=>m.action==='schedule'));

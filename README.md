@@ -1,8 +1,10 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.49**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.50**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 **Search settings** at the top of Settings filters the existing sections by their names, labels and explanations. Multiple words narrow the results; **Clear search** restores everything. Edits remain in their original controls, and Ctrl+S / Ctrl+Enter still save Settings. Help icons sit beside their corresponding heading text in every theme.
+
+The music library includes **25 songs** and **6 notification sounds**. All 17 additional battle recordings added in 4.2.50 are available in Settings, Focus audio, Timer and Scheduler audio selectors. **Random** gives eligible tracks equal chances unless you change their weights: song events initially include the songs, while Success, Failure and Session end initially include notification sounds. The original restored **Battle (Champion)** recording and the separate **Pokemon Diamond Pearl Platinum - 168. Battle! (Champion)** recording keep distinct names and selections. Existing selected sounds, volume levels, fades and saved weights are preserved.
 
 **Settings → Animations → Focus glow style** selects **Crimson halo** (default) or **Classic glow**. Crimson halo has a dark, translucent blood-red perimeter, a wider fade to transparent toward the center and gently rounded inner corners; Classic glow retains the original appearance. The same controls are available under the collapsed **Animations** section in **Choose Window / Tab…** and stay synchronized. The existing glow enable switch, Focus targets and audio preferences are preserved. Both styles respect Windows' reduced-motion preference and allow keyboard and mouse input through the glow.
 
