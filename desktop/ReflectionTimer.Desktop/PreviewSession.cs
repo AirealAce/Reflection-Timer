@@ -23,6 +23,7 @@ public sealed class PreviewSession
     internal static object FocusTargetView(FocusTarget t)=>new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused,captureScope=(int)t.CaptureScope};
     internal static object FocusView(FocusModeSettings settings)=>new {
         settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds, settings.ScreenEdgeGlow,
+        screenEdgeGlowStyle=(int)settings.ScreenEdgeGlowStyle,
         targets=settings.SelectedTargets.Select(FocusTargetView),
         target=settings.Target?.Name,
         targetKind=settings.Target is {} target ? (int?)target.Kind : null,

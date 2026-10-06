@@ -561,6 +561,7 @@ public sealed partial class TimerEngine
     }
     public void SetFocusMode(FocusModeSettings settings)
     {
+        if (!Enum.IsDefined(settings.ScreenEdgeGlowStyle)) throw new ArgumentException("Choose a supported Focus animation style.");
         if (settings.DelaySeconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
         if (settings.IdleSeconds is < 1 or > MaxDuration) throw new ArgumentException($"Idle time must be between 1 and {MaxDuration} seconds.");
         var targets = settings.SelectedTargets.DistinctBy(t => t.Key).ToArray();
@@ -571,6 +572,7 @@ public sealed partial class TimerEngine
         var previous = SettingsSnapshot.FocusMode;
         if (previous.Enabled == settings.Enabled && previous.DelaySeconds == settings.DelaySeconds && previous.IdleEnabled == settings.IdleEnabled
             && previous.IdleSeconds == settings.IdleSeconds && previous.ScreenEdgeGlow == settings.ScreenEdgeGlow
+            && previous.ScreenEdgeGlowStyle == settings.ScreenEdgeGlowStyle
             && previous.MultipleTargets == settings.MultipleTargets && previous.SelectedTargets.SequenceEqual(targets)) return;
         Change("settings.saved", s => s.FocusMode = settings);
     }

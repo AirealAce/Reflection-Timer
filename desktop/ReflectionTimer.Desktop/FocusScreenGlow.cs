@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using ReflectionTimer.Core;
 
 namespace ReflectionTimer.Accessible;
 
@@ -14,7 +15,8 @@ internal sealed class FocusScreenGlow : IDisposable
     private readonly Action? unavailable;
     private readonly Func<Rectangle[]> screens;
     private Rectangle[] bounds = [];
-    private int[] thicknesses = [];
+    private GlowMetrics[] geometry = [];
+    private FocusGlowStyle style = FocusGlowStyle.CrimsonHalo;
     private bool active, disposed, animate;
     private long started, nextDisplayCheck;
     internal IReadOnlyList<nint> WindowHandles => edges.Select(edge => edge.Handle).ToArray();
@@ -25,11 +27,16 @@ internal sealed class FocusScreenGlow : IDisposable
         this.screens = screens ?? (() => Screen.AllScreens.Select(s => s.Bounds).ToArray());
         pulse.Tick += (_, _) => Refresh();
     }
-    internal void SetActive(bool value)
+    internal void SetActive(bool value, FocusGlowStyle selectedStyle = FocusGlowStyle.CrimsonHalo)
     {
-        if (disposed || active == value) return;
+        if (disposed) return;
+        if (!Enum.IsDefined(selectedStyle)) selectedStyle = FocusGlowStyle.CrimsonHalo;
+        var changedStyle = style != selectedStyle;
+        if (active == value && !changedStyle) return;
+        style = selectedStyle;
         active = value;
         if (!value) { Clear(); return; }
+        if (changedStyle) Clear();
         started = Environment.TickCount64; nextDisplayCheck = 0;
         Refresh();
         if (edges.Count > 0) pulse.Start();
@@ -44,15 +51,15 @@ internal sealed class FocusScreenGlow : IDisposable
                 // Windows' reduced-motion preference also governs this glow.
                 animate = SystemParametersInfo(0x1042, 0, out var enabled, 0) && enabled;
                 var current = screens();
-                var scaled = current.Select(Thickness).ToArray();
-                if (!bounds.SequenceEqual(current) || !thicknesses.SequenceEqual(scaled)) {
-                    Clear(); bounds = current; thicknesses = scaled;
+                var scaled = current.Select(screen => Metrics(screen, style, DpiScale(screen))).ToArray();
+                if (!bounds.SequenceEqual(current) || !geometry.SequenceEqual(scaled)) {
+                    Clear(); bounds = current; geometry = scaled;
                     for (var i = 0; i < bounds.Length; i++)
-                        foreach (var edge in Layout(bounds[i], thicknesses[i])) edges.Add(new(edge, bounds[i]));
+                        foreach (var edge in Layout(bounds[i], geometry[i].SurfaceThickness)) edges.Add(new(edge, bounds[i], style, geometry[i]));
                     if (edges.Count > 0) pulse.Start();
                 }
             }
-            var alpha = Opacity(now - started, animate);
+            var alpha = Opacity(now - started, animate, style);
             foreach (var edge in edges) edge.Show(alpha);
         } catch {
             // A graphics/display failure must never close the timer, steal
@@ -60,13 +67,28 @@ internal sealed class FocusScreenGlow : IDisposable
             Clear(); try { unavailable?.Invoke(); } catch { }
         }
     }
-    private static int Thickness(Rectangle screen)
+    private static double DpiScale(Rectangle screen)
     {
         try {
             var monitor = MonitorFromPoint(new Point(screen.Left + screen.Width / 2, screen.Top + screen.Height / 2), 2);
-            if (GetDpiForMonitor(monitor, 0, out var x, out _) == 0) return (int)Math.Round(48 * x / 96d);
+            if (GetDpiForMonitor(monitor, 0, out var x, out _) == 0) return x / 96d;
         } catch { }
-        return 48;
+        return 1;
+    }
+    internal readonly record struct GlowMetrics(int Reach, int CornerRadius, int SurfaceThickness);
+    internal static GlowMetrics Metrics(Rectangle screen, FocusGlowStyle style, double scale = 1)
+    {
+        var limit = Math.Max(1, Math.Min(screen.Width, screen.Height) / 2);
+        if (style == FocusGlowStyle.Classic) {
+            var thickness = Math.Clamp((int)Math.Round(48 * scale), 1, limit);
+            return new(thickness, 0, thickness);
+        }
+        var reach = Math.Clamp((int)Math.Round(112 * scale), 1, Math.Max(1, limit / 2));
+        var radius = Math.Min((int)Math.Round(32 * scale), Math.Max(0, limit - reach));
+        // A rounded inner opening reaches farther into diagonal corners than
+        // the straight edges. Include its entire fade in these narrow strips.
+        var surface = Math.Min(limit, (int)Math.Ceiling(reach + (1 - 1 / Math.Sqrt(2)) * radius) + 1);
+        return new(reach, radius, surface);
     }
     internal static Rectangle[] Layout(Rectangle screen, int thickness)
     {
@@ -76,25 +98,43 @@ internal sealed class FocusScreenGlow : IDisposable
             new(screen.Left, screen.Top + t, t, screen.Height - 2 * t), new(screen.Right - t, screen.Top + t, t, screen.Height - 2 * t)];
         return result.Where(r => r.Width > 0 && r.Height > 0).ToArray();
     }
-    internal static byte Opacity(long elapsed, bool animate) => animate
-        ? (byte)Math.Round(210 + 25 * Math.Cos(Math.Max(0, elapsed) * Math.PI * 2 / 3200)) : (byte)235;
-    internal static byte PixelAlpha(Rectangle edge, Rectangle screen, int x, int y)
+    internal static byte Opacity(long elapsed, bool animate, FocusGlowStyle style = FocusGlowStyle.Classic) => animate
+        ? (byte)Math.Round((style == FocusGlowStyle.Classic ? 210 : 170) + (style == FocusGlowStyle.Classic ? 25 : 15) * Math.Cos(Math.Max(0, elapsed) * Math.PI * 2 / 3200))
+        : style == FocusGlowStyle.Classic ? (byte)235 : (byte)185;
+    internal static byte PixelAlpha(Rectangle edge, Rectangle screen, int x, int y, FocusGlowStyle style = FocusGlowStyle.Classic)
+        => PixelAlpha(edge, screen, x, y, style, Metrics(screen, style));
+    private static byte PixelAlpha(Rectangle edge, Rectangle screen, int x, int y, FocusGlowStyle style, GlowMetrics metrics)
     {
+        if (style != FocusGlowStyle.Classic) {
+            // Signed distance to a rounded, transparent inner workspace.
+            // Continuous coordinates keep the four native surfaces seamless.
+            var qx = Math.Abs(edge.Left + x + .5 - (screen.Left + screen.Width / 2d)) - (screen.Width / 2d - metrics.Reach - metrics.CornerRadius);
+            var qy = Math.Abs(edge.Top + y + .5 - (screen.Top + screen.Height / 2d)) - (screen.Height / 2d - metrics.Reach - metrics.CornerRadius);
+            var dx = Math.Max(qx, 0); var dy = Math.Max(qy, 0);
+            var roundedDistance = Math.Sqrt(dx * dx + dy * dy) + Math.Min(Math.Max(qx, qy), 0) - metrics.CornerRadius;
+            var fade = Math.Clamp(roundedDistance / metrics.Reach, 0, 1);
+            return (byte)Math.Round(255 * fade * fade * (3 - 2 * fade));
+        }
         var distance = Math.Min(Math.Min(edge.Left + x - screen.Left, screen.Right - edge.Left - x - 1),
             Math.Min(edge.Top + y - screen.Top, screen.Bottom - edge.Top - y - 1));
         var thickness = Math.Min(edge.Width, edge.Height);
         return (byte)Math.Round(255 * Math.Pow(Math.Clamp(1 - distance / (double)thickness, 0, 1), 2));
     }
-    internal static Bitmap Image(Rectangle edge, Rectangle screen)
+    internal static Bitmap Image(Rectangle edge, Rectangle screen, FocusGlowStyle style = FocusGlowStyle.Classic, GlowMetrics? scaledMetrics = null)
     {
+        var metrics = scaledMetrics ?? Metrics(screen, style);
         var bitmap = new Bitmap(edge.Width, edge.Height, PixelFormat.Format32bppPArgb);
         var data = bitmap.LockBits(new(0, 0, bitmap.Width, bitmap.Height), ImageLockMode.WriteOnly, bitmap.PixelFormat);
         try {
             var bytes = new byte[data.Stride * bitmap.Height];
             for (var y = 0; y < bitmap.Height; y++) for (var x = 0; x < bitmap.Width; x++) {
                 var offset = y * data.Stride + x * 4;
-                // Premultiplied pure red: B=G=0, R=A.
-                bytes[offset + 2] = bytes[offset + 3] = PixelAlpha(edge, screen, x, y);
+                var alpha = PixelAlpha(edge, screen, x, y, style, metrics);
+                bytes[offset + 3] = alpha;
+                // Crimson combines dark blood red with a translucent pulse; Classic
+                // retains its original pure-red pixels and lower opacity.
+                bytes[offset + 2] = style == FocusGlowStyle.Classic ? alpha : (byte)Math.Round(alpha * 112 / 255d);
+                bytes[offset] = style == FocusGlowStyle.Classic ? (byte)0 : (byte)Math.Round(alpha * 5 / 255d);
             }
             Marshal.Copy(bytes, 0, data.Scan0, bytes.Length);
         } finally { bitmap.UnlockBits(data); }
@@ -104,7 +144,7 @@ internal sealed class FocusScreenGlow : IDisposable
     {
         pulse.Stop();
         foreach (var edge in edges) edge.Dispose();
-        edges.Clear(); bounds = []; thicknesses = [];
+        edges.Clear(); bounds = []; geometry = [];
     }
     public void Dispose() { if (disposed) return; SetActive(false); disposed = true; pulse.Dispose(); }
 
@@ -112,11 +152,11 @@ internal sealed class FocusScreenGlow : IDisposable
     {
         private readonly Rectangle bounds;
         private nint bitmap, dc, previous;
-        internal Edge(Rectangle bounds, Rectangle screen)
+        internal Edge(Rectangle bounds, Rectangle screen, FocusGlowStyle style, GlowMetrics metrics)
         {
             this.bounds = bounds;
             try {
-                using var image = Image(bounds, screen);
+                using var image = Image(bounds, screen, style, metrics);
                 bitmap = image.GetHbitmap(Color.FromArgb(0));
                 dc = CreateCompatibleDC(0);
                 if (dc == 0) throw new Win32Exception();

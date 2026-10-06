@@ -43,7 +43,7 @@ internal sealed partial class PreviewWindow
             case "focusMode":
                 engine.SetFocusMode(state.FocusMode with {Enabled=ReadFlag(data,"enabled"),DelaySeconds=ReadInt(data,"delaySeconds",0,TimerEngine.MaxDuration)});break;
             case "focusAnimation":
-                engine.SetFocusMode(state.FocusMode with {ScreenEdgeGlow=ReadFlag(data,"enabled")});break;
+                engine.SetFocusMode(state.FocusMode with {ScreenEdgeGlow=ReadFlag(data,"enabled"),ScreenEdgeGlowStyle=data.TryGetProperty("style",out _)?(FocusGlowStyle)ReadInt(data,"style",0,1):state.FocusMode.ScreenEdgeGlowStyle});break;
             case "voiceAnnouncements": engine.SetVoiceAnnouncements(ReadFlag(data,"enabled"));message="Voice announcement preference saved.";break;
             case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;

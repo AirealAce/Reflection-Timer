@@ -15,9 +15,9 @@ internal sealed partial class PreviewApplication
     private void InitializeFocusMode()
     {
         focusGlow = new(() => Services.Log.Record("focus.glowUnavailable"));
-        focusMonitor = new(Session.Engine, focusTargets, Services.SetFocusAlert, value => focusGlow.SetActive(value && !closing));
+        focusMonitor = new(Session.Engine, focusTargets, Services.SetFocusAlert, value => focusGlow.SetActive(value && !closing, Session.Engine.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle));
         focusMonitor.StatusChanged += status => Broadcast(new { type = "focusStatus", status });
-        focusPulse.Tick += (_, _) => { focusMonitor.Poll(); focusGlow.SetActive(focusMonitor.ScreenEdgeGlow && !closing); }; focusPulse.Start();
+        focusPulse.Tick += (_, _) => { focusMonitor.Poll(); focusGlow.SetActive(focusMonitor.ScreenEdgeGlow && !closing, Session.Engine.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle); }; focusPulse.Start();
     }
     internal string FocusStatus => focusMonitor.Status;
     private void ToggleFocusModeFromGlobalShortcut()

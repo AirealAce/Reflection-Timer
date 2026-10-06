@@ -5,14 +5,16 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const targetButtons=[$('choose-focus-target'),$('choose-focus-target-settings')],list=$('focus-target-list'),use=$('focus-target-use');
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
   const glowControls=[$('focus-screen-glow'),$('focus-picker-screen-glow')];
-  let glowEnabled=true,glowDirty=false,glowRevision=0,glowPending=null;
-  function syncGlow(){glowControls.forEach(control=>control.checked=glowEnabled);}
+  const glowStyles=[$('focus-glow-style'),$('focus-picker-glow-style')];
+  let glowEnabled=true,glowStyle=0,glowDirty=false,glowRevision=0,glowPending=null;
+  function syncGlow(){glowControls.forEach(control=>control.checked=glowEnabled);glowStyles.forEach(control=>{control.value=String(glowStyle);control.disabled=!glowEnabled;});}
   function flushGlow(){
     if(glowPending)return glowPending;
-    glowPending=(async()=>{while(glowDirty){const captured=glowRevision;await send('focusAnimation',{enabled:glowEnabled,quiet:true});if(captured===glowRevision)glowDirty=false;}})().finally(()=>glowPending=null);
+    glowPending=(async()=>{while(glowDirty){const captured=glowRevision;await send('focusAnimation',{enabled:glowEnabled,style:glowStyle,quiet:true});if(captured===glowRevision)glowDirty=false;}})().finally(()=>glowPending=null);
     return glowPending;
   }
   for(const control of glowControls)control.addEventListener('change',()=>{glowEnabled=control.checked;glowDirty=true;glowRevision++;syncGlow();run(flushGlow);});
+  for(const control of glowStyles)control.addEventListener('change',()=>{glowStyle=Number(control.value);glowDirty=true;glowRevision++;syncGlow();run(flushGlow);});
   for(const toggle of toggles){toggle.setAttribute('aria-keyshortcuts','Control+Alt+;');toggle.title='Ctrl+Alt+;: toggle Focus mode.';}
   let settings={enabled:false,delaySeconds:5,targets:[]},enabled=false,dirty=false,revision=0,pending=false,saving=Promise.resolve();
   let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false,targetRevision=0;
@@ -24,7 +26,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const syncToggles=()=>toggles.forEach(control=>{control.setAttribute('aria-pressed',String(enabled));control.classList.toggle('primary',enabled);});
   function render(value){
     if(!value)return;settings=value;toggles.forEach(control=>control.disabled=false);
-    if(!glowDirty){glowEnabled=value.screenEdgeGlow!==false;syncGlow();}
+    if(!glowDirty){glowEnabled=value.screenEdgeGlow!==false;glowStyle=value.screenEdgeGlowStyle??0;syncGlow();}
     if(!dirty){enabled=!!value.enabled;syncToggles();delay.value=value.delaySeconds??5;}
     const targets=selectedTargets(value),many=targets.length>1,heading=many?[0,1,2].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
     const name=targets.length&&!many?shortName(targets[0]):'',label=targets.length?many?heading:targets[0].useFocused?name:`${heading}: ${name}`:'No focus target selected.';

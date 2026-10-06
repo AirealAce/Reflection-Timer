@@ -8,6 +8,9 @@ internal static class FocusVisualTests
     internal static void Run(Action<bool,string> check)
     {
         check(JsonSerializer.Deserialize<AppState>("{}")!.FocusMode.ScreenEdgeGlow, "New and older profiles default to the Focus screen-edge glow");
+        check(JsonSerializer.Deserialize<AppState>("{}")!.FocusMode.ScreenEdgeGlowStyle == FocusGlowStyle.CrimsonHalo
+            && JsonSerializer.Deserialize<FocusModeSettings>("{\"ScreenEdgeGlow\":false}") is {ScreenEdgeGlow:false,ScreenEdgeGlowStyle:FocusGlowStyle.CrimsonHalo},
+            "Crimson halo is the default style without re-enabling a previously disabled glow");
         var target = new FocusTarget(Guid.NewGuid(), FocusTargetKind.Window, "Synthetic target", "synthetic", 1, 2, 3);
         var settings = new FocusModeSettings { Enabled = true, Target = target, DelaySeconds = 5 };
         foreach (var mode in Enum.GetValues<SessionMode>()) {
@@ -36,9 +39,16 @@ internal static class FocusVisualTests
         var store = new MemoryStore(); var saved = new TimerEngine(store); saved.SetFocusMode(settings with { ScreenEdgeGlow = false });
         check(!new TimerEngine(store).SettingsSnapshot.FocusMode.ScreenEdgeGlow && store.State.FocusMode.Target == target,
             "Animation preference persists without replacing Focus targets");
-        foreach (var screen in new[] { new Rectangle(0, 0, 1920, 1080), new Rectangle(-2560, -200, 2560, 1440), new Rectangle(0, 0, 2, 2) }) {
-            var edges = FocusScreenGlow.Layout(screen, 48);
-            check(edges.All(r => screen.Contains(r) && r.Width > 0 && r.Height > 0), "Native edges stay inside each monitor, including negative coordinates and small displays");
+        foreach (var style in Enum.GetValues<FocusGlowStyle>()) {
+            saved.SetFocusMode(saved.SettingsSnapshot.FocusMode with {ScreenEdgeGlowStyle=style});
+            check(new TimerEngine(store).SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle == style && store.State.FocusMode.Target == target
+                && !store.State.FocusMode.ScreenEdgeGlow, "Selecting " + style + " persists while retaining the enabled preference and targets");
+        }
+        try { saved.SetFocusMode(saved.SettingsSnapshot.FocusMode with {ScreenEdgeGlowStyle=(FocusGlowStyle)99});throw new Exception("Unsupported style accepted"); } catch(ArgumentException) { }
+        check(saved.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle == FocusGlowStyle.Classic, "Invalid styles cannot replace the saved animation choice");
+        foreach (var monitor in new[] { new Rectangle(0, 0, 1920, 1080), new Rectangle(-2560, -200, 2560, 1440), new Rectangle(0, 0, 2, 2) }) {
+            var edges = FocusScreenGlow.Layout(monitor, 48);
+            check(edges.All(r => monitor.Contains(r) && r.Width > 0 && r.Height > 0), "Native edges stay inside each monitor, including negative coordinates and small displays");
             check(edges.SelectMany((a, i) => edges.Skip(i + 1).Select(b => Rectangle.Intersect(a, b))).All(r => r.Width == 0 || r.Height == 0),
                 "Edges do not overlap or paint the central workspace");
         }
@@ -51,6 +61,35 @@ internal static class FocusVisualTests
         using var bitmap = FocusScreenGlow.Image(top, area);
         check(bitmap.GetPixel(320, 0) is { A: 255, R: 255, G: 0, B: 0 } && bitmap.GetPixel(320, 47).A < 2,
             "Native bitmap is red with per-pixel transparency, not an opaque screen cover");
+        var screen = new Rectangle(-1920, 0, 1920, 1080);
+        var halo = FocusScreenGlow.Metrics(screen, FocusGlowStyle.CrimsonHalo);
+        var classic = FocusScreenGlow.Metrics(screen, FocusGlowStyle.Classic);
+        var haloEdges = FocusScreenGlow.Layout(screen, halo.SurfaceThickness);
+        var classicTop = FocusScreenGlow.Layout(screen, classic.SurfaceThickness)[0];
+        check(halo.Reach > classic.Reach * 2 && halo.CornerRadius is > 0 and <= 32 && halo.CornerRadius < halo.Reach / 3,
+            "Crimson halo extends more than twice as far with gently rounded, not pill-shaped, inner corners");
+        check(FocusScreenGlow.PixelAlpha(haloEdges[0], screen, 960, 72, FocusGlowStyle.CrimsonHalo) > 70
+            && FocusScreenGlow.PixelAlpha(classicTop, screen, 960, 72, FocusGlowStyle.Classic) == 0,
+            "The new glow remains clearly visible beyond the original fade");
+        check(FocusScreenGlow.PixelAlpha(haloEdges[0], screen, halo.Reach, halo.Reach, FocusGlowStyle.CrimsonHalo) > 0
+            && FocusScreenGlow.PixelAlpha(haloEdges[0], screen, 960, halo.Reach, FocusGlowStyle.CrimsonHalo) == 0,
+            "The rounded halo curves around corners while leaving the central workspace clear");
+        check(FocusScreenGlow.PixelAlpha(haloEdges[0], screen, 960, halo.SurfaceThickness - 1, FocusGlowStyle.CrimsonHalo) == 0,
+            "The native surface reaches past the halo without clipping its inward fade");
+        check(FocusScreenGlow.Metrics(screen, FocusGlowStyle.CrimsonHalo, 2).Reach == halo.Reach * 2,
+            "Halo extent follows monitor scaling");
+        using var crimson = FocusScreenGlow.Image(haloEdges[0], screen, FocusGlowStyle.CrimsonHalo);
+        check(crimson.GetPixel(960, 0) is { A:255, R:112, G:0, B:5 }, "Crimson pixels use dark blood red without warm green/orange");
+        check(Enumerable.Range(0, halo.Reach - 1).All(y => crimson.GetPixel(960,y).A >= crimson.GetPixel(960,y+1).A)
+            && crimson.GetPixel(960,halo.Reach).A == 0, "The blood-red glow continuously becomes more transparent toward the clear center");
+        check(Enumerable.Range(0, 3200).All(t => FocusScreenGlow.Opacity(t, true, FocusGlowStyle.CrimsonHalo) is >=155 and <=185)
+            && FocusScreenGlow.Opacity(0, false, FocusGlowStyle.CrimsonHalo) == 185, "Crimson remains translucent through its slow pulse and reduced-motion fallback");
+        var small = new Rectangle(0, 0, 640, 360);
+        var surfaces = FocusScreenGlow.Layout(small, FocusScreenGlow.Metrics(small, FocusGlowStyle.CrimsonHalo).SurfaceThickness);
+        var coversFade = true;
+        for(var y=0; y<small.Height && coversFade; y+=3)for(var x=0;x<small.Width;x+=3)
+            if(FocusScreenGlow.PixelAlpha(small,small,x,y,FocusGlowStyle.CrimsonHalo)>0 && !surfaces.Any(r=>r.Contains(x,y))){coversFade=false;break;}
+        check(coversFade, "The four native strips cover every sampled rounded-corner pixel without gaps");
     }
     private sealed class Source : IFocusTargetSource
     {

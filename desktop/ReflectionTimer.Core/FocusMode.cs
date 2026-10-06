@@ -5,6 +5,7 @@ namespace ReflectionTimer.Core;
 
 public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup }
 public enum FocusCaptureScope { Focused, FocusedIncludingBackground, OpenIncludingBackground }
+public enum FocusGlowStyle { CrimsonHalo, Classic }
 
 // Stored only inside the encrypted profile. Runtime IDs identify the exact tab,
 // rather than confusing duplicate titles or a page that changes its title.
@@ -45,6 +46,7 @@ public record FocusModeSettings
     public bool IdleEnabled { get; init; }
     public int IdleSeconds { get; init; } = 20;
     public bool ScreenEdgeGlow { get; init; } = true;
+    public FocusGlowStyle ScreenEdgeGlowStyle { get; init; } = FocusGlowStyle.CrimsonHalo;
     // Older encrypted profiles stored only Target. Keep that choice on upgrade.
     [JsonIgnore] public ImmutableArray<FocusTarget> SelectedTargets => !Targets.IsDefaultOrEmpty ? Targets : Target is {} target ? [target] : [];
     [JsonIgnore] public string SelectionKey => string.Join("|", SelectedTargets.Select(t => t.Key).Order(StringComparer.Ordinal));
