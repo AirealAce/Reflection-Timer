@@ -26,10 +26,11 @@ static class NativeReaderNotificationSmoke
                 var store=new MemoryStore{State=new(){LoggingEnabled=false,ShowAppView=false,ShowFloatingTimer=false,Timer=new(){Volume=0},FocusMode=new(){IdleEnabled=true}}};
                 var session=new PreviewSession(store,isolatedProfile:true);
                 var messages=new List<(string Text,bool Supplementary,bool Accepted)>();
+                var speech=new Speech();
                 using var app=new PreviewApplication(session,Path.Combine(Path.GetTempPath(),"ReflectionTimer-FocusReader-"+Guid.NewGuid().ToString("N")),startInTray:true,profileName:"focus-reader-smoke",shortcutRegistration:new Registration(),screenReaderNotification:(provider,text,extra)=>{
                     var accepted=ScreenReaderAnnouncements.TryAnnounce(provider,text,extra);
                     messages.Add((text,extra,accepted));return accepted;
-                });
+                },speech:speech);
                 var keys=(PreviewShortcuts)typeof(PreviewApplication).GetField("shortcuts",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
                 foreach(var mode in new[]{SessionMode.Timer,SessionMode.Stopwatch}){
                     session.Engine.SwitchMode(mode);messages.Clear();
@@ -39,6 +40,18 @@ static class NativeReaderNotificationSmoke
                     Check(!app.MainForm!.Visible&&GetForegroundWindow()==foreground&&session.Engine.CurrentTimer==timer&&JsonSerializer.Serialize(store.State.FocusMode)==JsonSerializer.Serialize(focus),mode+": reader feedback preserves foreground focus, hidden views, session and saved Focus options");
                 }
                 Check(!store.State.VoiceAnnouncements&&store.State.Timer.Volume==0&&store.State.Connection.WebAppUrl==""&&store.State.Outbox.Count==0,"Focus notification tests neither enable optional app speech nor touch production delivery");
+                session.Engine.SetVoiceAnnouncements(true);session.Engine.SetAppVolume(55);
+                foreach(var mode in new[]{SessionMode.Timer,SessionMode.Stopwatch}){
+                    session.Engine.SwitchMode(mode);messages.Clear();speech.Messages.Clear();
+                    keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusToggleId);
+                    keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusToggleId);
+                    Check(messages.Select(m=>m.Text).SequenceEqual(new[]{"Focus mode on.","Focus mode off."})&&messages.All(m=>m.Accepted)
+                        &&speech.Messages.SequenceEqual(messages.Select(m=>m.Text)),mode+": global Focus toggle reaches optional voice and the native reader provider exactly once per change");
+                }
+                messages.Clear();speech.Messages.Clear();
+                keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ReflectionFocusId);
+                Check(messages.Single().Text=="No pending reflection. Start a timer before making a check-in."&&speech.Messages.SequenceEqual(messages.Select(m=>m.Text)),"A reflection shortcut with no session gives accessible and optional spoken guidance without opening App");
+                Check(!app.MainForm!.Visible&&GetForegroundWindow()==foreground&&store.State.Outbox.Count==0,"Optional shortcut feedback preserves hidden views, external focus and isolated data");
                 app.MainForm!.Dispose();
             } catch(Exception error){failure=error;}
         });
@@ -49,4 +62,13 @@ static class NativeReaderNotificationSmoke
     }
     [DllImport("user32.dll")]private static extern nint GetForegroundWindow();
     private sealed class Registration:IHotKeyRegistration{public bool Register(nint window,int id,uint modifiers,uint key)=>true;public bool Unregister(nint window,int id)=>true;}
+    private sealed class Speech:IVoiceOutput
+    {
+        internal readonly List<string> Messages=[];
+        public void Speak(string text,int volume)=>Messages.Add(text);
+        public void SetVolume(int volume){}
+        public void Stop(){}
+        public bool TakeFailure()=>false;
+        public void Dispose(){}
+    }
 }

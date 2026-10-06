@@ -59,12 +59,22 @@ internal sealed class SessionVoice : IDisposable
         var message=action is null?"":Message(timer,action,engine.ElapsedNow);
         if(before.Timer.Mode!=after.Timer.Mode)message+=(message.Length>0?" ":"")+(after.Timer.Mode==SessionMode.Stopwatch?"Stopwatch mode.":"Timer mode.");
         if(message.Length>0)Publish(message,false,speak,after.Timer.Volume);
+        // Observe the saved preference, not one particular control/shortcut.
+        // Delay/target edits, polling and repeated saves remain silent.
+        if(before.FocusMode.Enabled!=after.FocusMode.Enabled)
+            Publish(after.FocusMode.Enabled?"Focus mode on.":"Focus mode off.",false,speak,after.Timer.Volume);
         // Layout changes can follow a start/pause asynchronously. Keep the
         // latest view announcement, but let the action and its time finish.
         if(before.ShowFloatingTimer!=after.ShowFloatingTimer || after.ShowFloatingTimer&&before.FloatingTimeOnly.HasValue&&before.FloatingTimeOnly!=after.FloatingTimeOnly)
             Publish(!after.ShowFloatingTimer?"Floating timer hidden.":after.FloatingTimeOnly==true?"Time-only view.":"Compact view.",true,speak,after.Timer.Volume);
         if(before.ShowAppView!=after.ShowAppView&&after.ShowAppView.HasValue)
             Publish(after.ShowAppView.Value?"App view.":"App view hidden.",true,speak,after.Timer.Volume);
+    }
+    internal void Feedback(string message,bool supplementary=false)
+    {
+        if(disposed||string.IsNullOrWhiteSpace(message))return;
+        var state=engine.SettingsSnapshot;
+        Publish(message,supplementary,state.VoiceAnnouncements&&state.Timer.Volume>0,state.Timer.Volume);
     }
     private void Publish(string message,bool supplementary,bool speak,int volume)
     {

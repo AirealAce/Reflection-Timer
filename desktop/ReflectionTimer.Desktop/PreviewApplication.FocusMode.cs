@@ -24,14 +24,15 @@ internal sealed partial class PreviewApplication
         var current=Session.Engine.SettingsSnapshot.FocusMode;
         if(!current.Enabled&&current.SelectedTargets.Length==0&&!current.IdleEnabled){
             Open("main",timerPage:true);
-            if(WindowActivation.CanReceiveFocus(MainForm!))((PreviewWindow)MainForm!).ChooseFocusTarget();
+            if(WindowActivation.CanReceiveFocus(MainForm!)){
+                ((PreviewWindow)MainForm!).ChooseFocusTarget();
+                Services.AnnounceFeedback("Choose a window, browser tab or group, or enable idle detection to turn Focus mode on.");
+            } else Services.AnnounceFeedback("Finish or close the open dialog before choosing a Focus target.");
             return;
         }
         Session.Engine.SetFocusMode(current with{Enabled=!current.Enabled});
         Broadcast(new{type="focusToggled",enabled=!current.Enabled});
-        // A hidden/background WebView live region cannot reliably speak a
-        // global shortcut. Use the same native provider as timer feedback.
-        AnnounceSession(current.Enabled?"Focus mode off.":"Focus mode on.",supplementary:false);
+        // SessionVoice publishes the committed change to both feedback paths.
     }
     internal async Task<object> ListFocusTargetsAsync(FocusTargetKind kind, bool reset = false)
     {

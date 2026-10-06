@@ -28,14 +28,14 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
     private readonly Func<Control?,string,bool,bool> notifyScreenReader;
-    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null, Func<Control?,string,bool,bool>? screenReaderNotification = null)
+    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null, Func<Control?,string,bool,bool>? screenReaderNotification = null, IVoiceOutput? speech = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
         viewerSession=session.Engine.CurrentTimer;
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         notifyScreenReader=screenReaderNotification??ScreenReaderAnnouncements.TryAnnounce;
-        Services = new(session.Engine, directory); Services.Announcement += Announce;
+        Services = new(session.Engine, directory, speech:speech); Services.Announcement += Announce;
         InitializeFocusMode();
         Services.SessionAnnouncement += AnnounceSession;
         Services.DeliveryIssueChanged += () => Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });
@@ -46,7 +46,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         var menu=new ContextMenuStrip();
         menu.Items.Add("App view",null,(_,_)=>Open("main"));menu.Items.Add("Compact view",null,(_,_)=>Open("compact"));
         menu.Items.Add("Show / hide floating timer",null,(_,_)=>ToggleCompactVisibility());
-        menu.Items.Add("Pending reflections",null,(_,_)=>{var p=Session.Engine.Snapshot.Prompts.LastOrDefault();if(p is not null)Open("reflection",p.Id);else Announce("No pending reflections.");});
+        menu.Items.Add("Pending reflections",null,(_,_)=>{var p=Session.Engine.Snapshot.Prompts.LastOrDefault();if(p is not null)Open("reflection",p.Id);else Services.AnnounceFeedback("No pending reflections.");});
         menu.Items.Add("Quit desktop app",null,async(_,_)=>await CloseMainAsync());
         tray=new(){Text="Reflection Timer",Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Information,Visible=true,ContextMenuStrip=menu};
         tray.DoubleClick+=(_,_)=>Open("main");
@@ -120,13 +120,13 @@ internal sealed partial class PreviewApplication : ApplicationContext
         var requestedAt=Session.Engine.ElapsedNow-(long)Math.Max(0,queueDelay.TotalMilliseconds);
         if(closing)return;
         try { action(requestedAt); }
-        catch(Exception e) { if(id!=4)Open("main"); Announce(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained."); }
+        catch(Exception e) { if(id!=4)Open("main"); Services.AnnounceFeedback(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained."); }
         finally { Services.Log.Record(new Activity(Session.Engine.CalendarTimestamp(requestedAt),"shortcut.used",null,id)); }
     };
     private void OpenPendingOrCheckIn(long requestedAt)
     {
         if(Session.ReflectionForShortcut(requestedAt) is {} id)Open("reflection",id);
-        else Announce("No pending reflection. Start a timer before making a check-in.");
+        else Services.AnnounceFeedback("No pending reflection. Start a timer before making a check-in.");
     }
     private void ReflectionHotkey(long requestedAt)
     {

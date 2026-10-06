@@ -9,6 +9,7 @@ static class ScreenReaderFeedbackTests
 {
     internal static void Run(Action<bool,string> check)
     {
+        FocusAndShortcutFeedback(check);
         var now=DateTimeOffset.Now;
         var store=new MemoryStore{State=new(){ShowFloatingTimer=true,FloatingTimeOnly=false,ShowAppView=false}};
         var engine=new TimerEngine(store,()=>now);
@@ -72,6 +73,49 @@ static class ScreenReaderFeedbackTests
         check(pause.HasSessionFeedback&&reset.HasSessionFeedback&&mode.HasSessionFeedback,"Pause, reset and mode commands do not add duplicate terse announcements");
         var settings=session.Execute("repeat",JsonSerializer.SerializeToElement(new{enabled=false}));
         check(!settings.HasSessionFeedback,"Ordinary settings confirmations keep their existing live feedback");
+    }
+    private static void FocusAndShortcutFeedback(Action<bool,string> check)
+    {
+        var store=new MemoryStore{State=new(){VoiceAnnouncements=true,Timer=new(){Volume=55},FocusMode=new(){IdleEnabled=true}}};
+        var engine=new TimerEngine(store);var speech=new Speech();var reader=new List<(string Text,bool Supplementary)>();
+        using var feedback=new SessionVoice(engine,speech,(text,extra)=>reader.Add((text,extra)));
+        foreach(var mode in new[]{SessionMode.Timer,SessionMode.Stopwatch}){
+            engine.SwitchMode(mode);reader.Clear();speech.Messages.Clear();
+            var options=engine.SettingsSnapshot.FocusMode;
+            engine.SetFocusMode(options with{Enabled=true});
+            check(reader.SequenceEqual(new[]{("Focus mode on.",false)})&&speech.Messages.SequenceEqual(new[]{"Focus mode on."}),mode+": committed Focus on reaches app voice and screen-reader feedback once");
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{DelaySeconds=9});engine.Checkpoint();
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode);
+            check(reader.Count==1&&speech.Messages.Count==1,"Focus delay edits, unchanged saves and checkpoints do not repeat announcements");
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=false});
+            check(reader.Last()==("Focus mode off.",false)&&reader.Count==2&&speech.Messages.SequenceEqual(new[]{"Focus mode on.","Focus mode off."}),mode+": committed Focus off uses the same feedback once");
+        }
+        engine.SetVoiceAnnouncements(false);reader.Clear();speech.Messages.Clear();
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=true});
+        check(reader.Single().Text=="Focus mode on."&&speech.Messages.Count==0,"Focus remains accessible with optional app voice disabled");
+        engine.SetVoiceAnnouncements(true);engine.SetAppVolume(0);
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=false});
+        check(reader.Last().Text=="Focus mode off."&&speech.Messages.Count==0,"Master mute silences Focus speech without suppressing reader feedback");
+        engine.SetAppVolume(55);store.Fail=true;var count=reader.Count;
+        try{engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=true});throw new Exception("Expected failed Focus save");}catch(IOException){}
+        check(reader.Count==count&&speech.Messages.Count==0&&!engine.SettingsSnapshot.FocusMode.Enabled,"Failed Focus saves announce no success and retain the saved state");
+        store.Fail=false;
+        feedback.Feedback("Choose a Focus target.");
+        check(reader.Last()==("Choose a Focus target.",false)&&speech.Messages.Single()=="Choose a Focus target.","Explicit shortcut guidance uses both feedback channels without inventing a Focus transition");
+        engine.SetVoiceAnnouncements(false);count=speech.Messages.Count;
+        feedback.Feedback("No pending reflections.");
+        check(reader.Last().Text=="No pending reflections."&&speech.Messages.Count==count,"No-op shortcut feedback respects voice opt-out but stays accessible");
+        engine.SetVoiceAnnouncements(true);engine.SetAppVolume(0);
+        feedback.Feedback("That action is unavailable.");
+        check(reader.Last().Text=="That action is unavailable."&&speech.Messages.Count==count,"Shortcut error feedback respects master mute independently of the reader");
+        engine.SetAppVolume(55);speech.Throw=true;feedback.Feedback("Synthetic shortcut failure.");
+        check(reader.Last().Text=="Synthetic shortcut failure."&&feedback.PollFailure() is not null,"Failed app speech cannot suppress shortcut reader feedback");
+        speech.Throw=false;count=reader.Count;feedback.Feedback(" ");
+        feedback.Dispose();feedback.Feedback("After disposal.");
+        check(reader.Count==count&&speech.Messages.Count==1,"Blank feedback and disposed feedback cannot queue announcements");
+        var restoredMessages=new List<string>();var restoredSpeech=new Speech();
+        using var restored=new SessionVoice(new TimerEngine(store),restoredSpeech,(text,_)=>restoredMessages.Add(text));
+        check(restoredMessages.Count==0&&restoredSpeech.Messages.Count==0,"Restoring Focus settings does not announce a fabricated transition");
     }
     private sealed class Speech : IVoiceOutput
     {
