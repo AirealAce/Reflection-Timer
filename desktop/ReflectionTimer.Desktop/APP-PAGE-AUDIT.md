@@ -51,6 +51,10 @@ Ctrl+Alt+] toggles the same saved target checkbox as Choose Window / Tab. An ope
 
 The browser popup now lists 1 Window / 2 Tab / 3 Tab Group, omitting Tab Group when the current tab is ungrouped. Native accessible item names include checked/unchecked; committed changes use screen-reader feedback and the optional vocalizer. A uniquely matching obsolete window bookmark is unchecked together with its current identity. Reservations cannot turn an ambiguous same-title match into a unique match, and separate live windows remain separate. Synthetic core/native-dialog and browser tests cover these cases; actual screen-reader speech remains a manual acceptance check.
 
+## Browser target selector layout in 4.2.47
+
+The Ctrl+Alt+] browser dialog shows a bold numbered target type, the full name's visual preview on a second line, and a consistently aligned checked/unchecked state. Long names use visual ellipsis while native list item names retain the complete target and state for screen readers. Rows have room for both lines at normal and larger text sizes. The horizontal scrollbar is removed, every available option is fully visible, the heading and keyboard hint share the list's left edge, and the action buttons align to its right edge. Native list selection, arrow/Enter/number shortcuts, cancellation, vocalizer routing, themes and saved target behavior are retained. Tests verify row visibility, alignment and full native accessibility names for two/three targets and larger text across all palettes.
+
 ## Settings search and help placement in 4.2.37
 
 Settings search in 4.2.37 adds a labeled search landmark at the top of Settings and filters the existing sections without copying controls, indexing typed private values, clearing drafts or changing help disclosure state. Clear search restores all settings and focuses the search field. An invalid pending setting is revealed before validation focuses it. Native Ctrl+S and Ctrl+Enter still save filtered-out edits. Help icons are placed directly after their heading text; the existing full-width heading bars, button styling and accessible heading names are retained.

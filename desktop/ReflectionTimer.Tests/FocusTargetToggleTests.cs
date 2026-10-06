@@ -39,7 +39,13 @@ internal static class FocusTargetToggleTests
                     using var dialog=new FocusTargetToggleDialog([window,tab,group],theme,t=>t.Kind==FocusTargetKind.Window,_=>{});
                     check(dialog.AccessibleRole==AccessibleRole.Dialog&&dialog.ShowInTaskbar&&dialog.ActiveControl==dialog.Choices&&dialog.Choices.AccessibleName=="Target type",theme+": browser popup exposes a named native dialog and focuses its accessible choice list");
                     check(dialog.Choices.Items[0]!.ToString()!.StartsWith("1. Window:")&&dialog.Choices.Items[0]!.ToString()!.EndsWith("(checked)")&&dialog.Choices.Items[1]!.ToString()!.EndsWith("(unchecked)"),theme+": browser choices put Window first and expose their checkbox states in native accessible names");
-                    dialog.ChooseKey(Keys.Down);check(dialog.SelectedTarget==tab,theme+": Down targets Tab");dialog.ChooseKey(Keys.Up);check(dialog.SelectedTarget==window,theme+": Up returns to Window");
+                    CheckLayout(dialog,check,theme+": three targets");
+                    using var largeFont=new Font(dialog.Font.FontFamily,20);
+                    dialog.Font=largeFont;CheckLayout(dialog,check,theme+": larger text");
+                    dialog.ChooseKey(Keys.Down);check(dialog.SelectedTarget==tab,theme+": Down targets Tab");
+                    check(dialog.Choices.AccessibilityObject.GetChild(1)?.State.HasFlag(AccessibleStates.Selected)==true,
+                        theme+": keyboard selection remains exposed by the native list accessibility provider after custom drawing");
+                    dialog.ChooseKey(Keys.Up);check(dialog.SelectedTarget==window,theme+": Up returns to Window");
                     check(dialog.ChooseKey(Keys.Enter)&&dialog.DialogResult==DialogResult.OK,theme+": Enter confirms the selected type");
                 }
                 foreach(var number in new[]{Keys.D1,Keys.D2,Keys.D3,Keys.NumPad1,Keys.NumPad2,Keys.NumPad3}){
@@ -47,6 +53,7 @@ internal static class FocusTargetToggleTests
                     check(dialog.ChooseKey(number)&&dialog.SelectedTarget!.Kind==(number is Keys.D1 or Keys.NumPad1?FocusTargetKind.Window:number is Keys.D2 or Keys.NumPad2?FocusTargetKind.BrowserTab:FocusTargetKind.BrowserTabGroup),"Top-row/numpad "+number+" selects its numbered browser target");
                 }
                 using var noGroup=new FocusTargetToggleDialog([window,tab],AppColorTheme.Dark,_=>false,_=>{});
+                CheckLayout(noGroup,check,"Ungrouped browser");
                 check(noGroup.Choices.Items.Count==2&&!noGroup.ChooseKey(Keys.D3)&&noGroup.ChooseKey(Keys.D2)&&noGroup.SelectedTarget==tab,"An ungrouped browser tab offers only Window and Tab; 3 cannot select a nonexistent group");
                 check(!noGroup.ChooseKey(Keys.Control|Keys.D1)&&noGroup.SelectedTarget==tab,"Modified number shortcuts do not accidentally confirm a target");
             }catch(Exception error){failure=error;}
@@ -59,6 +66,24 @@ internal static class FocusTargetToggleTests
         check(reader.Single()=="Tab checked as a Focus target."&&speech.Messages.Last()==reader.Single(),"Successful target feedback reaches both the reader provider and optional vocalizer");
         engine.SetVoiceAnnouncements(false);speech.Messages.Clear();reader.Clear();voice.Feedback("Tab unchecked as a Focus target.",supplementary:true);
         check(reader.Single()=="Tab unchecked as a Focus target."&&speech.Messages.Count==0,"Target feedback remains accessible when the optional vocalizer is off");
+    }
+    private static void CheckLayout(FocusTargetToggleDialog dialog,Action<bool,string> check,string label)
+    {
+        dialog.PerformAutoScale();dialog.Size=dialog.GetPreferredSize(Size.Empty);dialog.PerformLayout();
+        _=dialog.Choices.Handle;dialog.PerformLayout();
+        check(!dialog.Choices.HorizontalScrollbar&&Enumerable.Range(0,dialog.Choices.Items.Count)
+            .All(i=>dialog.Choices.GetItemRectangle(i).Bottom<=dialog.Choices.ClientSize.Height),
+            label+": every target row is fully visible without a horizontal scrollbar cutting off an option");
+        var layout=dialog.Controls.OfType<TableLayoutPanel>().Single();
+        var heading=layout.Controls.Find("focus-shortcut-heading",false).Single();
+        var keys=layout.Controls.Find("focus-shortcut-keys",false).Single();
+        var actions=layout.Controls.Find("focus-shortcut-actions",false).Single();
+        check(heading.Left==dialog.Choices.Left&&keys.Left==dialog.Choices.Left&&heading.Bottom<dialog.Choices.Top
+            &&dialog.Choices.Bottom<keys.Top&&keys.Bottom<actions.Top&&actions.Right==dialog.Choices.Right
+            &&actions.Bottom<=layout.ClientSize.Height-layout.Padding.Bottom,
+            label+": heading, rows and hint share a left edge; actions are right aligned and contained below them");
+        check(Enumerable.Range(0,dialog.Choices.Items.Count).All(i=>dialog.Choices.AccessibilityObject.GetChild(i)?.Name==dialog.Choices.Items[i]!.ToString()),
+            label+": native list accessibility retains complete item names and checked states independently of visual ellipsis");
     }
     private sealed class Speech:IVoiceOutput
     {
