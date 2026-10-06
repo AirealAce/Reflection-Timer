@@ -1,4 +1,4 @@
-# Reflection Timer 4.2.44
+# Reflection Timer 4.2.45
 
 Long explanations are collapsed by default. Use the circled question mark beside a section heading to open or close its guidance with a click, Enter, or Space. The Help tab collects instructions and keyboard shortcuts; Ctrl+Tab and Ctrl+Shift+Tab include Help. Settings → Help and guidance → Show all explanations keeps the explanations open by default and saves immediately. Labels, current state, delivery issues, and errors stay visible. Compact, Time-only, and reflection-popup layouts are unchanged.
 

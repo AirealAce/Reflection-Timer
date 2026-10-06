@@ -76,7 +76,8 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(7, ToggleModeFromGlobalShortcut),
             Shortcut(8, _=>ResetFromGlobalShortcut()),
             Shortcut(9, _=>CycleCompact(true)),
-            Shortcut(10, _=>ToggleFocusModeFromGlobalShortcut())
+            Shortcut(10, _=>ToggleFocusModeFromGlobalShortcut()),
+            Shortcut(11, _=>ToggleTargetFromGlobalShortcut())
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
         ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
     }

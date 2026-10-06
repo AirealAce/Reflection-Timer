@@ -30,6 +30,8 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const int CompactReverseId = 0x525D;
     internal const int FocusToggleId = 0x525E;
     internal const uint FocusToggleKey = 0xBA; // VK_OEM_1: semicolon/colon on a US keyboard.
+    internal const int FocusTargetToggleId=0x525F;
+    internal const uint FocusTargetToggleKey=0xDD; // VK_OEM_6: closing bracket.
     internal const uint CompactReverseModifiers = Modifiers | 0x0004; // Shift
     internal const uint ResetTimerKey = 0x52; // R
     internal const uint ModeToggleKey = 0xDE; // VK_OEM_7: apostrophe/quote on a US keyboard.

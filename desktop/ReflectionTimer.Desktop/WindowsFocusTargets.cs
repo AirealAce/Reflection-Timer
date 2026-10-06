@@ -12,7 +12,11 @@ internal interface IFocusTargetSource : IDisposable
     Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind);
     Task<FocusPresence> CheckAsync(FocusTarget target);
     FocusTarget? CaptureForeground() => null;
+    IReadOnlyList<FocusTarget> CaptureOpenWindows() => [];
     Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds) => Task.FromResult<IReadOnlyList<FocusTarget>>([]);
+    Task<IReadOnlyList<FocusTarget>> CaptureSelectionsAsync(FocusTarget? foreground,IReadOnlyList<FocusTarget> windows,IReadOnlyList<FocusTarget> choices)
+        => foreground is {} window?CaptureAsync(window,choices.Where(t=>t.CaptureScope==FocusCaptureScope.Focused).Select(t=>t.Kind).Distinct().ToArray())
+            : Task.FromResult<IReadOnlyList<FocusTarget>>([]);
     long? IdleMilliseconds => null;
     async Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)
     {
@@ -74,7 +78,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
                 using var process = Process.GetProcessById((int)pid);
                 if(caption.ToString()=="Program Manager")return true;
                 windows.Add(new(Guid.NewGuid(), FocusTargetKind.Window, caption.ToString(), process.ProcessName,
-                    handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName=caption.ToString() });
+                    handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName=caption.ToString(), ProcessPath=ProcessPath(process), WindowClass=WindowClass(handle) });
             } catch { /* A closing/inaccessible window is not a selectable target. */ }
             return true;
         }, 0);
@@ -91,8 +95,36 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         try {
             using var process = Process.GetProcessById((int)pid);
             return new(Guid.NewGuid(), FocusTargetKind.Window, caption.ToString(), process.ProcessName,
-                handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName = caption.ToString() };
+                handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName = caption.ToString(), ProcessPath=ProcessPath(process), WindowClass=WindowClass(handle) };
         } catch { return null; }
+    }
+    public IReadOnlyList<FocusTarget> CaptureOpenWindows()=>OpenWindows();
+    internal static bool IsBrowser(FocusTarget window)=>window.App.ToLowerInvariant() is "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera";
+    public async Task<IReadOnlyList<FocusTarget>> CaptureSelectionsAsync(FocusTarget? foreground,IReadOnlyList<FocusTarget> windows,IReadOnlyList<FocusTarget> choices)
+    {
+        var kinds=choices.Where(t=>t.CaptureScope==FocusCaptureScope.Focused).Select(t=>t.Kind).Distinct().ToArray();
+        var single=foreground is {} window&&kinds.Length>0?CaptureAsync(window,kinds):Task.FromResult<IReadOnlyList<FocusTarget>>([]);
+        var background=choices.Where(t=>t.CaptureScope!=FocusCaptureScope.Focused).ToArray();
+        var open=background.Any(t=>t.Kind==FocusTargetKind.Window)
+            ? windows.Select(t=>t with{CaptureScope=FocusCaptureScope.OpenIncludingBackground}).ToArray() : [];
+        if(background.All(t=>t.Kind==FocusTargetKind.Window))return (await single.ConfigureAwait(false)).Concat(open).ToArray();
+        var browser=Enqueue<IReadOnlyList<FocusTarget>>(()=>{
+            var captured=new List<FocusTarget>();
+            foreach(var target in windows.Where(IsBrowser)){
+                if(CheckWindow(target)==FocusPresence.Unavailable)continue;
+                try{
+                    var strip=BrowserStrip((nint)target.WindowHandle);
+                    var position=0;
+                    var tabs=strip.Where(s=>!s.Data.GroupHeader&&BelongsToWindow(s.Element,(nint)target.WindowHandle))
+                        .Select(s=>new BrowserTabChoice(target with{Kind=FocusTargetKind.BrowserTab,Name=s.Data.Name,TabRuntimeId=s.Data.Id,TabPosition=++position},s.Data.Selected,s.Element.Current.HasKeyboardFocus)).ToArray();
+                    if(CheckWindow(target)!=FocusPresence.Unavailable)captured.AddRange(BackgroundFocusTargets.Capture(target,background,tabs,strip.Select(s=>s.Data).ToArray()));
+                }catch{
+                    captured.AddRange(background.Where(t=>t.Kind!=FocusTargetKind.Window).Select(t=>target with{Kind=t.Kind,CaptureScope=t.CaptureScope,CaptureUnknown=true}));
+                }
+            }
+            return captured;
+        });
+        return (await single.ConfigureAwait(false)).Concat(open).Concat(await browser.ConfigureAwait(false)).ToArray();
     }
     public Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds)
     {
@@ -162,7 +194,8 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         catch { return FocusPresence.Unavailable; }
         return IsTargetForeground(handle) ? FocusPresence.Focused : FocusPresence.Away;
     }
-    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
+    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.CaptureUnknown?Task.FromResult(CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown)
+        : target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
         ? Task.FromResult(CheckWindow(target)) : Enqueue(() => {
         var window = CheckWindow(target);
         if (window == FocusPresence.Unavailable) return window;
@@ -194,6 +227,15 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         return false;
     }
     private static string CacheKey(FocusTarget target, string id) => $"{target.ProcessId}:{target.ProcessStartedAt}:{target.WindowHandle}:{id}";
+    private static string ProcessPath(Process process)
+    {
+        try { return process.MainModule?.FileName ?? ""; } catch { return ""; }
+    }
+    private static string WindowClass(nint handle)
+    {
+        var value=new StringBuilder(512);GetClassName(handle,value,value.Capacity);return value.ToString();
+    }
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern int GetClassName(nint handle,StringBuilder name,int count);
     private sealed record NativeBrowserSlot(AutomationElement Element, BrowserTabSlot Data);
     private static IReadOnlyList<NativeBrowserSlot> BrowserStrip(nint handle)
     {

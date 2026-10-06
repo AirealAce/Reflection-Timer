@@ -80,25 +80,27 @@ static class DefaultsThemeShortcutTests
         Exception? failure=null;
         var thread=new Thread(()=>{
             try {
-                var backend=new Registration();var calls=new int[11];
+                var backend=new Registration();var count=PreviewShortcuts.Chords.Length;var calls=new int[count];
                 backend.Blocked.Add(GlobalShortcut.CompactId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleId);
                 backend.Blocked.Add(GlobalShortcut.TimerToggleAltId);
                 backend.Blocked.Add(GlobalShortcut.ModeToggleId);
                 backend.Blocked.Add(GlobalShortcut.FocusToggleId);
-                var delays=new TimeSpan[11];
-                using var keys=new PreviewShortcuts(Enumerable.Range(0,11).Select(i=>(Action<TimeSpan>)(delay=>{calls[i]++;delays[i]=delay;})).ToArray(),backend:backend);
+                var delays=new TimeSpan[count];
+                using var keys=new PreviewShortcuts(Enumerable.Range(0,count).Select(i=>(Action<TimeSpan>)(delay=>{calls[i]++;delays[i]=delay;})).ToArray(),backend:backend);
                 check(backend.Requests.Take(5).Select(r=>r.Key).SequenceEqual(new uint[]{0x54,0xC0,0xBC,0xBE,0xBF})&&backend.Requests.Take(5).All(r=>r.Modifiers==(0x0002|0x0001|0x4000)),"All five global chords use the swapped comma/slash mappings with Ctrl+Alt and no key-repeat");
-                check(backend.Requests.Count==11&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
+                check(backend.Requests.Count==count&&backend.Requests[5]==(0x20u,0x4002u),"Ctrl+Space keeps its exact registration and suppresses held-key repeats");
                 check(backend.Requests[6]==(0x20u,0x4003u),"The alias registers Ctrl+Alt+Space with held-key repeat suppressed");
                 check(backend.Requests[8]==(0x52u,0x4003u),"Ctrl+Alt+R registers global reset with held-key repeats suppressed");
-                check(backend.Requests[7]==(0xDEu,0x4003u)&&PreviewShortcuts.Chords.Select(c=>c.Id).Distinct().Count()==11,"Ctrl+Alt+apostrophe registers its own US virtual key with held-key repeat suppressed");
+                check(backend.Requests[7]==(0xDEu,0x4003u)&&PreviewShortcuts.Chords.Select(c=>c.Id).Distinct().Count()==count,"Ctrl+Alt+apostrophe registers its own US virtual key with held-key repeat suppressed");
                 check(backend.Requests[9]==(0xBCu,0x4007u),"Reverse cycle registers comma with Ctrl+Alt+Shift and no repeat");
                 check(backend.Requests[10]==(0xBAu,0x4003u),"Focus registers Ctrl+Alt+semicolon with held-key repeats suppressed");
+                check(backend.Requests[11]==(0xDDu,0x4003u),"Target toggle registers Ctrl+Alt+] with held-key repeats suppressed");
                 var states=JsonSerializer.SerializeToElement(keys.Status,PreviewSession.Json);
-                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false,false,false,true,true,false}),"Compact, timer toggle, mode toggle and Focus conflicts report their own unavailable status");
+                check(states.EnumerateArray().Select(s=>s.GetProperty("available").GetBoolean()).SequenceEqual(new[]{true,true,false,true,true,false,false,false,true,true,false,true}),"Compact, timer toggle, mode toggle and Focus conflicts report their own unavailable status");
                 foreach(var chord in PreviewShortcuts.Chords)keys.Dispatch(GlobalShortcut.HotKeyMessage,chord.Id);
-                check(calls.SequenceEqual(new[]{1,1,0,1,1,0,0,0,1,1,0}),"Registered shortcut messages invoke exactly their matching action");
+                check(calls.SequenceEqual(new[]{1,1,0,1,1,0,0,0,1,1,0,1}),"Registered shortcut messages invoke exactly their matching action");
+                check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusTargetToggleId)&&calls[11]==2&&calls[10]==0,"Target selection dispatches independently of Focus enablement");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactReverseId);
                 check(calls[9]==2&&calls[2]==0,"Reverse cycle dispatches independently while forward comma is unavailable");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ResetTimerId);
@@ -122,7 +124,7 @@ static class DefaultsThemeShortcutTests
                 backend.Blocked.Clear();check(keys.RetryUnavailable(),"Releasing a competing shortcut recovers without restarting");
                 keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactId);
                 check(calls[2]==1&&!keys.Dispatch(0,GlobalShortcut.HotKeyId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,-1),"Recovered shortcut works and unrelated messages are ignored");
-                keys.Dispose();check(backend.Removed.Count==11&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactReverseId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusToggleId),"Exit releases all eleven owned shortcuts, including Focus");
+                keys.Dispose();check(backend.Removed.Count==count&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.ModeToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.CompactReverseId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusToggleId)&&!keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.FocusTargetToggleId),"Exit releases all owned shortcuts, including target selection");
                 var clock=new Clock();var pairs=new ConsecutiveShortcutPresses(clock);
                 var first=pairs.Press();clock.Ticks+=TimeSpan.FromMilliseconds(799).Ticks;
                 check(!first&&pairs.Press()&&!pairs.Press(),"Period double press selects App once and consumes the pair");

@@ -9,6 +9,7 @@ internal sealed class FocusModeMonitor : IDisposable
     private readonly IFocusTargetSource source;
     private readonly Action<bool> alert;
     private readonly FocusModeGate gate = new();
+    private readonly SavedFocusWindows savedWindows;
     private Task<FocusPresence>? reading;
     private string? readingTargets;
     private string? checkedTargets;
@@ -19,7 +20,7 @@ internal sealed class FocusModeMonitor : IDisposable
     private readonly Dictionary<Guid, Capture> captures = [];
     private Capture? queuedCapture, activeCapture;
     private Task<IReadOnlyList<FocusTarget>>? capturing;
-    private sealed record Capture(Guid Session, FocusTarget? Window, FocusTargetKind[] Kinds)
+    private sealed record Capture(Guid Session, FocusTarget? Window, IReadOnlyList<FocusTarget> Windows,FocusTarget[] Choices)
     {
         internal IReadOnlyList<FocusTarget> Targets { get; set; } = [];
         internal bool Completed { get; set; }
@@ -31,6 +32,7 @@ internal sealed class FocusModeMonitor : IDisposable
     internal FocusModeMonitor(TimerEngine engine, IFocusTargetSource source, Action<bool> alert)
     {
         this.engine = engine; this.source = source; this.alert = alert;
+        savedWindows=new(engine,source);
         previous = engine.SettingsSnapshot;
         engine.ActivityRecorded += Activity;
         engine.Changed += Changed;
@@ -45,11 +47,13 @@ internal sealed class FocusModeMonitor : IDisposable
         // stopwatch resumed by saving its reflection. Mode changes never capture.
         if (activity.Event != "session.modeChanged" && state.Timer.IsRunning && state.Timer.SessionId is {} session
             && (!previous.Timer.IsRunning || previous.Timer.SessionId != session)) {
-            var kinds = state.FocusMode.SelectedTargets.Where(t => t.UseFocused).Select(t => t.Kind).Distinct().ToArray();
-            if (kinds.Length > 0) {
+            var choices = state.FocusMode.SelectedTargets.Where(t => t.UseFocused).ToArray();
+            if (choices.Length > 0) {
                 FocusTarget? foreground;
                 try { foreground = source.CaptureForeground(); } catch { foreground = null; }
-                var capture = new Capture(session, foreground, kinds);
+                IReadOnlyList<FocusTarget> open;
+                try{open=choices.Any(t=>t.CaptureScope!=FocusCaptureScope.Focused)?source.CaptureOpenWindows():[];}catch{open=[];}
+                var capture = new Capture(session, foreground, open,choices);
                 captures[session] = capture; queuedCapture = capture;
                 PumpCapture();
             }
@@ -76,7 +80,7 @@ internal sealed class FocusModeMonitor : IDisposable
             queuedCapture = null;
             if (!ReferenceEquals(captures.GetValueOrDefault(next.Session), next)) return;
             activeCapture = next;
-            try { capturing = next.Window is {} window ? source.CaptureAsync(window, next.Kinds) : Task.FromResult<IReadOnlyList<FocusTarget>>([]); }
+            try { capturing = source.CaptureSelectionsAsync(next.Window,next.Windows,next.Choices); }
             catch { capturing = Task.FromResult<IReadOnlyList<FocusTarget>>([]); }
             CompleteCapture();
         }
@@ -84,15 +88,16 @@ internal sealed class FocusModeMonitor : IDisposable
     private FocusModeSettings Effective(AppState state)
     {
         var captured = state.Timer.SessionId is {} id ? captures.GetValueOrDefault(id)?.Targets : null;
-        var targets = state.FocusMode.SelectedTargets.Select(t => t.UseFocused
-            ? captured?.FirstOrDefault(c => c.Kind == t.Kind) ?? t : t).DistinctBy(t => t.Key).ToImmutableArray();
+        var targets = state.FocusMode.SelectedTargets.SelectMany(t => t.UseFocused
+            ? captured?.Where(c=>c.Kind==t.Kind&&c.CaptureScope==t.CaptureScope).ToArray() is {Length:>0} matches?matches:[t] : new[]{t})
+            .DistinctBy(t => t.Key).ToImmutableArray();
         return state.FocusMode with { Target = targets.FirstOrDefault(), Targets = targets };
     }
     private string ProbeKey(FocusModeSettings settings) => $"{generation}:{settings.SelectionKey}";
     private async Task<FocusPresence> CheckEffectiveAsync(FocusModeSettings settings, Guid? session)
     {
         var captured = session is {} id ? captures.GetValueOrDefault(id) : null;
-        var pending = settings.SelectedTargets.Any(t => t.UseFocused && (captured?.Completed != true || !captured.Kinds.Contains(t.Kind)));
+        var pending = settings.SelectedTargets.Any(t => t.UseFocused && (captured?.Completed != true || !captured.Choices.Any(c=>c.Key==t.Key)));
         var available = settings.SelectedTargets.Where(t => !t.UseFocused).ToArray();
         if (available.Length == 0) return pending ? FocusPresence.Unknown : FocusPresence.Unavailable;
         var presence = await source.CheckAnyAsync(available).ConfigureAwait(false);
@@ -111,6 +116,7 @@ internal sealed class FocusModeMonitor : IDisposable
     internal void Poll()
     {
         if (disposed) return;
+        savedWindows.Poll();
         var state = engine.SettingsSnapshot;
         if (!state.Timer.IsRunning || !state.FocusMode.Enabled) { Changed(); return; }
         PumpCapture();
@@ -134,5 +140,8 @@ internal sealed class FocusModeMonitor : IDisposable
         if (alerting != decision.Alert) { alerting = decision.Alert; alert(alerting); }
         if (status != decision.Status) { status = decision.Status; StatusChanged?.Invoke(status); }
     }
+    internal void RestoreWindows(IReadOnlyList<FocusTarget> open)=>savedWindows.Apply(open);
+    internal FocusTarget CurrentWindow(FocusTarget target)=>savedWindows.Current(target);
+    internal string[] PreviousWindowKeys(FocusTarget target)=>savedWindows.PreviousKeys(target);
     public void Dispose() { if (disposed) return; disposed = true; engine.ActivityRecorded -= Activity; engine.Changed -= Changed; alert(false); source.Dispose(); }
 }

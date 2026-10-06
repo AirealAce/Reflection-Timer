@@ -70,17 +70,17 @@ internal sealed class SessionVoice : IDisposable
         if(before.ShowAppView!=after.ShowAppView&&after.ShowAppView.HasValue)
             Publish(after.ShowAppView.Value?"App view.":"App view hidden.",true,speak,after.Timer.Volume);
     }
-    internal void Feedback(string message,bool supplementary=false)
+    internal void Feedback(string message,bool supplementary=false,bool nativeControlAnnounces=false)
     {
         if(disposed||string.IsNullOrWhiteSpace(message))return;
         var state=engine.SettingsSnapshot;
-        Publish(message,supplementary,state.VoiceAnnouncements&&state.Timer.Volume>0,state.Timer.Volume);
+        Publish(message,supplementary,state.VoiceAnnouncements&&state.Timer.Volume>0,state.Timer.Volume,!nativeControlAnnounces);
     }
-    private void Publish(string message,bool supplementary,bool speak,int volume)
+    private void Publish(string message,bool supplementary,bool speak,int volume,bool notifyReader=true)
     {
         // Keep failures in either delivery path from affecting the other path
         // or undoing the already-saved timer action.
-        try { screenReader?.Invoke(message,supplementary); } catch { }
+        try { if(notifyReader)screenReader?.Invoke(message,supplementary); } catch { }
         if(!speak)return;
         try { if(supplementary)output.SpeakSupplement(message,volume);else output.Speak(message,volume); }
         catch { failed=true; }

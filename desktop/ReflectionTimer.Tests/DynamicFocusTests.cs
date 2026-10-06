@@ -13,10 +13,11 @@ internal static class DynamicFocusTests
             "The three dynamic choices have separate stable identities even with no open targets");
         foreach (var kind in kinds) {
             var first = PreviewApplication.FocusChoices(kind, [window with { Kind = kind }]);
-            check(first.Length == 2 && first[0].UseFocused && first[1].Key != first[0].Key
+            var ordinary=first.First(t=>!t.UseFocused);
+            check(first.Length == (kind==FocusTargetKind.BrowserTabGroup?4:3) && first[0].UseFocused && ordinary.Key != first[0].Key
                 && first[0].Id == PreviewApplication.FocusChoices(kind, [])[0].Id, kind + ": dynamic choice is first and stable across refreshes");
             check(PreviewApplication.MatchesSavedFocusTarget(first[0] with { Name = "Display renamed" }, first[0])
-                && !PreviewApplication.MatchesSavedFocusTarget(first[1], first[0]), kind + ": a dynamic choice cannot match an ordinary target");
+                && !PreviewApplication.MatchesSavedFocusTarget(ordinary, first[0]), kind + ": a dynamic choice cannot match an ordinary target");
         }
         var store = new MemoryStore(); var engine = new TimerEngine(store);
         var options = new FocusModeSettings { Enabled = true, MultipleTargets = true, Targets = dynamic, DelaySeconds = 0 };

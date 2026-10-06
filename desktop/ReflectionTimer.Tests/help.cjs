@@ -115,11 +115,11 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       if(process.env.REFLECTION_PREVIEW_SCREENSHOTS){await fs.mkdir(process.env.REFLECTION_PREVIEW_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.REFLECTION_PREVIEW_SCREENSHOTS,`Help-theme-${theme}.png`)});}
     }
     await page.locator('#showAllExplanations').uncheck();await page.waitForFunction(()=>window.settings.showAllExplanations===false);
-    await page.evaluate(()=>window.dispatchBridge({type:'shortcuts',shortcuts:Array.from({length:11},(_,i)=>({available:i!==5}))}));
+    await page.evaluate(()=>window.dispatchBridge({type:'shortcuts',shortcuts:Array.from({length:12},(_,i)=>({available:i!==5}))}));
     check(await page.locator('#shortcut-availability').isVisible()&&await page.locator('#shortcut-availability').textContent().then(t=>t.includes('Ctrl+Space')),'Unavailable shortcuts remain visible in Settings when detailed instructions are in Help');
     await page.locator('a[href="#help-shortcuts"]').click();
     check(await page.locator('#tab-help').getAttribute('aria-selected')==='true'&&await page.locator('#help-shortcuts-heading').evaluate(e=>document.activeElement===e),'Settings shortcut link selects Help and focuses the right heading');
-    check(await page.locator('#shortcut-notices kbd').count()===11&&await page.locator('#help-topics').textContent().then(t=>t.includes('Disruptive')&&t.includes('Fade')&&t.includes('Ctrl+S')&&t.includes('setupReflectionTimer')),'Help collects audio, reflection, receiver setup and keyboard instructions');
+    check(await page.locator('#shortcut-notices kbd').count()===12&&await page.locator('#shortcut-notices kbd').last().textContent()==='Ctrl+Alt+]'&&await page.locator('#help-topics').textContent().then(t=>t.includes('Disruptive')&&t.includes('Fade')&&t.includes('Ctrl+S')&&t.includes('setupReflectionTimer')),'Help collects audio, reflection, receiver setup and all keyboard instructions including the Focus target shortcut');
     check(await page.locator('#help').locator('input,select,textarea').count()===0,'Help copies guidance without any editable controls or private data fields');
     check(await page.locator('[id]').evaluateAll(nodes=>new Set(nodes.map(n=>n.id)).size===nodes.length),'Guide copies keep all document IDs unique');
     await page.locator('#main').evaluate(e=>e.scrollTop=0);await capture('Help-page');

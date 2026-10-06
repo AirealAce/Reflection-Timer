@@ -18,7 +18,11 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             if(m.data.reset){window.choices.clear();for(const t of window.settings.focusMode.targets)window.choices.set(t.id,t);}
             const kind=m.data.kind;
             let targets=window.emptyTargets?[]:['a','b'].map((suffix,index)=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,name:window.longNames?'A long target name '.repeat(25):kind===2?'Work group':kind===1?'Same tab title':suffix==='a'?'Work window':'Other window',app:suffix==='a'&&kind===0?'EXCEL':'chrome',windowName:'Browser window',tabPosition:index+1,current:kind===1&&`${kind}-${suffix}`===window.currentTabId,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)}));
-            targets.unshift({id:`${kind}-focused`,key:`${kind}-focused`,kind,useFocused:true,name:'Use focused '+['window','tab','tab group'][kind],app:'',tabPosition:0,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-focused`)});
+            const dynamic=[{suffix:'focused',scope:0,name:'Use focused '+['window','tab','tab group'][kind]},
+              {suffix:'background',scope:kind===0?2:1,name:kind===0?'Use open windows (including background)':kind===1?'Use focused tabs (including background)':'Use focused tab groups (including background)'}];
+            if(kind===2)dynamic.push({suffix:'open',scope:2,name:'Use open tab groups (including background)'});
+            targets.unshift(...dynamic.map(({suffix,scope,name})=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,useFocused:true,captureScope:scope,name,app:'',tabPosition:0,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)})));
+            if(kind===0&&window.windowReplacements)targets=targets.filter(t=>t.useFocused).concat(window.windowReplacements);
             for(const t of targets)window.choices.set(t.id,t);
             if(window.repeatTarget&&targets.length)targets.push({...targets[0],id:'repeated-native-id'});
             window.dispatchBridge({type:'focusTargets',kind,targets});
@@ -105,12 +109,12 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Tab #|Tab Name|App'),'Tabs have number, name and app headers');
     check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=49&&getComputedStyle(el).textAlign==='left'&&el.scrollWidth<=el.clientWidth),'Tab # is narrow and left aligned without clipping its header');
     check(await table.evaluate(el=>el.getBoundingClientRect().top-document.querySelector('.focus-target-type-row').getBoundingClientRect().bottom>=12),'The table has clear spacing below Target type');
-    check(await table.locator('tbody tr').nth(1).getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab follows the dynamic option with its own name and actual tab number');
+    check(await table.locator('tbody tr').nth(2).getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab follows the dynamic options with its own name and actual tab number');
     await row(1,'a').focus();await row(1,'a').press('Enter');await dialog.waitFor({state:'hidden'});
     check(await page.locator('#choose-focus-target-settings .focus-target-label').textContent()==='1 - Same tab title','A single tab button displays Tab # - Tab Name');
     await open('#choose-focus-target-settings');check(await row(1,'a').evaluate(el=>el.classList.contains('picked')),'Reopening retains the saved tab rather than replacing it with the current tab');
     await page.evaluate(()=>{window.currentTabId='1-a';window.repeatTarget=true;});await page.locator('#focus-target-refresh').click();await ready();
-    check(await table.locator('tbody tr').count()===3&&await table.locator('tbody tr').nth(1).getAttribute('data-key')==='1-a','Refresh keeps the dynamic option first and deduplicates repeated native keys without merging same-title tabs');
+    check(await table.locator('tbody tr').count()===4&&await table.locator('tbody tr').nth(2).getAttribute('data-key')==='1-a','Refresh keeps the dynamic options first and deduplicates repeated native keys without merging same-title tabs');
     await close();await page.evaluate(()=>window.repeatTarget=false);
     for(const [k,gesture,expected] of [[0,'Enter','chrome'],[1,'Space','2 - Same tab title'],[2,'Double-click','Work group']]){
       await open('#choose-focus-target-settings');await kind(k);await row(k,'b').focus();const count=await saves();
@@ -138,7 +142,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.locator('#tab-timer').click();await open();count=await saves();await page.evaluate(()=>window.dispatchBridge({type:'settingsSaveShortcut'}));await dialog.waitFor({state:'hidden'});
     check(await saves()===count+1,'The native WebView save shortcut also saves the picker when opened from Timer');
     await open();await page.locator('#focus-multiple-targets').check();
-    check(await table.getByRole('checkbox').count()===3&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled checkboxes and an explicit Save button');
+    check(await table.getByRole('checkbox').count()===5&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled checkboxes and an explicit Save button');
     await kind(0);await row(0,'a').getByRole('checkbox').check();await kind(1);await row(1,'a').getByRole('checkbox').check();await kind(2);
     check(await row(2,'a').getByRole('checkbox').isChecked(),'Changing categories retains the group selection');
     await kind(0);check(await row(0,'a').getByRole('checkbox').isChecked(),'The window checkbox remains checked after visiting other categories');
@@ -244,9 +248,44 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.locator('#choose-focus-target').getAttribute('aria-label')==='Window, Tab, Tab Group','Mixed dynamic choices retain the category-only multi-target button');
     await open();for(const k of [0,1,2]){await kind(k);check(await row(k,'focused').getByRole('checkbox').isChecked(),'Reopening keeps dynamic '+k+' checked across categories');}
     await page.evaluate(()=>window.emptyTargets=true);await page.locator('#focus-target-refresh').click();await ready();
-    check(await table.locator('tbody tr').count()===1&&await row(2,'focused').getByRole('checkbox').isChecked()&&!await row(2,'focused').evaluate(e=>e.classList.contains('unavailable')),'Dynamic choices remain selectable when no ordinary targets are open');
+    check(await table.locator('tbody tr').count()===3&&await row(2,'focused').getByRole('checkbox').isChecked()&&!await row(2,'focused').evaluate(e=>e.classList.contains('unavailable')),'Dynamic choices remain selectable when no ordinary targets are open');
     await page.locator('#focus-target-cancel').press('Control+Enter');await dialog.waitFor({state:'hidden'});
     check(await page.evaluate(()=>window.settings.focusMode.targets.filter(t=>t.useFocused).length===3),'Ctrl+Enter retains all dynamic choices from an empty ordinary list');
+    await page.evaluate(()=>{window.settings.focusMode.targets=window.settings.focusMode.targets.filter(t=>t.useFocused);window.dispatchBridge({type:'settings',settings:window.settings});});
+    await open();
+    const expectedDynamic=[['Use focused window','Use open windows (including background)'],['Use focused tab','Use focused tabs (including background)'],['Use focused tab group','Use focused tab groups (including background)','Use open tab groups (including background)']];
+    for(const k of [0,1,2]){
+      await kind(k);
+      check(await table.locator('tbody tr').evaluateAll(rows=>rows.map(r=>r.getAttribute('aria-label'))).then(names=>JSON.stringify(names)===JSON.stringify(expectedDynamic[k])),'Empty category '+k+' lists each capture scope in the requested order with its full accessible name');
+      await row(k,'background').getByRole('checkbox').check();if(k===2)await row(k,'open').getByRole('checkbox').check();
+    }
+    await page.locator('#focus-target-use').press('Control+s');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.targets.length===7&&new Set(window.settings.focusMode.targets.map(t=>`${t.kind}:${t.captureScope}`)).size===7),'Multiple Targets saves all seven original/background scopes without merging choices of the same category');
+    await open();for(const k of [0,1,2]){await kind(k);check(await table.getByRole('checkbox').evaluateAll(boxes=>boxes.every(b=>b.checked)),'Every saved capture scope stays checked when reopening category '+k);}
+    await row(2,'open').getByRole('checkbox').uncheck();await close();
+    check(await page.evaluate(()=>window.settings.focusMode.targets.length===7),'Cancelling a changed background choice leaves saved capture scopes intact');
+    await page.evaluate(()=>{
+      window.emptyTargets=false;
+      const old=suffix=>({id:`0-old${suffix}`,key:`0-old${suffix}`,kind:0,name:'Work window',app:'EXCEL',windowName:'Work window'});
+      window.oldWindows=[old(1),old(2)];
+      window.windowReplacements=[{id:'0-restored',key:'0-restored',kind:0,name:'Work window',app:'EXCEL',windowName:'Work window',replacesKeys:window.oldWindows.map(t=>t.key),selected:true}];
+      window.settings.focusMode={...window.settings.focusMode,targets:window.oldWindows,multipleTargets:true};window.dispatchBridge({type:'settings',settings:window.settings});
+    });
+    await open();
+    check(await table.locator('tbody tr.unavailable').count()===0&&await table.locator('tbody tr').count()===3&&await table.getByRole('checkbox').evaluateAll(boxes=>boxes.filter(b=>b.checked).length===1),'Reconnected duplicate bookmarks become one checked live window with no gray stale rows');
+    await row(0,'restored').getByRole('checkbox').press('Control+s');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.targets.length===1&&window.settings.focusMode.targets[0].id==='0-restored'),'Saving the restored selection sends the current window identity');
+    await page.evaluate(()=>{
+      window.windowReplacements=[{...window.oldWindows[0],selected:true}];window.settings.focusMode.targets=[window.oldWindows[0]];window.dispatchBridge({type:'settings',settings:window.settings});
+    });await open();await row(0,'old1').getByRole('checkbox').uncheck();
+    await page.evaluate(()=>window.windowReplacements=[{id:'0-restored',key:'0-restored',kind:0,name:'Work window',app:'EXCEL',windowName:'Work window',replacesKeys:['0-old1'],selected:true}]);
+    await page.locator('#focus-target-refresh').click();await ready();
+    check(!await row(0,'restored').getByRole('checkbox').isChecked()&&await table.locator('tbody tr.unavailable').count()===0,'Refreshing a reconnect respects an unchecked unsaved choice instead of rechecking it from the saved profile');await close();
+    await page.evaluate(()=>{
+      window.windowReplacements=[1,2].map(i=>({id:`0-distinct${i}`,key:`0-distinct${i}`,kind:0,name:'Same window title',app:'chrome',windowName:'Same window title'}));
+      window.settings.focusMode.targets=[];window.dispatchBridge({type:'settings',settings:window.settings});
+    });await open();
+    check(await row(0,'distinct1').count()===1&&await row(0,'distinct2').count()===1,'Separate live windows sharing an app and title retain their own selectable rows');await close();
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}

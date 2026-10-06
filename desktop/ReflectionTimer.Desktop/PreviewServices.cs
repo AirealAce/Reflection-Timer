@@ -326,7 +326,7 @@ public sealed class PreviewServices : IDisposable
     internal void PreviewVoice(){voice.Preview();PollVoiceStatus();}
     // Explicit user-action feedback only. Do not route routine autosaves or
     // background delivery/status updates through optional synthesized speech.
-    internal void AnnounceFeedback(string message,bool supplementary=false)=>voice.Feedback(message,supplementary);
+    internal void AnnounceFeedback(string message,bool supplementary=false,bool nativeControlAnnounces=false)=>voice.Feedback(message,supplementary,nativeControlAnnounces);
     public void Dispose()
     {
         if(disposed) return; disposed=true;

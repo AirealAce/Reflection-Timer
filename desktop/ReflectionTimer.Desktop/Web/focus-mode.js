@@ -46,7 +46,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     }
     use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked);
     setText(use,multiple.checked?'Save selected targets':'Use selected target');
-    setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window. Use focused… captures the active target when you start or resume; switching modes alone keeps it.');
+    setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window. Dynamic choices capture on start/resume. Background choices include other windows; focused tabs means the selected tab in each browser window. Switching modes keeps the capture.');
   }
   function status(){
     const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length;
@@ -177,7 +177,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     if(message.type==='focusTargets'&&dialog.open&&Number(kindControl.value)===message.kind){
       const keys=new Set();rows=message.targets.map(t=>({...t,kind:message.kind})).filter(t=>{const identity=key(t);if(keys.has(identity))return false;keys.add(identity);return true;});
       rows.sort((a,b)=>Number(!!b.useFocused)-Number(!!a.useFocused)||(message.kind===1?Number(!!b.current)-Number(!!a.current):0));
-      for(const target of rows){if(picked.has(key(target)))picked.set(key(target),target);}
+      for(const target of rows){
+        const identity=key(target);let chosen=picked.has(identity);
+        for(const previous of target.replacesKeys??[]){
+          if(picked.delete(previous))chosen=true;
+          if(activeKey===previous)activeKey=identity;
+        }
+        if(chosen)picked.set(identity,target);
+      }
       if(!multiple.checked&&!picked.size){const initial=rows.find(t=>t.selected)??rows[0];if(initial)picked.set(key(initial),initial);}
       if(!multiple.checked&&picked.size&&![...picked.values()].some(t=>t.kind===message.kind)&&rows.length){picked.clear();const initial=rows.find(t=>t.selected)??rows[0];picked.set(key(initial),initial);}
       for(const target of picked.values())if(target.kind===message.kind&&!keys.has(key(target)))rows.push({...target,unavailable:true});

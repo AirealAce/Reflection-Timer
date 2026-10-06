@@ -564,6 +564,7 @@ public sealed partial class TimerEngine
         if (settings.DelaySeconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
         if (settings.IdleSeconds is < 1 or > MaxDuration) throw new ArgumentException($"Idle time must be between 1 and {MaxDuration} seconds.");
         var targets = settings.SelectedTargets.DistinctBy(t => t.Key).ToArray();
+        if(targets.Any(t=>t.UseFocused&&!FocusTarget.ValidScope(t.Kind,t.CaptureScope)))throw new ArgumentException("Choose a supported dynamic target.");
         if (targets.Length > 256 || (!settings.MultipleTargets && targets.Length > 1)) throw new ArgumentException("Enable Multiple Targets to choose more than one target (up to 256).");
         if (settings.Enabled && targets.Length == 0 && !settings.IdleEnabled) throw new ArgumentException("Choose a focus target or enable Idle for first.");
         settings = settings with { Target = targets.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(targets) };

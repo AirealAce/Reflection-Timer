@@ -74,7 +74,7 @@ internal sealed class ResetConfirmationDialog : Form
         ActiveControl = confirm;
     }
 
-    private static void ApplyFocusOutline(Button button, PreviewPalette palette, Color color)
+    internal static void ApplyFocusOutline(Button button, PreviewPalette palette, Color color)
     {
         button.FlatStyle = FlatStyle.Flat;
         button.FlatAppearance.BorderColor = palette.Border;
@@ -91,7 +91,7 @@ internal sealed class ResetConfirmationDialog : Form
         };
     }
 
-    private static Color FocusColor(PreviewPalette palette, AppColorTheme theme)
+    internal static Color FocusColor(PreviewPalette palette, AppColorTheme theme)
     {
         // Match the Windows title-bar accent when it is clearly visible against
         // the button. Respect contrast themes and fall back to the app's accent.
