@@ -11,7 +11,7 @@ internal sealed class FocusTargetToggleDialog : Form
     private readonly Action<string> speak;
     internal ListBox Choices { get; }
     internal FocusTarget? SelectedTarget=>Choices.SelectedIndex>=0?targets[Choices.SelectedIndex]:null;
-    internal FocusTargetToggleDialog(IReadOnlyList<FocusTarget> targets,AppColorTheme theme,Action<string> speak)
+    internal FocusTargetToggleDialog(IReadOnlyList<FocusTarget> targets,AppColorTheme theme,Func<FocusTarget,bool> isChecked,Action<string> speak)
     {
         if(targets.Count==0||targets.Count>3)throw new ArgumentException("Choose an available browser target.");
         this.targets=targets;this.speak=speak;
@@ -22,11 +22,11 @@ internal sealed class FocusTargetToggleDialog : Form
         AutoSize=true;AutoSizeMode=AutoSizeMode.GrowAndShrink;
         Icon=Icon.ExtractAssociatedIcon(Environment.ProcessPath!)??SystemIcons.Question;
         var palette=PreviewTheme.Palette(theme,SystemInformation.HighContrast);BackColor=palette.Background;ForeColor=palette.Text;
-        var instructions=new Label{Text="Select the target to add or remove.\nUp / Down, then Enter; or press its number. Escape cancels.",AutoSize=true,MaximumSize=new(490,0),Margin=new(0,0,0,12)};
+        var instructions=new Label{Text="Select the target whose checkbox you want to toggle.\nUp / Down, then Enter; or press its number. Escape cancels.",AutoSize=true,MaximumSize=new(490,0),Margin=new(0,0,0,12)};
         Choices=new(){Name="focus-shortcut-choices",AccessibleName="Target type",AccessibleDescription=AccessibleDescription,
             Width=490,IntegralHeight=false,TabIndex=0,BackColor=palette.Raised,ForeColor=palette.Text,HorizontalScrollbar=true};
         Choices.Height=Choices.ItemHeight*targets.Count+8;
-        for(var i=0;i<targets.Count;i++)Choices.Items.Add($"{Number(targets[i])}. {FocusTargetToggle.Label(targets[i])}");
+        for(var i=0;i<targets.Count;i++)Choices.Items.Add($"{Number(targets[i])}. {FocusTargetToggle.Label(targets[i])} ({(isChecked(targets[i])?"checked":"unchecked")})");
         Choices.SelectedIndex=0;
         Choices.SelectedIndexChanged+=(_,_)=>{if(Visible&&Choices.SelectedItem is {} choice)speak(choice.ToString()!);};
         Choices.DoubleClick+=(_,_)=>{if(Choices.SelectedIndex>=0)DialogResult=DialogResult.OK;};
@@ -51,7 +51,7 @@ internal sealed class FocusTargetToggleDialog : Form
         if(key==Keys.Enter&&Choices.SelectedIndex>=0){DialogResult=DialogResult.OK;return true;}
         return false;
     }
-    private static int Number(FocusTarget target)=>target.Kind==FocusTargetKind.BrowserTab?1:target.Kind==FocusTargetKind.BrowserTabGroup?2:3;
+    private static int Number(FocusTarget target)=>target.Kind==FocusTargetKind.Window?1:target.Kind==FocusTargetKind.BrowserTab?2:3;
     protected override bool ProcessCmdKey(ref Message msg,Keys keyData)=>ChooseKey(keyData)||base.ProcessCmdKey(ref msg,keyData);
     protected override CreateParams CreateParams{get{var value=base.CreateParams;value.ExStyle=(value.ExStyle|0x40000)&~0x08000080;return value;}}
     protected override void OnShown(EventArgs e)

@@ -5,10 +5,13 @@ namespace ReflectionTimer.Accessible;
 
 internal static class FocusTargetToggle
 {
-    internal static (FocusModeSettings Settings,bool Added) Toggle(FocusModeSettings current,FocusTarget target)
+    internal static FocusTarget[] Matching(FocusModeSettings current,FocusTarget target,IReadOnlyList<FocusTarget>? open=null)
+        => current.SelectedTargets.Where(saved=>SavedFocusWindows.MatchesForToggle(current,saved,target,open??[])).ToArray();
+    internal static (FocusModeSettings Settings,bool Added) Toggle(FocusModeSettings current,FocusTarget target,IReadOnlyList<FocusTarget>? open=null)
     {
-        var added=!current.SelectedTargets.Any(t=>t.Key==target.Key);
-        var targets=(added?current.SelectedTargets.Append(target):current.SelectedTargets.Where(t=>t.Key!=target.Key)).ToImmutableArray();
+        var matching=Matching(current,target,open).Select(t=>t.Key).ToHashSet();
+        var added=matching.Count==0;
+        var targets=(added?current.SelectedTargets.Append(target):current.SelectedTargets.Where(t=>!matching.Contains(t.Key))).ToImmutableArray();
         return (current with{Target=targets.FirstOrDefault(),Targets=targets,MultipleTargets=current.MultipleTargets||targets.Length>1,
             Enabled=current.Enabled&&(targets.Length>0||current.IdleEnabled)},added);
     }
@@ -40,17 +43,21 @@ internal sealed partial class PreviewApplication
             try{
                 if(await focusTargets.CheckAsync(window).WaitAsync(TimeSpan.FromSeconds(6))!=FocusPresence.Focused)
                     throw new ArgumentException("The initiating window is no longer focused. Press Ctrl+Alt+] again in the window you want.");
+                var open=await focusTargets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(6));
+                focusMonitor.RestoreWindows(open);
                 FocusTarget? chosen=window;
                 if(WindowsFocusTargets.IsBrowser(window)){
                     var capture=focusTargets.CaptureAsync(window,Enum.GetValues<FocusTargetKind>());targetShortcutBrowserRead=capture;
                     var captured=await capture.WaitAsync(TimeSpan.FromSeconds(6));
-                    var choices=new[]{FocusTargetKind.BrowserTab,FocusTargetKind.BrowserTabGroup,FocusTargetKind.Window}
+                    var choices=new[]{FocusTargetKind.Window,FocusTargetKind.BrowserTab,FocusTargetKind.BrowserTabGroup}
                         .Select(kind=>captured.FirstOrDefault(t=>t.Kind==kind)).OfType<FocusTarget>().ToArray();
                     if(choices.Length==0)throw new ArgumentException("The browser target could not be identified. No targets changed.");
                     if(await focusTargets.CheckAsync(window).WaitAsync(TimeSpan.FromSeconds(6))!=FocusPresence.Focused)
                         throw new ArgumentException("The initiating browser is no longer focused. Press Ctrl+Alt+] again in the browser you want.");
                     if(closing)return;
+                    var current=Session.Engine.SettingsSnapshot.FocusMode;
                     using var dialog=new FocusTargetToggleDialog(choices,Session.Engine.SettingsSnapshot.Theme,
+                        target=>FocusTargetToggle.Matching(current,target,open).Length>0,
                         message=>Services.AnnounceFeedback(message,nativeControlAnnounces:true));
                     chosen=dialog.ShowDialog(MainForm)==DialogResult.OK?dialog.SelectedTarget:null;
                 }
@@ -59,11 +66,17 @@ internal sealed partial class PreviewApplication
                 var validation=focusTargets.CheckAsync(chosen);if(chosen.Kind!=FocusTargetKind.Window)targetShortcutBrowserRead=validation;
                 if(await validation.WaitAsync(TimeSpan.FromSeconds(6))==FocusPresence.Unavailable)
                     throw new ArgumentException("That target closed or moved before it could be saved. No targets changed.");
-                var open=await focusTargets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(6));
+                open=await focusTargets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(6));
                 focusMonitor.RestoreWindows(open);
-                var result=FocusTargetToggle.Toggle(Session.Engine.SettingsSnapshot.FocusMode,chosen);
+                var before=Session.Engine.SettingsSnapshot.FocusMode;
+                var changedKeys=FocusTargetToggle.Matching(before,chosen,open).Select(PreviewApplication.FocusTargetKey)
+                    .Append(PreviewApplication.FocusTargetKey(chosen)).Concat(focusMonitor.PreviousWindowKeys(chosen).Select(HashFocusKey)).Distinct().ToArray();
+                var result=FocusTargetToggle.Toggle(before,chosen,open);
                 Session.Engine.SetFocusMode(result.Settings);
-                Services.AnnounceFeedback(FocusTargetToggle.Label(chosen)+(result.Added?" added as a Focus target.":" removed from Focus targets."),supplementary:true);
+                if(result.Added)focusChoices[chosen.Id]=chosen;
+                Broadcast(new{type="focusTargetToggled",target=PreviewSession.FocusTargetView(chosen),@checked=result.Added,
+                    keys=changedKeys,result.Settings.MultipleTargets,result.Settings.Enabled});
+                Services.AnnounceFeedback(FocusTargetToggle.Label(chosen)+(result.Added?" checked as a Focus target.":" unchecked as a Focus target."),supplementary:true);
             }catch(Exception error){Services.AnnounceFeedback(error is ArgumentException?error.Message:"The Focus target could not be saved. Your existing targets and session are retained.");}
             finally{targetShortcutBusy=false;}
         });

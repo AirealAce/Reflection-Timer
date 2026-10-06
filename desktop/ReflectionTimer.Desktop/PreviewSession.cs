@@ -20,9 +20,10 @@ public sealed class PreviewSession
     internal void SelectScheduleDraft(Guid? id)=>ScheduledLowDraft=id is {} key
         ? Engine.Snapshot.Schedules.SingleOrDefault(s=>s.Id==key)?.LowTime ?? throw new ArgumentException("That schedule is no longer available.") : new();
     internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,low.RandomTracks,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
+    internal static object FocusTargetView(FocusTarget t)=>new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused,captureScope=(int)t.CaptureScope};
     internal static object FocusView(FocusModeSettings settings)=>new {
         settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds,
-        targets=settings.SelectedTargets.Select(t => new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused,captureScope=(int)t.CaptureScope}),
+        targets=settings.SelectedTargets.Select(FocusTargetView),
         target=settings.Target?.Name,
         targetKind=settings.Target is {} target ? (int?)target.Kind : null,
         targetApp=settings.Target?.App, targetWindowName=settings.Target?.WindowName, targetPosition=settings.Target?.TabPosition

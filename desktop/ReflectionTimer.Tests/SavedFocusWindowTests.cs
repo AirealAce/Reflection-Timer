@@ -12,6 +12,7 @@ internal static class SavedFocusWindowTests
         var restored=SavedFocusWindows.Resolve(old,[reopened]);
         check(restored.Key==reopened.Key&&restored.Id==old.Id,"A restarted window reconnects to a unique app/title while preserving its bookmark");
         check(SavedFocusWindows.Resolve(old,[reopened,reopened with{WindowHandle=125}])==old,"Two real windows with the same name remain ambiguous and distinct");
+        check(SavedFocusWindows.Resolve(old,[reopened,reopened with{WindowHandle=125}],new(){reopened.Key})==old,"Reserving another selected window cannot turn two same-title windows into a false unique match");
         check(SavedFocusWindows.Resolve(old,[reopened,reopened with{WindowHandle=125,Name="Other",WindowName="Other"}]).Key==reopened.Key,"An exact unique title identifies its window among multiple app windows");
         check(SavedFocusWindows.Resolve(old,[reopened with{Name="Renamed",WindowName="Renamed"}]).WindowHandle==124,"The sole eligible app window reconnects after its title changes");
         check(SavedFocusWindows.Resolve(old,[reopened with{ProcessPath=@"D:\Other\editor.exe"}])==old&&SavedFocusWindows.Resolve(old,[reopened with{WindowClass="EditorDialog"}])==old,"A different executable or native window type cannot replace a saved window");

@@ -33,14 +33,20 @@ internal sealed class SavedFocusWindows(TimerEngine engine, IFocusTargetSource s
         // A live identity remains authoritative when the window's title changes.
         var exact=windows.FirstOrDefault(t=>t.Key==saved.Key);
         if(exact is not null)return saved; // Refresh captions in the chooser, not on every poll/save.
-        var candidates=windows.Where(t=>SameApplication(saved,t)&&reserved?.Contains(t.Key)!=true).ToArray();
+        var candidates=windows.Where(t=>SameApplication(saved,t)).ToArray();
         var named=candidates.Where(t=>TitleKey(t)==TitleKey(saved)).ToArray();
         FocusTarget? replacement=named.Length==1?named[0]:null;
         // Shared hosts and folder windows cannot identify their original app/document
         // by process name alone. Never turn one of them into a different selection.
         if(allowSingleApp&&named.Length==0&&candidates.Length==1&&saved.App.ToLowerInvariant() is not ("applicationframehost" or "wwahost" or "rundll32" or "explorer"))replacement=candidates[0];
-        return replacement is null?saved:replacement with{Id=saved.Id};
+        // Reservations cannot make an ambiguous title look unique by hiding
+        // another live window. Resolve first, then protect an existing selection.
+        return replacement is null||reserved?.Contains(replacement.Key)==true?saved:replacement with{Id=saved.Id};
     }
+    internal static bool MatchesForToggle(FocusModeSettings settings,FocusTarget saved,FocusTarget target,IReadOnlyList<FocusTarget> open)
+        => saved.Key==target.Key||IsSavedWindow(saved)&&IsSavedWindow(target)
+            && Resolve(saved,open,allowSingleApp:!settings.SelectedTargets.Where(IsSavedWindow)
+                .Any(other=>SameApplication(saved,other)&&TitleKey(other)!=TitleKey(saved))).Key==target.Key;
     internal static FocusModeSettings Reconnect(FocusModeSettings saved,IReadOnlyList<FocusTarget> open)
     {
         var targets=ResolveSelection(saved,open).Select(p=>p.New).DistinctBy(t=>t.Key).ToImmutableArray();

@@ -6,7 +6,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
   for(const toggle of toggles){toggle.setAttribute('aria-keyshortcuts','Control+Alt+;');toggle.title='Ctrl+Alt+;: toggle Focus mode.';}
   let settings={enabled:false,delaySeconds:5,targets:[]},enabled=false,dirty=false,revision=0,pending=false,saving=Promise.resolve();
-  let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false;
+  let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false,targetRevision=0;
   const type=kind=>['Window','Tab','Tab Group'][kind]??'Window';
   const key=target=>target.key??`${target.kind}:${target.id}`;
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
@@ -136,7 +136,12 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     controls.forEach(({control})=>control.disabled=true);list.inert=true;dialog.setAttribute('aria-busy','true');
     try{
       await flushAudio();
-      await flush();await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),enable:enableOnChoose,multipleTargets:multiple.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
+      await flush();
+      let savedRevision;
+      do {
+        savedRevision=targetRevision;
+        await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),enable:enableOnChoose,multipleTargets:multiple.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
+      }while(savedRevision!==targetRevision);
       dialog.close();announce('Focus settings saved.');
     }catch(error){failure=error.message;throw error;}
     finally{selecting=false;dialog.removeAttribute('aria-busy');list.inert=false;controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(dialog.open)active?.focus();if(failure)setText($('focus-picker-status'),failure);}
@@ -171,6 +176,30 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       enabled=message.enabled===true;settings={...settings,enabled};syncToggles();if(dirty)revision++;return true;
     }
     if(message.type==='focusChooseShortcut'){if(!document.querySelector('dialog[open]'))open(toggles[0],true);return true;}
+    if(message.type==='focusTargetToggled'&&dialog.open){
+      // A global checkbox toggle is a deliberate edit to this draft as well.
+      // Update only its target; retain every unrelated unsaved choice/option.
+      const target=message.target,affected=new Set(message.keys??[key(target)]);
+      targetRevision++;
+      enabled=message.enabled===true;settings={...settings,enabled};syncToggles();if(dirty)revision++;
+      const focused=list.contains(document.activeElement)?document.activeElement.closest('tr')?.dataset.key:null;
+      const oldMultiple=multiple.checked;let redraw=false;
+      for(const identity of affected)picked.delete(identity);
+      if(message.checked){picked.set(key(target),target);if(message.multipleTargets||picked.size>1)multiple.checked=true;}
+      const remaining=rows.filter(t=>!t.unavailable||!affected.has(key(t))||message.checked&&key(t)===key(target));
+      if(remaining.length!==rows.length){rows=remaining;redraw=true;}
+      const existing=rows.findIndex(t=>key(t)===key(target));
+      if(message.checked&&existing>=0&&rows[existing].unavailable){rows[existing]=target;redraw=true;}
+      if(message.checked&&Number(kindControl.value)===target.kind&&!rows.some(t=>key(t)===key(target))){rows.push(target);redraw=true;}
+      if(redraw||oldMultiple!==multiple.checked){
+        draw();
+        if(focused&&document.hasFocus()){
+          const row=[...list.querySelectorAll('tbody tr')].find(row=>row.dataset.key===focused);
+          (row?.querySelector('input')??row??kindControl).focus();
+        }
+      }else {syncSelection();status();}
+      return true;
+    }
     if(message.type==='settingsSaveShortcut'&&dialog.open){if(!composing)run(useSelection);return true;}
     if(message.type==='focusStatus')setText($('focus-status'),message.status);
     if(message.type==='settings')render(message.settings.focusMode);

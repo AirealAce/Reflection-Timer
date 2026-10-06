@@ -45,6 +45,12 @@ The original dynamic choices remain first. Background choices capture open windo
 
 Ctrl+Alt+] adds/removes a specific target globally. Browser selection uses a named native dialog, a focused ListBox, Up/Down and Enter, fixed type numbers 1 Tab / 2 Tab Group / 3 Window, Escape cancellation, Alt+Tab visibility, theme palettes and focused-button outlines. Native list selection supplies screen-reader feedback, while the optional vocalizer speaks the same choice without a second reader notification. Committed target changes use both independent feedback channels. Synthetic tests cover choices, number keys, speech routing, profile persistence and session preservation; actual screen-reader speech and keyboard usability still require manual acceptance.
 
+## Global target checkbox consistency in 4.2.46
+
+Ctrl+Alt+] toggles the same saved target checkbox as Choose Window / Tab. An open chooser immediately reflects the change without losing unrelated draft targets, idle options or the keyboard focus of an unchanged row. A toggle during a pending chooser save is retained instead of being overwritten by that older save. Newly captured targets are registered for immediate saving, and a live target replaces its unavailable placeholder.
+
+The browser popup now lists 1 Window / 2 Tab / 3 Tab Group, omitting Tab Group when the current tab is ungrouped. Native accessible item names include checked/unchecked; committed changes use screen-reader feedback and the optional vocalizer. A uniquely matching obsolete window bookmark is unchecked together with its current identity. Reservations cannot turn an ambiguous same-title match into a unique match, and separate live windows remain separate. Synthetic core/native-dialog and browser tests cover these cases; actual screen-reader speech remains a manual acceptance check.
+
 ## Settings search and help placement in 4.2.37
 
 Settings search in 4.2.37 adds a labeled search landmark at the top of Settings and filters the existing sections without copying controls, indexing typed private values, clearing drafts or changing help disclosure state. Clear search restores all settings and focuses the search field. An invalid pending setting is revealed before validation focuses it. Native Ctrl+S and Ctrl+Enter still save filtered-out edits. Help icons are placed directly after their heading text; the existing full-width heading bars, button styling and accessible heading names are retained.
