@@ -18,6 +18,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             if(m.data.reset){window.choices.clear();for(const t of window.settings.focusMode.targets)window.choices.set(t.id,t);}
             const kind=m.data.kind;
             let targets=window.emptyTargets?[]:['a','b'].map((suffix,index)=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,name:window.longNames?'A long target name '.repeat(25):kind===2?'Work group':kind===1?'Same tab title':suffix==='a'?'Work window':'Other window',app:suffix==='a'&&kind===0?'EXCEL':'chrome',windowName:'Browser window',tabPosition:index+1,current:kind===1&&`${kind}-${suffix}`===window.currentTabId,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)}));
+            if(kind===0&&window.windowListing)targets=window.windowListing.map(t=>({...t,selected:window.settings.focusMode.targets.some(s=>s.key===t.key)}));
             const dynamic=[{suffix:'focused',scope:0,name:'Use focused '+['window','tab','tab group'][kind]},
               {suffix:'background',scope:kind===0?2:1,name:kind===0?'Use open windows (including background)':kind===1?'Use focused tabs (including background)':'Use focused tab groups (including background)'}];
             if(kind===2)dynamic.push({suffix:'open',scope:2,name:'Use open tab groups (including background)'});
@@ -63,6 +64,14 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     const saves=()=>page.evaluate(()=>window.messages.filter(m=>m.action==='focusSelect').length);
     const inline=()=>page.evaluate(()=>{const r=document.querySelector('#reset').getBoundingClientRect(),f=document.querySelector('#focus-enabled').getBoundingClientRect(),c=document.querySelector('#choose-focus-target').getBoundingClientRect();return f.x>=r.right&&c.x>=f.right&&Math.abs(f.y+f.height/2-r.y-r.height/2)<1&&Math.abs(c.y+c.height/2-f.y-f.height/2)<1;});
     const style=id=>page.locator(id).evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,padding:s.padding,borderRadius:s.borderRadius,height:el.getBoundingClientRect().height};});
+    const numberAlignment=()=>page.locator('#focus-target-list').evaluate(list=>{
+      const head=list.querySelector('th.focus-number-cell'),value=[...list.querySelectorAll('td.focus-number-cell .focus-cell')].find(el=>el.textContent.trim());
+      if(!head||!value)return false;
+      const h=getComputedStyle(head),cell=getComputedStyle(value.parentElement),range=document.createRange();range.selectNodeContents(head);
+      return h.textAlign==='left'&&cell.textAlign==='left'&&h.paddingLeft==='8px'&&cell.paddingLeft==='8px'
+        &&Math.abs(range.getBoundingClientRect().left-value.getBoundingClientRect().left)<1
+        &&head.getBoundingClientRect().width<=57&&head.scrollWidth<=head.clientWidth;
+    });
     check(await pressed()==='false','Focus starts off');
     check(await page.locator('#focus-screen-glow').isChecked()&&await page.locator('#focus-picker-screen-glow').isChecked(),'Focus screen-edge glow defaults on in both Settings and chooser for an older profile');
     check(await page.locator('#focus-glow-style').inputValue()==='0'&&await page.locator('#focus-picker-glow-style').inputValue()==='0'
@@ -114,7 +123,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await close();
     await open('#choose-focus-target-settings');await kind(1);
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Tab #|Tab Name|App'),'Tabs have number, name and app headers');
-    check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=49&&getComputedStyle(el).textAlign==='left'&&el.scrollWidth<=el.clientWidth),'Tab # is narrow and left aligned without clipping its header');
+    check(await numberAlignment(),'Tab # stays narrow, with header and values left aligned at the same inset');
     check(await table.evaluate(el=>el.getBoundingClientRect().top-document.querySelector('.focus-target-type-row').getBoundingClientRect().bottom>=12),'The table has clear spacing below Target type');
     check(await table.locator('tbody tr').nth(2).getAttribute('data-key')==='1-b'&&await row(1,'b').locator('td').nth(1).textContent()==='(current tab) Same tab title','The current tab follows the dynamic options with its own name and actual tab number');
     await row(1,'a').focus();await row(1,'a').press('Enter');await dialog.waitFor({state:'hidden'});
@@ -132,7 +141,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     }
     await open('#choose-focus-target-settings');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='Grp #|Group Name|App'),'Tab groups have number, group name and app headers');
-    check(await page.locator('#focus-target-list th').first().evaluate(el=>el.getBoundingClientRect().width<=49&&getComputedStyle(el).textAlign==='left'&&el.scrollWidth<=el.clientWidth),'Grp # is narrow and left aligned without clipping its header');
+    check(await numberAlignment(),'Grp # stays narrow, with header and values left aligned at the same inset');
     await row(2,'b').focus();await row(2,'b').press('ArrowUp');check(await row(2,'a').evaluate(el=>el===document.activeElement)&&await dialog.isVisible(),'Arrow keys move between rows without confirming');
     let count=await saves();await page.keyboard.down('Space');await page.keyboard.down('Space');check(await saves()===count&&await dialog.isVisible(),'Holding Space waits for release');await page.keyboard.up('Space');await dialog.waitFor({state:'hidden'});check(await saves()===count+1,'Space saves once on release');
     await open('#choose-focus-target-settings');await row(2,'a').focus();count=await saves();await page.keyboard.down('Enter');await dialog.waitFor({state:'hidden'});await page.keyboard.down('Enter');await page.keyboard.up('Enter');check(await saves()===count+1&&!await dialog.isVisible(),'Held Enter cannot repeatedly save or reopen the picker');
@@ -214,6 +223,13 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     for(const theme of [0,1,2,3]){
       await page.evaluate(theme=>{window.settings.theme=theme;window.dispatchBridge({type:'settings',settings:window.settings});window.longNames=true;},theme);
       await open('#choose-focus-target-settings');await kind(1);await page.locator('#focus-multiple-targets').check();await ready();
+      check(await numberAlignment(),'Checkboxes do not shift the number header or its cell contents in theme '+theme);
+      check(await page.locator('#focus-picker-audio>summary').textContent()==='Audio','The chooser uses the shorter Audio heading in theme '+theme);
+      check(await page.evaluate(()=>{
+        const appearance=id=>{const detail=document.getElementById(id),box=getComputedStyle(detail),summary=getComputedStyle(detail.querySelector('summary'));
+          return JSON.stringify([box.padding,box.margin,box.border,box.borderRadius,box.backgroundColor,summary.fontWeight,summary.color]);};
+        return appearance('focus-picker-audio')===appearance('focus-picker-animations');
+      }),'Audio and Animations share one disclosure style in theme '+theme);
       check(await table.evaluate(el=>{const rows=[...el.querySelectorAll('tbody tr')];return [...rows[0].cells].every((cell,index)=>Math.abs(cell.getBoundingClientRect().width-rows[1].cells[index].getBoundingClientRect().width)<1);}), 'All cells align to fixed column widths in theme '+theme);
       await page.locator('#focus-target-kind').focus();await page.mouse.move(0,0);
       check(await row(1,'a').locator('.focus-cell').nth(1).evaluate(el=>{const s=getComputedStyle(el);return s.textOverflow==='ellipsis'&&s.whiteSpace==='nowrap'&&el.scrollWidth>el.clientWidth;}),'Long un-targeted names use ellipsis in theme '+theme);
@@ -394,6 +410,16 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await kind(1);
     await row(1,'background').getByRole('checkbox').uncheck();
     check(!await page.locator('#focus-picker-tab-scope').isVisible(),'Tab scope guidance is hidden for unrelated choices');await close();
+    await open('#choose-focus-target-settings');await page.evaluate(()=>window.windowListing=[
+      {id:'0-desktop',key:'0-desktop',kind:0,name:'Desktop',app:'explorer',displayName:'Desktop'},
+      {id:'0-a',key:'0-a',kind:0,name:'ChatGPT',app:'ChatGPT',displayName:'ChatGPT — Window 1'},
+      {id:'0-b',key:'0-b',kind:0,name:'ChatGPT',app:'ChatGPT',displayName:'ChatGPT — Window 2 (minimized)'}
+    ]);await kind(0);
+    check(await row(0,'desktop').locator('td').last().textContent()==='Desktop','Desktop appears as an ordinary selectable Window target');
+    check(await row(0,'a').locator('td').last().textContent()==='ChatGPT — Window 1'
+      &&await row(0,'b').locator('td').last().textContent()==='ChatGPT — Window 2 (minimized)','Separate same-title windows have distinct visible names and minimized feedback');
+    check(await row(0,'b').getAttribute('aria-label').then(name=>name.includes('Window 2 (minimized)')),'Screen readers receive the same window distinction as the visible table');
+    await close();
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}

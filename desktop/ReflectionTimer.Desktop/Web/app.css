@@ -150,8 +150,7 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 .focus-idle-row,.focus-away-row{margin:0 0 8px;gap:8px}
 .focus-idle-row>label,.focus-away-row>label{display:inline-flex;flex:0 0 auto;align-items:center;gap:8px;margin:0}
 .focus-idle-row input[type=number],.focus-away-row input[type=number]{width:90px;margin:0}
-#focus-picker-audio{margin:12px 0;border:1px solid var(--border);border-radius:8px;padding:10px}
-#focus-picker-audio>summary{cursor:pointer;font-weight:700}
+#focus-target-dialog .focus-picker-option{margin:12px 0}
 #focus-picker-audio-editor form{margin:10px 0;min-width:0}
 #focus-picker-audio-editor fieldset{margin:0;min-inline-size:0}
 #focus-picker-audio-editor .audio-source-row>label{max-width:100%}
@@ -169,4 +168,4 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 #focus-target-list tbody tr:focus-within{outline:2px solid var(--accent);outline-offset:-2px}
 #focus-target-list tbody tr.unavailable{opacity:.65}
 #focus-target-list .focus-selection-cell{padding-left:4px;padding-right:4px}
-#focus-target-list .focus-number-cell{padding-left:4px;padding-right:4px;text-align:left;white-space:nowrap}
+#focus-target-list .focus-number-cell{padding-left:8px;padding-right:8px;text-align:left;white-space:nowrap}

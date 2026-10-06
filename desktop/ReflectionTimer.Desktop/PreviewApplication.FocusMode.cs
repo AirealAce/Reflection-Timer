@@ -53,7 +53,9 @@ internal sealed partial class PreviewApplication
         if (focusChoices.Count > 4096) throw new ArgumentException("Reopen the target chooser to refresh its saved choices.");
         var choices = FocusChoices(kind, list);
         foreach (var target in choices) focusChoices[target.Id] = target;
+        var windowLabels = FocusWindowLabels.Create(choices, WindowsFocusTargets.IsMinimized);
         return choices.Select(t => new { id = t.Id, key = FocusTargetKey(t), kind=(int)t.Kind,name = t.Name, app = t.App, windowName=t.WindowName,tabPosition=t.TabPosition,
+            displayName = windowLabels.GetValueOrDefault(t.Key,t.Name),
             t.UseFocused,captureScope=(int)t.CaptureScope, replacesKeys=focusMonitor.PreviousWindowKeys(t).Select(HashFocusKey).ToArray(), selected = saved.Any(s => MatchesSavedFocusTarget(t,s)), current = !t.UseFocused && focusTargets.IsCurrent(t) }).ToArray();
     }
     internal static FocusTarget[] FocusChoices(FocusTargetKind kind, IReadOnlyList<FocusTarget> list) => Enum.GetValues<FocusCaptureScope>()

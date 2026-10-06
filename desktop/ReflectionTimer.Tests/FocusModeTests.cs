@@ -9,6 +9,7 @@ internal static class FocusModeTests
 {
     internal static async Task Run(Action<bool,string> check)
     {
+        FocusWindowListingTests.Run(check);
         SavedFocusWindowTests.Run(check);
         BackgroundFocusTests.Run(check);
         FocusVisualTests.Run(check);

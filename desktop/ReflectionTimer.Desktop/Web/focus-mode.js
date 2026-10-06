@@ -22,7 +22,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const key=target=>target.key??`${target.kind}:${target.id}`;
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
   const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.name;
-  const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:` — ${target.app}`);
+  const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.displayName??target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:` — ${target.app}`);
   const syncToggles=()=>toggles.forEach(control=>{control.setAttribute('aria-pressed',String(enabled));control.classList.toggle('primary',enabled);});
   function render(value){
     if(!value)return;settings=value;toggles.forEach(control=>control.disabled=false);
@@ -85,7 +85,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function draw(){
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:['Grp #','Group Name','App'];
-    const widths=kind===0?['30%','']:['48px','','24%'];
+    const widths=kind===0?['30%','']:['56px','','24%'];
     if(multiple.checked){headers.unshift('');widths.unshift('24px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
@@ -99,7 +99,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         const td=document.createElement('td'),checkbox=document.createElement('input');td.className='focus-selection-cell';checkbox.type='checkbox';checkbox.tabIndex=-1;checkbox.setAttribute('aria-label',description);checkbox.disabled=loading||selecting;
         checkbox.addEventListener('change',()=>{choose(target);});checkbox.addEventListener('click',event=>{if(event.detail>1)event.preventDefault();});td.append(checkbox);row.append(td);
       }
-      const values=target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
+      const values=target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.displayName??target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
       for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if(kind!==0&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
       row.addEventListener('focusin',()=>{
         activeKey=key(target);for(const other of body.children){other.tabIndex=!multiple.checked&&other===row?0:-1;const checkbox=other.querySelector('input');if(checkbox)checkbox.tabIndex=other===row?0:-1;}

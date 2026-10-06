@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.2.50</p>
+    <p class="eyebrow">Reflection Timer 4.2.51</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -199,15 +199,15 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.50</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.51</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">
-    <p id="focus-picker-help" data-help="focus-picker">Any selected target counts as focused while its window is in front. A window permits all its tabs; a tab requires that exact tab; a group permits its current tabs. Idle for also alerts after keyboard and mouse inactivity while the session is running.</p>
+    <p id="focus-picker-help" data-help="focus-picker">Any selected target counts as focused while its window is in front. A window permits all its tabs; a tab requires that exact tab; a group permits its current tabs. Window also includes Desktop. Separate windows with identical names receive window numbers; minimized windows are marked. Idle for also alerts after keyboard and mouse inactivity while the session is running.</p>
     <div class="option-row focus-away-row"><label for="focus-delay">Start audio after</label><input id="focus-delay" type="number" min="0" max="31536000" step="1" value="5" required aria-label="Focus alert delay in seconds"><span>seconds away</span></div>
     <div class="option-row focus-idle-row"><label><input id="focus-idle-enabled" type="checkbox"> Idle for</label><input id="focus-idle-seconds" type="number" min="1" max="31536000" step="1" value="20" required aria-label="Idle time in seconds"><span>seconds</span></div>
-    <details id="focus-picker-audio"><summary>Focus audio</summary><div id="focus-picker-audio-editor"></div><button id="focus-picker-stop-audio" type="button">Stop audio</button></details>
-    <details id="focus-picker-animations"><summary>Animations</summary><label class="check"><input id="focus-picker-screen-glow" type="checkbox" checked>Red screen-edge glow when away from Focus targets</label><label>Focus glow style<select id="focus-picker-glow-style"><option value="0" selected>Crimson halo</option><option value="1">Classic glow</option></select></label></details>
+    <details id="focus-picker-audio" class="focus-picker-option"><summary>Audio</summary><div id="focus-picker-audio-editor"></div><button id="focus-picker-stop-audio" type="button">Stop audio</button></details>
+    <details id="focus-picker-animations" class="focus-picker-option"><summary>Animations</summary><label class="check"><input id="focus-picker-screen-glow" type="checkbox" checked>Red screen-edge glow when away from Focus targets</label><label>Focus glow style<select id="focus-picker-glow-style"><option value="0" selected>Crimson halo</option><option value="1">Classic glow</option></select></label></details>
     <label class="focus-multiple-row"><input id="focus-multiple-targets" type="checkbox"> Multiple Targets</label>
     <label for="focus-target-kind">Target type</label>
     <div class="option-row focus-target-type-row"><select id="focus-target-kind"><option value="0">Window</option><option value="1">Browser Tab</option><option value="2">Browser Tab Groups</option></select><button id="focus-target-refresh" type="button">Refresh List</button></div>

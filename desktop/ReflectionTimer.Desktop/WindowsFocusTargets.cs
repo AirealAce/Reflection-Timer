@@ -66,36 +66,50 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     private static IReadOnlyList<FocusTarget> OpenWindows()
     {
         var windows = new List<FocusTarget>();
+        var shell = GetShellWindow();
         EnumWindows((handle, _) => {
+            if (shell != 0 && DesktopIdentity(handle) == shell) return true;
             if (windows.Count >= 256 || !IsWindowVisible(handle) || Cloaked(handle) || ((long)GetWindowLongPtr(handle,-20) & 0x08000080L) != 0) return true;
-            GetWindowThreadProcessId(handle, out var pid);
             // The App view is a valid target; floating/tool windows were filtered above.
-            if (pid == 0) return true;
-            var caption = new StringBuilder(2049); GetWindowText(handle, caption, caption.Capacity);
-            if (caption.Length == 0) return true;
-            try {
-                using var process = Process.GetProcessById((int)pid);
-                if(caption.ToString()=="Program Manager")return true;
-                windows.Add(new(Guid.NewGuid(), FocusTargetKind.Window, caption.ToString(), process.ProcessName,
-                    handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName=caption.ToString(), ProcessPath=ProcessPath(process), WindowClass=WindowClass(handle) });
-            } catch { /* A closing/inaccessible window is not a selectable target. */ }
+            if (ReadWindow(handle) is {} target) windows.Add(target);
             return true;
         }, 0);
+        // Windows marks its desktop as a tool window. It is intentionally
+        // included once, separately from floating app/tool windows.
+        if (shell != 0 && IsWindowVisible(shell) && ReadWindow(shell) is {} desktop) windows.Add(desktop);
         return windows;
     }
+    private static FocusTarget? ReadWindow(nint handle, bool allowUntitled = false)
+    {
+        GetWindowThreadProcessId(handle, out var pid);
+        if (pid == 0) return null;
+        var caption = new StringBuilder(2049); GetWindowText(handle, caption, caption.Capacity);
+        var name = handle == GetShellWindow() ? "Desktop" : caption.ToString();
+        if (name.Length == 0 && !allowUntitled) return null;
+        try {
+            using var process = Process.GetProcessById((int)pid);
+            return new(Guid.NewGuid(), FocusTargetKind.Window, name, process.ProcessName,
+                handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName=name, ProcessPath=ProcessPath(process), WindowClass=WindowClass(handle) };
+        } catch { return null; }
+    }
+    internal static nint DesktopWindowIdentity(nint handle, nint shell, string windowClass, bool hasDesktopIcons)
+        => shell != 0 && (handle == shell || windowClass == "WorkerW" && hasDesktopIcons) ? shell : handle;
+    private static nint DesktopIdentity(nint handle)
+    {
+        var shell = GetShellWindow();
+        if (shell == 0 || handle == shell) return handle;
+        var windowClass = WindowClass(handle);
+        return DesktopWindowIdentity(handle, shell, windowClass,
+            windowClass == "WorkerW" && FindWindowEx(handle, 0, "SHELLDLL_DefView", null) != 0);
+    }
+    internal static bool IsMinimized(FocusTarget target) => !target.UseFocused && target.Kind == FocusTargetKind.Window && IsIconic((nint)target.WindowHandle);
     public FocusTarget? CaptureForeground()
     {
         // Snapshot the native identity synchronously at start/resume, before a
         // viewer or accessibility announcement can move focus elsewhere.
-        var handle = GetAncestor(GetForegroundWindow(), 2);
+        var handle = DesktopIdentity(GetAncestor(GetForegroundWindow(), 2));
         if (handle == 0 || !IsWindow(handle)) return null;
-        GetWindowThreadProcessId(handle, out var pid);
-        var caption = new StringBuilder(2049); GetWindowText(handle, caption, caption.Capacity);
-        try {
-            using var process = Process.GetProcessById((int)pid);
-            return new(Guid.NewGuid(), FocusTargetKind.Window, caption.ToString(), process.ProcessName,
-                handle.ToInt64(), (int)pid, process.StartTime.ToUniversalTime().Ticks) { WindowName = caption.ToString(), ProcessPath=ProcessPath(process), WindowClass=WindowClass(handle) };
-        } catch { return null; }
+        return ReadWindow(handle, allowUntitled:true);
     }
     public IReadOnlyList<FocusTarget> CaptureOpenWindows()=>OpenWindows();
     internal static bool IsBrowser(FocusTarget window)=>window.App.ToLowerInvariant() is "chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera";
@@ -147,7 +161,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         });
     }
     public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Window
-        ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
+        ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.Name == "Desktop" && w.WindowClass == "Progman" ? 0 : 1).ThenBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
         var windows = OpenWindows();
         var choices = new List<FocusTarget>();
         var tabChoices = new List<BrowserTabChoice>();
@@ -279,7 +293,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     }
     private static bool IsTargetForeground(nint target)
     {
-        var foreground = GetAncestor(GetForegroundWindow(), 2);
+        var foreground = DesktopIdentity(GetAncestor(GetForegroundWindow(), 2));
         for (var i = 0; foreground != 0 && i < 16; i++, foreground = GetWindow(foreground, 4)) if (foreground == target) return true;
         return false;
     }
@@ -295,6 +309,8 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
     [DllImport("user32.dll")] private static extern nint GetAncestor(nint handle, uint flags);
     [DllImport("user32.dll")] private static extern nint GetWindow(nint handle, uint command);
+    [DllImport("user32.dll")] private static extern nint GetShellWindow();
+    [DllImport("user32.dll",CharSet=CharSet.Unicode)] private static extern nint FindWindowEx(nint parent, nint after, string windowClass, string? title);
     [DllImport("user32.dll",EntryPoint="GetWindowLongPtrW")] private static extern nint GetWindowLongPtr(nint handle,int index);
     [DllImport("dwmapi.dll")] private static extern int DwmGetWindowAttribute(nint handle, int attribute, out int value, int size);
 }
