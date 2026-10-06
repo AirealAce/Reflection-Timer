@@ -36,6 +36,10 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             };if(window.holdSelection)window.releaseSelection=complete;else complete();return;
           }
           if(m.action==='focusMode'){window.settings.focusMode={...window.settings.focusMode,...m.data};window.dispatchBridge({type:'settings',settings:window.settings});}
+          if(m.action==='focusAnimation'){
+            const complete=()=>{window.settings.focusMode.screenEdgeGlow=m.data.enabled;window.dispatchBridge({type:'settings',settings:window.settings});window.dispatchBridge({type:'reply',requestId:m.requestId});};
+            if(window.holdAnimationSave)window.releaseAnimationSave=complete;else complete();return;
+          }
           if(m.action==='saveSound'){
             const complete=()=>{
               if(window.soundError){window.dispatchBridge({type:'reply',requestId:m.requestId,error:window.soundError});return;}
@@ -60,6 +64,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     const inline=()=>page.evaluate(()=>{const r=document.querySelector('#reset').getBoundingClientRect(),f=document.querySelector('#focus-enabled').getBoundingClientRect(),c=document.querySelector('#choose-focus-target').getBoundingClientRect();return f.x>=r.right&&c.x>=f.right&&Math.abs(f.y+f.height/2-r.y-r.height/2)<1&&Math.abs(c.y+c.height/2-f.y-f.height/2)<1;});
     const style=id=>page.locator(id).evaluate(el=>{const s=getComputedStyle(el);return {background:s.backgroundColor,color:s.color,padding:s.padding,borderRadius:s.borderRadius,height:el.getBoundingClientRect().height};});
     check(await pressed()==='false','Focus starts off');
+    check(await page.locator('#focus-screen-glow').isChecked()&&await page.locator('#focus-picker-screen-glow').isChecked(),'Focus screen-edge glow defaults on in both Settings and chooser for an older profile');
     check(await page.locator('#focus-enabled').getAttribute('aria-keyshortcuts')==='Control+Alt+;'&&await page.locator('#focus-settings-enabled').getAttribute('aria-keyshortcuts')==='Control+Alt+;','Both Focus controls expose their global shortcut to screen readers');
     check(await page.locator('#choose-focus-target').textContent()==='Choose Window / Tab…','No saved choice has the original chooser label');
     check(await inline(),'Reset, Focus and chooser retain one row at the original App width');
@@ -350,6 +355,33 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await pressed()==='false'&&await page.locator('#focus-delay').inputValue()==='11'&&!await page.locator('#focus-target-use').isDisabled(),'Removing the last target updates Focus off while retaining an unsaved delay and allowing an empty selection to be saved');
     await page.locator('#focus-target-use').press('Control+s');await dialog.waitFor({state:'hidden'});
     check(await page.evaluate(()=>!window.settings.focusMode.enabled&&window.settings.focusMode.delaySeconds===11&&window.settings.focusMode.targets.length===0),'Saving the pending delay cannot turn Focus back on after the shortcut unchecked its final target');
+    await page.locator('#tab-settings').click();
+    const preferences=await page.evaluate(()=>JSON.stringify({...window.settings.focusMode,screenEdgeGlow:undefined}));
+    await page.locator('#focus-screen-glow').uncheck();await page.waitForFunction(()=>window.settings.focusMode.screenEdgeGlow===false);
+    check(!await page.locator('#focus-picker-screen-glow').isChecked()&&await page.evaluate(()=>JSON.stringify({...window.settings.focusMode,screenEdgeGlow:undefined}))===preferences,'Main Animations autosave synchronizes the chooser without changing targets, audio delay or Focus state');
+    await page.getByRole('searchbox',{name:'Search settings',exact:true}).fill('animations');
+    check(await page.locator('#focus-screen-glow').isVisible()&&!await page.locator('#theme').isVisible(),'Settings search finds the Animations section');
+    await page.getByRole('button',{name:'Clear search',exact:true}).click();
+    await open('#choose-focus-target-settings');
+    check(!await page.locator('#focus-picker-animations').evaluate(e=>e.open),'Chooser Animations starts collapsed and preserves its saved value');
+    await page.locator('#focus-picker-animations>summary').press('Enter');
+    await page.locator('#focus-picker-screen-glow').check();await page.waitForFunction(()=>window.settings.focusMode.screenEdgeGlow===true);
+    check(await page.locator('#focus-screen-glow').isChecked(),'Chooser animation changes synchronize the main Settings checkbox');
+    await page.evaluate(()=>window.holdAnimationSave=true);
+    await page.locator('#focus-picker-screen-glow').uncheck();
+    await page.waitForFunction(()=>typeof window.releaseAnimationSave==='function');
+    const beforeAnimationSave=await saves();await page.locator('#focus-picker-screen-glow').press('Control+s');
+    check(await dialog.isVisible()&&await saves()===beforeAnimationSave,'Ctrl+S waits for pending animation persistence before saving chooser targets');
+    await page.evaluate(()=>{window.holdAnimationSave=false;window.releaseAnimationSave();});await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.screenEdgeGlow===false)&&await saves()===beforeAnimationSave+1,'Ctrl+S completes the shared animation/target save');
+    await open('#choose-focus-target-settings');await page.locator('#focus-multiple-targets').check();await kind(1);await row(1,'background').getByRole('checkbox').check();
+    check(await page.locator('#focus-picker-tab-scope').isVisible()&&await page.locator('#focus-picker-tab-scope').textContent().then(t=>t.includes('only the selected tab')),'Background tab selection explains its exact one-tab capture');
+    check(!await page.locator('#focus-picker-target-overlap').isVisible(),'A tab-only selection does not show unrelated overlap guidance');
+    await kind(2);await row(2,'focused').getByRole('checkbox').check();
+    check(await page.locator('#focus-picker-target-overlap').isVisible(),'A selected group explains why its other tabs also satisfy Focus');
+    await kind(1);
+    await row(1,'background').getByRole('checkbox').uncheck();
+    check(!await page.locator('#focus-picker-tab-scope').isVisible(),'Tab scope guidance is hidden for unrelated choices');await close();
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}

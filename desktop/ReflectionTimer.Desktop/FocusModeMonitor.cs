@@ -8,6 +8,7 @@ internal sealed class FocusModeMonitor : IDisposable
     private readonly TimerEngine engine;
     private readonly IFocusTargetSource source;
     private readonly Action<bool> alert;
+    private readonly Action<bool>? glow;
     private readonly FocusModeGate gate = new();
     private readonly SavedFocusWindows savedWindows;
     private Task<FocusPresence>? reading;
@@ -25,13 +26,14 @@ internal sealed class FocusModeMonitor : IDisposable
         internal IReadOnlyList<FocusTarget> Targets { get; set; } = [];
         internal bool Completed { get; set; }
     }
-    private bool alerting, disposed;
+    private bool alerting, glowing, disposed;
     private string status = "Off";
     internal event Action<string>? StatusChanged;
     internal string Status => status;
-    internal FocusModeMonitor(TimerEngine engine, IFocusTargetSource source, Action<bool> alert)
+    internal bool ScreenEdgeGlow => glowing;
+    internal FocusModeMonitor(TimerEngine engine, IFocusTargetSource source, Action<bool> alert, Action<bool>? glow = null)
     {
-        this.engine = engine; this.source = source; this.alert = alert;
+        this.engine = engine; this.source = source; this.alert = alert; this.glow = glow;
         savedWindows=new(engine,source);
         previous = engine.SettingsSnapshot;
         engine.ActivityRecorded += Activity;
@@ -112,6 +114,7 @@ internal sealed class FocusModeMonitor : IDisposable
         // another application's accessibility provider is still answering.
         var settings = Effective(state);
         if (!state.Timer.IsRunning || !settings.Enabled || ProbeKey(settings) != readingTargets) Apply(gate.Evaluate(settings, state.Timer, FocusPresence.Unknown, engine.ElapsedNow));
+        else if (!settings.ScreenEdgeGlow && glowing) { glowing = false; glow?.Invoke(false); }
     }
     internal void Poll()
     {
@@ -138,10 +141,11 @@ internal sealed class FocusModeMonitor : IDisposable
     private void Apply(FocusModeDecision decision)
     {
         if (alerting != decision.Alert) { alerting = decision.Alert; alert(alerting); }
+        if (glowing != decision.ScreenEdgeGlow) { glowing = decision.ScreenEdgeGlow; glow?.Invoke(glowing); }
         if (status != decision.Status) { status = decision.Status; StatusChanged?.Invoke(status); }
     }
     internal void RestoreWindows(IReadOnlyList<FocusTarget> open)=>savedWindows.Apply(open);
     internal FocusTarget CurrentWindow(FocusTarget target)=>savedWindows.Current(target);
     internal string[] PreviousWindowKeys(FocusTarget target)=>savedWindows.PreviousKeys(target);
-    public void Dispose() { if (disposed) return; disposed = true; engine.ActivityRecorded -= Activity; engine.Changed -= Changed; alert(false); source.Dispose(); }
+    public void Dispose() { if (disposed) return; disposed = true; engine.ActivityRecorded -= Activity; engine.Changed -= Changed; alert(false); glow?.Invoke(false); source.Dispose(); }
 }

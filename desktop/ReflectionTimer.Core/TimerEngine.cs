@@ -570,7 +570,8 @@ public sealed partial class TimerEngine
         settings = settings with { Target = targets.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(targets) };
         var previous = SettingsSnapshot.FocusMode;
         if (previous.Enabled == settings.Enabled && previous.DelaySeconds == settings.DelaySeconds && previous.IdleEnabled == settings.IdleEnabled
-            && previous.IdleSeconds == settings.IdleSeconds && previous.MultipleTargets == settings.MultipleTargets && previous.SelectedTargets.SequenceEqual(targets)) return;
+            && previous.IdleSeconds == settings.IdleSeconds && previous.ScreenEdgeGlow == settings.ScreenEdgeGlow
+            && previous.MultipleTargets == settings.MultipleTargets && previous.SelectedTargets.SequenceEqual(targets)) return;
         Change("settings.saved", s => s.FocusMode = settings);
     }
     public void SetSessionEndPopups(bool enabled)

@@ -4,6 +4,15 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const $=id=>document.getElementById(id),dialog=$('focus-target-dialog'),toggles=[$('focus-enabled'),$('focus-settings-enabled')];
   const targetButtons=[$('choose-focus-target'),$('choose-focus-target-settings')],list=$('focus-target-list'),use=$('focus-target-use');
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
+  const glowControls=[$('focus-screen-glow'),$('focus-picker-screen-glow')];
+  let glowEnabled=true,glowDirty=false,glowRevision=0,glowPending=null;
+  function syncGlow(){glowControls.forEach(control=>control.checked=glowEnabled);}
+  function flushGlow(){
+    if(glowPending)return glowPending;
+    glowPending=(async()=>{while(glowDirty){const captured=glowRevision;await send('focusAnimation',{enabled:glowEnabled,quiet:true});if(captured===glowRevision)glowDirty=false;}})().finally(()=>glowPending=null);
+    return glowPending;
+  }
+  for(const control of glowControls)control.addEventListener('change',()=>{glowEnabled=control.checked;glowDirty=true;glowRevision++;syncGlow();run(flushGlow);});
   for(const toggle of toggles){toggle.setAttribute('aria-keyshortcuts','Control+Alt+;');toggle.title='Ctrl+Alt+;: toggle Focus mode.';}
   let settings={enabled:false,delaySeconds:5,targets:[]},enabled=false,dirty=false,revision=0,pending=false,saving=Promise.resolve();
   let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false,targetRevision=0;
@@ -15,6 +24,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const syncToggles=()=>toggles.forEach(control=>{control.setAttribute('aria-pressed',String(enabled));control.classList.toggle('primary',enabled);});
   function render(value){
     if(!value)return;settings=value;toggles.forEach(control=>control.disabled=false);
+    if(!glowDirty){glowEnabled=value.screenEdgeGlow!==false;syncGlow();}
     if(!dirty){enabled=!!value.enabled;syncToggles();delay.value=value.delaySeconds??5;}
     const targets=selectedTargets(value),many=targets.length>1,heading=many?[0,1,2].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
     const name=targets.length&&!many?shortName(targets[0]):'',label=targets.length?many?heading:targets[0].useFocused?name:`${heading}: ${name}`:'No focus target selected.';
@@ -32,7 +42,8 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose a window, browser tab, or tab group.');
     setText($('focus-settings-target'),label+(value.idleEnabled?` · Idle for ${value.idleSeconds??20} seconds`:''));
   }
-  function flush(){
+  async function flush(){await flushGlow();await flushMode();}
+  function flushMode(){
     if(pending)return saving;
     if(!delay.checkValidity()){if(!dialog.open)open(document.body.dataset.tab==='settings'?targetButtons[1]:targetButtons[0]);delay.reportValidity();return Promise.reject(new Error('Enter a focus delay of zero or more whole seconds.'));}
     pending=true;saving=(async()=>{
@@ -40,6 +51,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     })().finally(()=>pending=false);return saving;
   }
   function syncSelection(){
+    const selected=[...picked.values()],backgroundTabs=selected.some(t=>t.kind===1&&t.useFocused&&t.captureScope===1);
+    $('focus-picker-tab-scope').hidden=!backgroundTabs;
+    $('focus-picker-target-overlap').hidden=!backgroundTabs||!selected.some(t=>t.kind===2||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase())));
     for(const row of list.querySelectorAll('tbody tr')){
       const checked=picked.has(row.dataset.key);row.classList.toggle('picked',checked);row.setAttribute('aria-current',checked&&!multiple.checked?'true':'false');
       const checkbox=row.querySelector('input');if(checkbox){checkbox.checked=checked;checkbox.disabled=loading||selecting;}
@@ -109,7 +123,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function open(button,enable=false){
     if(selecting||loading||dialog.open)return;
-    opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;
+    opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;$('focus-picker-animations').open=false;
     picked=new Map(selectedTargets(settings).filter(t=>t.id).map(t=>[key(t),t]));rows=[];activeKey=null;resetList=true;
     kindControl.value=String(selectedTargets(settings)[0]?.kind??settings.targetKind??0);draw();dialog.showModal();kindControl.focus();run(refresh);
   }

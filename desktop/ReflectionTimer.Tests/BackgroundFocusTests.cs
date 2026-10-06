@@ -26,6 +26,25 @@ internal static class BackgroundFocusTests
         var ungrouped=BackgroundFocusTargets.Capture(window,backgrounds,[new(first,true)], [new("one","strip","Selected",false,true)]);
         check(ungrouped.Count==1&&!ungrouped[0].CaptureUnknown,"An ungrouped active tab gives no fake group and remains a usable tab target");
         check(BackgroundFocusTargets.Capture(window,backgrounds,[],strip).Any(t=>t.Kind==FocusTargetKind.BrowserTab&&t.CaptureUnknown),"An unreadable selected tab is Unknown instead of producing a false away alert");
+        var anotherWindow = window with { WindowHandle = 999 };
+        var otherTab = first with { WindowHandle = 999, TabRuntimeId = "other-window-tab" };
+        var scope = backgrounds.Single(t => t.Kind == FocusTargetKind.BrowserTab);
+        var perWindow = new[] { window, anotherWindow }.SelectMany(w => BackgroundFocusTargets.Capture(w, [scope],
+            [new(first,true),new(second,false),new(otherTab,true)], strip)).ToArray();
+        check(perWindow.Length == 2 && perWindow.Any(t => t.Key == first.Key) && perWindow.Any(t => t.Key == otherTab.Key),
+            "Two browser windows capture exactly their one selected tab each, including the background window");
+        check(FocusedBrowserTargets.CheckTab(first,[new(first,true),new(second,false)],true)==FocusPresence.Focused
+            && FocusedBrowserTargets.CheckTab(second,[new(first,true),new(second,false)],true)==FocusPresence.Away,
+            "A browser window being foreground does not satisfy its unselected tabs");
+        check(FocusedBrowserTargets.CheckTab(first,[new(first,false),new(second,true)],true)==FocusPresence.Away,
+            "Switching to another tab cannot move the pinned target to that tab");
+        check(FocusedBrowserTargets.CheckTab(first,[new(first,true),new(second,false)],false)==FocusPresence.Away,
+            "A selected tab in a background window is captured but does not count as current focus");
+        check(FocusedBrowserTargets.CheckTab(first,[new(first,true),new(second,true)],true)==FocusPresence.Unknown,
+            "An ambiguous provider reporting every tab selected cannot permit every tab");
+        check(FocusedBrowserTargets.CheckTab(first,[new(otherTab,true)],true)==FocusPresence.Unavailable
+            && FocusedBrowserTargets.CheckTab(first,[new(second,true)],true)==FocusPresence.Unavailable,
+            "Other windows and closed tabs cannot impersonate a saved exact tab");
         foreach(var mode in Enum.GetValues<SessionMode>()){
             var store=new MemoryStore();var engine=new TimerEngine(store);engine.SwitchMode(mode);
             var option=backgrounds.Single(t=>t.Kind==FocusTargetKind.BrowserTab);

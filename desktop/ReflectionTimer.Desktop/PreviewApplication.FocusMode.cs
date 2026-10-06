@@ -7,15 +7,17 @@ internal sealed partial class PreviewApplication
 {
     private readonly IFocusTargetSource focusTargets = new WindowsFocusTargets();
     private FocusModeMonitor focusMonitor = null!;
+    private FocusScreenGlow focusGlow = null!;
     private readonly System.Windows.Forms.Timer focusPulse = new() { Interval = 250 };
     private readonly Dictionary<Guid, FocusTarget> focusChoices = [];
     private Task<IReadOnlyList<FocusTarget>>? listingBrowserTargets;
     private int focusListRevision;
     private void InitializeFocusMode()
     {
-        focusMonitor = new(Session.Engine, focusTargets, Services.SetFocusAlert);
+        focusGlow = new(() => Services.Log.Record("focus.glowUnavailable"));
+        focusMonitor = new(Session.Engine, focusTargets, Services.SetFocusAlert, value => focusGlow.SetActive(value && !closing));
         focusMonitor.StatusChanged += status => Broadcast(new { type = "focusStatus", status });
-        focusPulse.Tick += (_, _) => focusMonitor.Poll(); focusPulse.Start();
+        focusPulse.Tick += (_, _) => { focusMonitor.Poll(); focusGlow.SetActive(focusMonitor.ScreenEdgeGlow && !closing); }; focusPulse.Start();
     }
     internal string FocusStatus => focusMonitor.Status;
     private void ToggleFocusModeFromGlobalShortcut()

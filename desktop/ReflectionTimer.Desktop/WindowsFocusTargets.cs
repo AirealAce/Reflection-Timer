@@ -47,7 +47,6 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     [StructLayout(LayoutKind.Sequential)] private struct LastInputInfo { internal uint Size, Time; }
     [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInputInfo input);
     private readonly BlockingCollection<Action> jobs = new();
-    private readonly Dictionary<string, AutomationElement> tabs = [];
     private readonly Thread worker;
     private string? currentTabKey;
     private bool disposed;
@@ -167,7 +166,6 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
                     var name = slot.Data.Name;
                     if (string.IsNullOrWhiteSpace(name)) continue;
                     var id = slot.Data.Id;
-                    tabs[CacheKey(window, id)] = tab;
                     var target = window with { Id = Guid.NewGuid(), Kind = kind, Name = name.Length > 2048 ? name[..2048] : name, TabRuntimeId = id, TabPosition=++position };
                     tabChoices.Add(new(target, slot.Data.Selected, tab.Current.HasKeyboardFocus));
                 }
@@ -178,9 +176,6 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
             choices.AddRange(listing.Targets);
             Volatile.Write(ref currentTabKey, listing.Current is {} current ? BrowserTabListing.Identity(current) : null);
         }
-        // Bound retained accessibility objects to current choices.
-        var keys = choices.Select(t => CacheKey(t, t.TabRuntimeId)).ToHashSet();
-        foreach (var key in tabs.Keys.Where(k => !keys.Contains(k)).ToArray()) tabs.Remove(key);
         return kind == FocusTargetKind.BrowserTab ? choices : choices.OrderBy(t => t.App).ThenBy(t => t.WindowName).ThenBy(t=>t.TabPosition).ToArray();
     });
     public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.BrowserTab && BrowserTabListing.Identity(target) == Volatile.Read(ref currentTabKey);
@@ -196,28 +191,52 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     }
     public Task<FocusPresence> CheckAsync(FocusTarget target) => target.CaptureUnknown?Task.FromResult(CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown)
         : target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
-        ? Task.FromResult(CheckWindow(target)) : Enqueue(() => {
+        ? Task.FromResult(CheckWindow(target)) : Enqueue(() => CheckBrowser(target, []));
+    public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)
+    {
+        // Check ordinary windows first so an unrelated hung browser cannot
+        // mask a selected window. Read each browser strip once per probe.
+        if (targets.Any(t => !t.UseFocused && !t.CaptureUnknown && t.Kind == FocusTargetKind.Window && CheckWindow(t) == FocusPresence.Focused))
+            return Task.FromResult(FocusPresence.Focused);
+        if (targets.All(t => t.Kind == FocusTargetKind.Window || t.UseFocused || t.CaptureUnknown)) {
+            var native = targets.Select(t => t.UseFocused ? FocusPresence.Unknown : t.CaptureUnknown
+                ? CheckWindow(t) == FocusPresence.Unavailable ? FocusPresence.Unavailable : FocusPresence.Unknown : CheckWindow(t)).ToArray();
+            return Task.FromResult(native.Contains(FocusPresence.Focused) ? FocusPresence.Focused
+                : native.Contains(FocusPresence.Unknown) ? FocusPresence.Unknown : native.Contains(FocusPresence.Away) ? FocusPresence.Away : FocusPresence.Unavailable);
+        }
+        return Enqueue(() => {
+            var snapshots = new Dictionary<(long, int, long), BrowserProbe>();
+            var away = false; var unknown = false;
+            foreach (var target in targets) {
+                var presence = target.UseFocused ? FocusPresence.Unknown
+                    : target.CaptureUnknown ? CheckWindow(target) == FocusPresence.Unavailable ? FocusPresence.Unavailable : FocusPresence.Unknown
+                    : target.Kind == FocusTargetKind.Window ? CheckWindow(target) : CheckBrowser(target, snapshots);
+                if (presence == FocusPresence.Focused) return presence;
+                away |= presence == FocusPresence.Away; unknown |= presence == FocusPresence.Unknown;
+            }
+            return unknown ? FocusPresence.Unknown : away ? FocusPresence.Away : FocusPresence.Unavailable;
+        });
+    }
+    private sealed record BrowserProbe(IReadOnlyList<NativeBrowserSlot> Slots)
+    {
+        internal IReadOnlyList<BrowserTabChoice>? Choices { get; set; }
+    }
+    private static FocusPresence CheckBrowser(FocusTarget target, Dictionary<(long, int, long), BrowserProbe> snapshots)
+    {
         var window = CheckWindow(target);
         if (window == FocusPresence.Unavailable) return window;
         var handle = (nint)target.WindowHandle;
         try {
+            var key = (target.WindowHandle, target.ProcessId, target.ProcessStartedAt);
+            if (!snapshots.TryGetValue(key, out var probe)) snapshots[key] = probe = new(BrowserStrip(handle));
             if (target.Kind == FocusTargetKind.BrowserTabGroup)
-                return BrowserTabGroups.Check(target.TabRuntimeId, BrowserStrip(handle).Select(slot => slot.Data).ToArray(), IsTargetForeground(handle));
-            var key = CacheKey(target, target.TabRuntimeId);
-            if (!tabs.TryGetValue(key, out var tab)) {
-                tab = BrowserStrip(handle).Where(slot => !slot.Data.GroupHeader).Select(slot => slot.Element).FirstOrDefault(t => string.Join(",", t.GetRuntimeId()) == target.TabRuntimeId);
-                if (tab is null) return FocusPresence.Unavailable;
-                tabs[key] = tab;
-            }
-            if (!BelongsToWindow(tab, handle)) return FocusPresence.Unavailable;
-            if (tab.TryGetCurrentPattern(SelectionItemPattern.Pattern, out var pattern)) {
-                var selected = ((SelectionItemPattern)pattern).Current.IsSelected;
-                return selected && IsTargetForeground(handle) ? FocusPresence.Focused : FocusPresence.Away;
-            }
-            return FocusPresence.Unknown;
-        } catch (ElementNotAvailableException) { tabs.Remove(CacheKey(target, target.TabRuntimeId)); return FocusPresence.Unavailable; }
+                return BrowserTabGroups.Check(target.TabRuntimeId, probe.Slots.Select(slot => slot.Data).ToArray(), IsTargetForeground(handle));
+            probe.Choices ??= probe.Slots.Where(slot => !slot.Data.GroupHeader && BelongsToWindow(slot.Element, handle))
+                .Select(slot => new BrowserTabChoice(target with { Kind = FocusTargetKind.BrowserTab, TabRuntimeId = slot.Data.Id }, slot.Data.Selected, slot.Element.Current.HasKeyboardFocus)).ToArray();
+            return FocusedBrowserTargets.CheckTab(target, probe.Choices, IsTargetForeground(handle));
+        } catch (ElementNotAvailableException) { return FocusPresence.Unavailable; }
         catch { return FocusPresence.Unknown; }
-    });
+    }
     private static bool BelongsToWindow(AutomationElement element, nint handle)
     {
         for (var i = 0; element is not null && i < 20; i++, element = TreeWalker.ControlViewWalker.GetParent(element)) {
@@ -226,7 +245,6 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         }
         return false;
     }
-    private static string CacheKey(FocusTarget target, string id) => $"{target.ProcessId}:{target.ProcessStartedAt}:{target.WindowHandle}:{id}";
     private static string ProcessPath(Process process)
     {
         try { return process.MainModule?.FileName ?? ""; } catch { return ""; }

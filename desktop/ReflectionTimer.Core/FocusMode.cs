@@ -44,13 +44,14 @@ public record FocusModeSettings
     public bool MultipleTargets { get; init; }
     public bool IdleEnabled { get; init; }
     public int IdleSeconds { get; init; } = 20;
+    public bool ScreenEdgeGlow { get; init; } = true;
     // Older encrypted profiles stored only Target. Keep that choice on upgrade.
     [JsonIgnore] public ImmutableArray<FocusTarget> SelectedTargets => !Targets.IsDefaultOrEmpty ? Targets : Target is {} target ? [target] : [];
     [JsonIgnore] public string SelectionKey => string.Join("|", SelectedTargets.Select(t => t.Key).Order(StringComparer.Ordinal));
 }
 
 public enum FocusPresence { Focused, Away, Unavailable, Unknown }
-public record FocusModeDecision(bool Alert, string Status);
+public record FocusModeDecision(bool Alert, string Status, bool ScreenEdgeGlow = false);
 
 // Monotonic elapsed time; no dependence on wall-clock edits or sleep recovery.
 public sealed class FocusModeGate
@@ -74,8 +75,11 @@ public sealed class FocusModeGate
         else awaySince = null;
         var remaining = awaySince is {} since ? Math.Max(0, settings.DelaySeconds - (now - since) / 1000) : (long?)null;
         var idle = settings.IdleEnabled && idleMilliseconds >= settings.IdleSeconds * 1000L;
-        if (idle) return new(true, $"Idle for {settings.IdleSeconds} seconds · alert active");
-        if (remaining is {} seconds) return new(seconds == 0, seconds == 0 ? "Away from selected targets · delay reached" : $"Away from selected targets · alert in {seconds} seconds");
+        // The visual warning is immediate and independent of the audio grace
+        // period. Inactivity on a selected target is not leaving that target.
+        var glow = settings.ScreenEdgeGlow && hasTargets && presence == FocusPresence.Away;
+        if (idle) return new(true, $"Idle for {settings.IdleSeconds} seconds · alert active", glow);
+        if (remaining is {} seconds) return new(seconds == 0, seconds == 0 ? "Away from selected targets · delay reached" : $"Away from selected targets · alert in {seconds} seconds", glow);
         return new(false, !hasTargets ? settings.IdleEnabled ? "Watching for inactivity" : "Choose a window or tab" : presence switch {
             FocusPresence.Focused => "A selected target is focused",
             FocusPresence.Unavailable => "Targets closed or moved. Choose them again.",

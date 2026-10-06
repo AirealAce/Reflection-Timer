@@ -318,6 +318,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         if (closing) return;
         closing = true;
+        focusGlow.SetActive(false);
         try {
             await promptCoordinator.ExclusivelyAsync(async()=>{
                 foreach (var window in windows.ToArray()) await window.FlushDraftAsync();
@@ -330,5 +331,5 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again."); }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { focusPulse.Dispose();focusMonitor.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }

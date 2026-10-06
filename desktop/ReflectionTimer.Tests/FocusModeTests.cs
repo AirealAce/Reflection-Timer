@@ -11,6 +11,7 @@ internal static class FocusModeTests
     {
         SavedFocusWindowTests.Run(check);
         BackgroundFocusTests.Run(check);
+        FocusVisualTests.Run(check);
         FocusTargetToggleTests.Run(check);
         var target=new FocusTarget(Guid.NewGuid(),FocusTargetKind.Window,"Synthetic focus target","synthetic",123,456,789);
         check(PreviewApplication.MatchesSavedFocusTarget(target with{Id=Guid.NewGuid(),Name="Renamed window"},target),"Reopening the picker retains the saved window despite a new list ID or title");

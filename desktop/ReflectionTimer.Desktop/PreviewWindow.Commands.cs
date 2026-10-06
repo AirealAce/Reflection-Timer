@@ -22,7 +22,7 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode")) return false;
+        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode" or "focusAnimation")) return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
@@ -42,6 +42,8 @@ internal sealed partial class PreviewWindow
                 _=services.Play(SoundEvent.Success);break;
             case "focusMode":
                 engine.SetFocusMode(state.FocusMode with {Enabled=ReadFlag(data,"enabled"),DelaySeconds=ReadInt(data,"delaySeconds",0,TimerEngine.MaxDuration)});break;
+            case "focusAnimation":
+                engine.SetFocusMode(state.FocusMode with {ScreenEdgeGlow=ReadFlag(data,"enabled")});break;
             case "voiceAnnouncements": engine.SetVoiceAnnouncements(ReadFlag(data,"enabled"));message="Voice announcement preference saved.";break;
             case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;

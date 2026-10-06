@@ -4,6 +4,17 @@ namespace ReflectionTimer.Accessible;
 
 internal static class FocusedBrowserTargets
 {
+    internal static FocusPresence CheckTab(FocusTarget target, IReadOnlyList<BrowserTabChoice> tabs, bool windowFocused)
+    {
+        var owned = tabs.Where(t => t.Target.WindowHandle == target.WindowHandle && t.Target.ProcessId == target.ProcessId
+            && t.Target.ProcessStartedAt == target.ProcessStartedAt).ToArray();
+        if (!owned.Any(t => t.Target.TabRuntimeId == target.TabRuntimeId)) return FocusPresence.Unavailable;
+        var current = BrowserTabListing.Create(owned).Current;
+        // A provider reporting multiple selected tabs is not evidence that all
+        // tabs satisfy the target. Verify the unique current selection afresh.
+        if (current is null) return FocusPresence.Unknown;
+        return windowFocused && current.TabRuntimeId == target.TabRuntimeId ? FocusPresence.Focused : FocusPresence.Away;
+    }
     internal static IReadOnlyList<FocusTarget> Capture(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds,
         IReadOnlyList<BrowserTabChoice> tabs, IReadOnlyList<BrowserTabSlot> strip)
     {
