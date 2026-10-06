@@ -167,5 +167,6 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 #focus-target-list tbody tr.picked{background:var(--raised);box-shadow:inset 3px 0 var(--accent)}
 #focus-target-list tbody tr:focus-within{outline:2px solid var(--accent);outline-offset:-2px}
 #focus-target-list tbody tr.unavailable{opacity:.65}
-#focus-target-list .focus-selection-cell{padding-left:4px;padding-right:4px}
+#focus-target-list .focus-selection-cell{padding-left:8px;padding-right:8px}
+#focus-target-list .focus-selection-cell input[type=checkbox]{padding:0;width:16px;height:16px}
 #focus-target-list .focus-number-cell{padding-left:8px;padding-right:8px;text-align:left;white-space:nowrap}

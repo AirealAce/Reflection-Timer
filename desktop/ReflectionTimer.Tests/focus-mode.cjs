@@ -68,9 +68,20 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       const head=list.querySelector('th.focus-number-cell'),value=[...list.querySelectorAll('td.focus-number-cell .focus-cell')].find(el=>el.textContent.trim());
       if(!head||!value)return false;
       const h=getComputedStyle(head),cell=getComputedStyle(value.parentElement),range=document.createRange();range.selectNodeContents(head);
+      const header=head.getBoundingClientRect(),label=range.getBoundingClientRect();
       return h.textAlign==='left'&&cell.textAlign==='left'&&h.paddingLeft==='8px'&&cell.paddingLeft==='8px'
-        &&Math.abs(range.getBoundingClientRect().left-value.getBoundingClientRect().left)<1
-        &&head.getBoundingClientRect().width<=57&&head.scrollWidth<=head.clientWidth;
+        &&Math.abs(label.left-value.getBoundingClientRect().left)<1
+        &&header.right-label.right>=label.left-header.left+4
+        &&header.width<=65&&head.scrollWidth<=head.clientWidth;
+    });
+    const checkboxClearance=()=>page.locator('#focus-target-list').evaluate(list=>{
+      const border=list.getBoundingClientRect();
+      return [...list.querySelectorAll('tbody input[type=checkbox]')].every(box=>{
+        const bounds=box.getBoundingClientRect(),cell=box.parentElement.getBoundingClientRect(),style=getComputedStyle(box);
+        const outline=box.matches(':focus-visible')?parseFloat(style.outlineWidth)+parseFloat(style.outlineOffset):0;
+        return cell.width<=33&&bounds.left-cell.left>=7.5&&cell.right-bounds.right>=7.5
+          &&bounds.left-outline>=border.left+1&&bounds.right+outline<=cell.right;
+      });
     });
     check(await pressed()==='false','Focus starts off');
     check(await page.locator('#focus-screen-glow').isChecked()&&await page.locator('#focus-picker-screen-glow').isChecked(),'Focus screen-edge glow defaults on in both Settings and chooser for an older profile');
@@ -236,12 +247,19 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       const unwrappedHeight=await row(1,'a').evaluate(el=>el.getBoundingClientRect().height);await row(1,'a').hover();
       check(await row(1,'a').locator('.focus-cell').nth(1).evaluate(el=>getComputedStyle(el).whiteSpace==='nowrap')&&await row(1,'a').evaluate(el=>el.getBoundingClientRect().height)===unwrappedHeight,'Hovering does not wrap or resize a row in theme '+theme);
       await row(1,'a').getByRole('checkbox').focus();
+      check(await checkboxClearance(),'Tab checkboxes and keyboard outlines stay inside their cells and table border in theme '+theme);
       check(await row(1,'a').locator('.focus-cell').nth(1).evaluate(el=>getComputedStyle(el).whiteSpace==='normal')&&await row(1,'b').locator('.focus-cell').nth(1).evaluate(el=>getComputedStyle(el).whiteSpace==='nowrap'),'Only the targeted row wraps its full name in theme '+theme);
       check(await page.evaluate(()=>document.querySelector('#focus-target-dialog').scrollWidth<=document.querySelector('#focus-target-dialog').clientWidth+1),'Long names do not widen the dialog in theme '+theme);
       check(await page.locator('#focus-target-use').evaluate(el=>{const r=el.getBoundingClientRect(),dialog=document.querySelector('#focus-target-dialog').getBoundingClientRect();return r.top>=dialog.top&&r.bottom<=dialog.bottom&&r.bottom<=innerHeight;}),'Save stays visible while long names wrap in theme '+theme);
       await capture('focus-target-table-theme-'+theme,dialog);await page.locator('#focus-picker-audio>summary').click();
       check(await page.locator('#sound-volume-5-picker').isVisible()&&await dialog.evaluate(e=>{const body=e.querySelector('.focus-picker-body');return e.scrollWidth<=e.clientWidth+1&&body.scrollWidth<=body.clientWidth+1;}),'Expanded Focus audio fits the themed chooser in theme '+theme);
-      await capture('focus-audio-theme-'+theme,dialog);await close();
+      await capture('focus-audio-theme-'+theme,dialog);await page.locator('#focus-picker-audio>summary').click();
+      for(const targetKind of [0,2]){
+        await kind(targetKind);await row(targetKind,'a').getByRole('checkbox').focus();
+        check(await checkboxClearance(),'Target kind '+targetKind+' keeps checkbox and focus outline clear of the border in theme '+theme);
+        if(targetKind===2)check(await numberAlignment(),'Grp # retains visibly left-aligned text in theme '+theme);
+      }
+      await close();
     }
     await page.evaluate(()=>{window.longNames=false;window.settings.focusMode.targets=[{id:'1-b',key:'1-b',kind:1,name:'Long saved tab '.repeat(30),app:'chrome',windowName:'Browser window',tabPosition:2}];window.dispatchBridge({type:'settings',settings:window.settings});});await page.locator('#tab-timer').click();
     check(await inline()&&await page.locator('#choose-focus-target').evaluate(el=>{const name=el.querySelector('.focus-target-label');return el.getBoundingClientRect().width<=260&&name.scrollWidth>name.clientWidth;}),'Long saved names stay clipped without enlarging the main action row');

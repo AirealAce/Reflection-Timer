@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.2.51**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.2.52**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 **Search settings** at the top of Settings filters the existing sections by their names, labels and explanations. Multiple words narrow the results; **Clear search** restores everything. Edits remain in their original controls, and Ctrl+S / Ctrl+Enter still save Settings. Help icons sit beside their corresponding heading text in every theme.
 

@@ -85,8 +85,8 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function draw(){
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:['Grp #','Group Name','App'];
-    const widths=kind===0?['30%','']:['56px','','24%'];
-    if(multiple.checked){headers.unshift('');widths.unshift('24px');}
+    const widths=kind===0?['30%','']:['64px','','24%'];
+    if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
     const head=document.createElement('tr');for(const text of headers){const th=document.createElement('th');th.scope='col';th.textContent=text;if(text.endsWith(' #'))th.className='focus-number-cell';if(!text){th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');}head.append(th);}list.querySelector('thead').replaceChildren(head);
