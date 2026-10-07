@@ -12,7 +12,7 @@ public record CsvSettings
     public string Directory { get; init; } = "";
     [JsonIgnore] public string ResolvedDirectory => NormalizeDirectory(Directory);
     public static string DefaultDirectory => Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory) is { Length: > 0 } desktop
-        ? desktop : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Desktop"), "Reflection Timer");
+        ? desktop : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Desktop"), "Reflection Timer Logs");
     public static string NormalizeDirectory(string value)
     {
         value = value.Trim();
@@ -47,6 +47,9 @@ public sealed class CsvLog
     private static string Duration(long seconds) => seconds >= 3600 ? $"{seconds / 3600}:{seconds / 60 % 60:00}:{seconds % 60:00}" : $"{seconds / 60}:{seconds % 60:00}";
     private static string PlainText(string value) => value.TrimStart() is { Length: > 0 } trimmed && trimmed[0] is '=' or '+' or '@'
         || value.StartsWith('\t') || value.StartsWith('\r') ? "'" + value : value;
+    private static string Field(string value) => value.IndexOfAny([',', '"', '\r', '\n']) >= 0
+        || value.Length > 0 && (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]))
+        ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
     internal static string[] Row(OutboxItem item)
     {
         var pauses = item.Pauses.OrderBy(p => p.PausedAt).ToArray();
@@ -94,7 +97,7 @@ public sealed class CsvLog
                 using (var stream = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)) {
                     using (var writer = new StreamWriter(stream, new UTF8Encoding(true), leaveOpen: true)) {
                         writer.NewLine = "\r\n";
-                        void WriteRow(IEnumerable<string> fields) => writer.WriteLine(string.Join(",", fields.Select(value => "\"" + value.Replace("\"", "\"\"") + "\"")));
+                        void WriteRow(IEnumerable<string> fields) => writer.WriteLine(string.Join(",", fields.Select(Field)));
                         WriteRow(Headers);
                         foreach (var existing in rows) WriteRow(existing);
                         WriteRow(row);

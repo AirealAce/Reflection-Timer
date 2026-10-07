@@ -17,7 +17,7 @@ static class CsvTests
         try {
             var fresh=AppState.CreateDefault();
             check(fresh.Csv.Enabled&&!fresh.ExtensionDisabledConfirmed,"Fresh profiles prefer CSV with Sheets off");
-            check(fresh.Csv.ResolvedDirectory==Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),"Reflection Timer"),"The default CSV folder is on the actual Desktop");
+            check(fresh.Csv.ResolvedDirectory==Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),"Reflection Timer Logs"),"The default CSV folder is Reflection Timer Logs on the actual Desktop");
             var legacy=JsonSerializer.Deserialize<AppState>("{\"ExtensionDisabledConfirmed\":true,\"Outbox\":[{\"Message\":\"Existing pending reflection\"}]}",DataJson.Options)!;
             check(legacy.ExtensionDisabledConfirmed&&legacy.Csv.Enabled&&legacy.Outbox[0].WantsSheets&&legacy.Outbox[0].CsvStatus==CsvDeliveryStatus.NotRequested,"Legacy Sheets preferences and pending entries survive without exporting old history");
             var folder=Path.Combine(root,"new","daily");var entry=Entry(folder);var log=new CsvLog();
@@ -28,6 +28,14 @@ static class CsvTests
             check(rows[0].SequenceEqual(CsvLog.Headers)&&rows.Length==2&&rows[1].Length==11,"Daily CSV has one header row and the Sheets columns plus an entry ID");
             check(rows[1][1]==entry.Message&&rows[1][2]=="10:21"&&rows[1][3]=="15:00"&&rows[1][6]=="timer","CSV round-trips commas, quotes, Unicode and line breaks with timer durations");
             check(File.ReadAllBytes(reply.File).Take(3).SequenceEqual(new byte[]{0xef,0xbb,0xbf}),"A UTF-8 BOM preserves Unicode in Windows spreadsheet apps");
+            var simple=entry with{Id=Guid.NewGuid(),Message="testing",Mode=SessionMode.Stopwatch,ActualDurationSeconds=51,CsvDirectory=Path.Combine(root,"readable")};var simpleReply=log.Write(simple);var simpleText=File.ReadAllText(simpleReply.File);
+            check(simpleText.StartsWith(string.Join(",",CsvLog.Headers)+"\r\n")&&!simpleText.Contains('"')&&simpleText.Contains("testing,0:51,,,,stop watch"),"Headers, plain text and empty cells avoid unnecessary quotes");
+            var quoted=entry with{Id=Guid.NewGuid(),Message="Leading space ",CsvDirectory=simple.CsvDirectory};check(log.Write(quoted).Success&&Read(simpleReply.File).Last()[1]==quoted.Message,"Required quoting preserves whitespace as well as commas, quotes and line breaks");
+            var legacyFolder=Path.Combine(root,"legacy-quotes");Directory.CreateDirectory(legacyFolder);var legacyEntry=simple with{CsvDirectory=legacyFolder};
+            var legacyRows=Read(simpleReply.File);var oldQuoted=string.Join("\r\n",legacyRows.Select(row=>string.Join(",",row.Select(value=>"\""+value.Replace("\"","\"\"")+"\""))))+"\r\n";File.WriteAllText(CsvLog.FilePath(legacyEntry),oldQuoted,new UTF8Encoding(true));
+            var legacyBytes=File.ReadAllBytes(CsvLog.FilePath(legacyEntry));
+            check(log.Write(legacyEntry).Success&&legacyBytes.SequenceEqual(File.ReadAllBytes(CsvLog.FilePath(legacyEntry))),"Retrying an older fully quoted CSV retains its existing entry without duplicates");
+            check(log.Write(legacyEntry with{Id=Guid.NewGuid(),Message="Another entry"}).Success&&Read(CsvLog.FilePath(legacyEntry)).Length==4&&Read(CsvLog.FilePath(legacyEntry))[2][1]==quoted.Message,"Appending to older CSV files simplifies quoting without changing stored cell contents");
             var before=File.ReadAllBytes(reply.File);
             check(log.Write(entry).Success&&before.SequenceEqual(File.ReadAllBytes(reply.File)),"Retrying an entry leaves one row and does not rewrite the file");
             check(log.Write(entry with{Message="Different contents"}).Error=="csv_conflict"&&before.SequenceEqual(File.ReadAllBytes(reply.File)),"A conflicting ID never overwrites or duplicates an existing row");

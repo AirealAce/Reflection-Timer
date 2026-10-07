@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.3.0</p>
+    <p class="eyebrow">Reflection Timer 4.3.1</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -150,7 +150,7 @@
         <label for="csv-directory">CSV folder</label>
         <div class="option-row csv-folder-row"><input id="csv-directory" type="text" maxlength="4096" aria-describedby="csv-directory-help"><button id="csv-browse" type="button">Choose folder…</button></div>
         <p id="csv-directory-help" class="hint">Daily files use MM-dd-yyyy.csv, matching the daily Sheets tab name with filename-safe separators.</p>
-        <p data-help="destinations">Select either destination or both. CSV is selected by default; Google Sheets is optional. The folder and daily file are created when an entry is sent. CSV files have column headers and the same response, duration, session status and pause details as Sheets, plus an entry ID to prevent duplicate retries. Test entries use test-MM-dd-yyyy.csv. CSV files are ordinary readable files. Changing the folder applies to future entries; Retry selected also uses the current folder for a failed CSV entry.</p>
+        <p data-help="destinations">Select either destination or both. CSV is selected by default in Desktop\Reflection Timer Logs; Google Sheets is optional. The folder and daily file are created when an entry is sent. CSV files have column headers and the same response, duration, session status and pause details as Sheets, plus an entry ID to prevent duplicate retries. Test entries use test-MM-dd-yyyy.csv. Open CSV files in a spreadsheet to read the columns as a table; enable Wrap text to show multiline responses and pauses within their cells. Quotes appear only where required to retain the data. CSV files are ordinary readable files. Changing the folder applies to future entries; Retry selected also uses the current folder for a failed CSV entry.</p>
       </form>
     </section>
     <section id="startup" class="main-only"><h2 data-help-heading="startup">Startup &amp; diagnostics</h2><label class="check"><input id="start-at-login" form="appearance-form" type="checkbox">Start in the tray when I sign in to Windows</label><p class="preview-note" data-help="startup">Reflection Timer starts in the tray using your saved settings.</p><label class="check"><input id="logging" form="appearance-form" type="checkbox" checked>Record local diagnostic events</label><h2>Save settings</h2><p data-help="startup"><kbd>Ctrl+Enter</kbd> or the bottom-right Save settings button saves your settings from anywhere on this page.</p><p data-help="startup">The API token, reflections, and drafts are encrypted for your Windows account in <code>%USERPROFILE%\.reflection-timer</code>. This is the single active settings folder for every launch method. Connection settings may be saved incomplete; sending waits until they are valid. Windows sign-in startup is optional and off by default.</p></section>
@@ -210,7 +210,7 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.0</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.1</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">

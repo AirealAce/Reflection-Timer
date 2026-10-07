@@ -10,7 +10,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.route('**/*',async route=>{const name=path.basename(new URL(route.request().url()).pathname);if(!/\.(html|js|css)$/.test(name))return route.abort();await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});});
     await page.addInitScript(()=>{
       const handlers=[];window.messages=[];
-      window.settings={sheetUrl:'',webAppUrl:'',sheetMode:'date',sheetName:'Template',connected:false,sheetsEnabled:false,csvEnabled:true,csvDirectory:'C:\\Synthetic Desktop\\Reflection Timer',volume:0,threshold:15,showFloatingTimer:true,
+      window.settings={sheetUrl:'',webAppUrl:'',sheetMode:'date',sheetName:'Template',connected:false,sheetsEnabled:false,csvEnabled:true,csvDirectory:'C:\\Synthetic Desktop\\Reflection Timer Logs',volume:0,threshold:15,showFloatingTimer:true,
         theme:0,popup:4,placement:4,overlap:2,tracks:[{id:0,name:'Default'},{id:6,name:'Battle (Trainer)'}],sounds:[0,1,2,3,4,5].map(kind=>({kind,track:0,behavior:2,volume:100,fadeOutAfterSeconds:10,defaultName:'Bundled track'}))};
       window.state={clock:{seconds:900,text:'15 minutes',status:'Ready'},timer:{durationSeconds:900,mode:0,autoRestart:false,enabled:true,threshold:15},prompts:[],schedules:[],outbox:[]};
       window.dispatchBridge=m=>handlers.forEach(h=>h({data:m}));
@@ -34,7 +34,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.evaluate(()=>{window.dispatchBridge({type:'settings',settings:window.settings});window.dispatchBridge({type:'state',state:window.state});});
     await page.locator('#tab-settings').click();
     check(await page.locator('#csv-enabled').isChecked()&&!await page.locator('#connection-enabled').isChecked(),'Fresh Settings selects CSV and leaves Sheets off');
-    check(await page.locator('#csv-directory').inputValue()==='C:\\Synthetic Desktop\\Reflection Timer','Settings exposes the resolved Desktop folder');
+    check(await page.locator('#csv-directory').inputValue()==='C:\\Synthetic Desktop\\Reflection Timer Logs','Settings exposes the resolved Desktop folder');
     check(await page.locator('#extension-off,#duplicate-timers,#import-schedules').count()===0,'Abandoned extension controls are absent');
     check(await page.locator('#connection-enabled').evaluate(el=>el.form.id==='connection-form')&&await page.locator('#csv-enabled').evaluate(el=>el.form.id==='csv-form'),'Independent destination controls retain correct form owners');
     await page.locator('#csv-enabled').uncheck();await page.locator('#connection-enabled').check();await page.locator('#connection-enabled').press('Control+Enter');
