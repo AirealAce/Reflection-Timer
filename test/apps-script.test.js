@@ -34,12 +34,16 @@ function createHarness(names = ['Template'], timezone = 'America/New_York', opti
     formats.set(name, formatsGrid);
     notesBySheet.set(name, notes);
     let maxRows = 774;
+    let frozenRows = 0;
     const columnWidths = new Map();
     let conditionalRules = [];
     const sheet = {
       getName: () => name,
       getMaxColumns: () => 33,
       getMaxRows: () => maxRows,
+      getFrozenRows: () => frozenRows,
+      setFrozenRows(value) { frozenRows = value; },
+      isSheetHidden: () => name === 'Data',
       getColumnWidth: (column) => columnWidths.get(column) || 100,
       setColumnWidth(column, width) { columnWidths.set(column, width); },
       getLastRow: () => grid.length,
@@ -198,11 +202,11 @@ function createHarness(names = ['Template'], timezone = 'America/New_York', opti
     },
     Utilities: {
       formatDate(date, timeZone, format) {
-        assert.ok(['yyyy-MM-dd-HH-mm','M/d/yyyy h:mm a'].includes(format));
+        assert.ok(['yyyy-MM-dd-HH-mm','h:mm a M/d/yyyy'].includes(format));
         const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {
           timeZone, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23'
         }).formatToParts(date).map((part) => [part.type, part.value]));
-        if(format==='M/d/yyyy h:mm a')return `${Number(parts.month)}/${Number(parts.day)}/${parts.year} ${Number(parts.hour)%12||12}:${parts.minute} ${Number(parts.hour)<12?'AM':'PM'}`;
+        if(format==='h:mm a M/d/yyyy')return `${Number(parts.hour)%12||12}:${parts.minute} ${Number(parts.hour)<12?'AM':'PM'} ${Number(parts.month)}/${Number(parts.day)}/${parts.year}`;
         return `${parts.year}-${parts.month}-${parts.day}-${parts.hour}-${parts.minute}`;
       },
       Charset: { UTF_8: 'utf8' },
@@ -216,6 +220,63 @@ function createHarness(names = ['Template'], timezone = 'America/New_York', opti
   const request = (payload) => JSON.parse(context.doPost({ postData: { contents: JSON.stringify(payload) } }).text);
   return { grid: grids.get('Template'), grids, formats, notesBySheet, insertedCells, request, scriptLock, createdSheets, deletedSheets, context, sheets, properties };
 }
+
+const expectedHeaders = ['Time', 'Response', 'Time spent', 'Time allotted', 'Status',
+  'Reason for ending early', 'Mode', 'Pause time', 'Pause Duration', 'Pause Reason'];
+
+test('header migration preserves full rows and receipts, freezes headers and is repeatable', () => {
+  const h = createHarness(['Template', 'test', '09/05/2026', 'Data', '5/29']);
+  const requestId = crypto.randomUUID();
+  const initial = h.request({ ...datedRequest, isTest: true, requestId, deliveryProtocol: 'request-id-v1' });
+  assert.equal(initial.success, true, initial.error);
+  h.grids.get('test')[0][32] = 'neighboring data';
+  const oldGrid = structuredClone(h.grids.get('test'));
+  const oldNote = h.notesBySheet.get('test')[0][0];
+  assert.equal(h.context.addReflectionTimerHeaders().tabs, 3);
+  assert.deepEqual(h.grids.get('test')[0].slice(0, 10), expectedHeaders);
+  assert.deepEqual(h.grids.get('test')[1], Array.from(oldGrid[0], value => value ?? ''));
+  assert.equal(h.notesBySheet.get('test')[1][0], oldNote);
+  assert.equal(h.sheets[1].getFrozenRows(), 1);
+  const after = structuredClone(h.grids.get('test'));
+  h.context.addReflectionTimerHeaders();
+  assert.deepEqual(h.grids.get('test'), after);
+  const duplicate = h.request({ ...datedRequest, isTest: true, requestId, deliveryProtocol: 'request-id-v1' });
+  assert.equal(duplicate.duplicate, true);
+  assert.deepEqual(h.grids.get('test'), after);
+  assert.deepEqual(h.grids.get('Data')[0], ['', '']);
+  assert.deepEqual(h.grids.get('5/29')[0], ['', '']);
+  assert.equal(h.scriptLock.locked, false);
+});
+
+test('same-hour and new-hour entries remain below headers with matching dividers and colors', () => {
+  const h = createHarness(['test']);
+  h.context.ensureLogHeaders_(h.sheets[0]);
+  const send = time => h.request({ ...datedRequest, isTest: true, submittedAt: `2026-09-05T${time}:00-04:00`, message: time });
+  for (const time of ['18:20', '18:21', '19:05']) assert.equal(send(time).range, 'A2:J2');
+  assert.deepEqual(h.grids.get('test')[0].slice(0, 10), expectedHeaders);
+  assert.equal(h.grids.get('test')[1][1], '19:05');
+  assert.equal(h.grids.get('test')[2][0], '7:00 PM');
+  assert.equal(h.grids.get('test')[3][1], '18:21');
+  assert.equal(h.grids.get('test')[4][1], '18:20');
+  assert.equal(h.grids.get('test')[5][0], '6:00 PM');
+  assert.equal(h.formats.get('test')[0][0].fontWeight, 'bold');
+  assert.equal(h.formats.get('test')[1][0].background, '#ffffff');
+  assert.equal(h.formats.get('test')[3][0].background, '#595959');
+});
+
+test('new daily sheets retain headers from the template without copying old entries', () => {
+  const h = createHarness();
+  h.context.ensureLogHeaders_(h.sheets[0]);
+  h.grid[1] = ['old time', 'old reflection'];
+  const original = structuredClone(h.grid);
+  const result = h.request(datedRequest);
+  assert.equal(result.range, 'A2:J2');
+  assert.deepEqual(h.grids.get(result.sheet)[0].slice(0, 10), expectedHeaders);
+  assert.equal(h.grids.get(result.sheet)[1][1], datedRequest.message);
+  assert.equal(h.grids.get(result.sheet).some(row => row[1] === 'old reflection'), false);
+  assert.deepEqual(h.grid, original);
+  assert.equal(h.createdSheets[0].getFrozenRows(), 1);
+});
 
 test('Apps Script ping validates configuration and returns the target', () => {
   const harness = createHarness();
@@ -293,7 +354,7 @@ test('pause columns preserve dates, durations, multiline reasons and matching ro
   const pauses=[{id:crypto.randomUUID(),pausedAt:'2026-09-05T18:20:00-04:00',durationSeconds:65,reason:'Phone\nReturned'},
     {id:crypto.randomUUID(),pausedAt:'2026-09-05T18:25:00-04:00',durationSeconds:3601,reason:''}];
   const result=h.request({...datedRequest,isTest:true,pauses});assert.equal(result.success,true,result.error);
-  assert.deepEqual(h.grids.get('test')[0].slice(7,10),['1. 9/5/2026 6:20 PM\n2. 9/5/2026 6:25 PM','1. 1 min 5 secs\n2. 1 hr 1 sec','1. Phone\nReturned\n2. N/A']);
+  assert.deepEqual(h.grids.get('test')[0].slice(7,10),['1. 6:20 PM 9/5/2026\n2. 6:25 PM 9/5/2026','1. 1 min 5 secs\n2. 1 hr 1 sec','1. Phone\nReturned\n2. N/A']);
   for(const col of [7,8,9]){
     const format=h.formats.get('test')[0][col];assert.equal(format.background,col%2===1?'#000000':'#ffffff');
     assert.equal(format.wrap,true);assert.equal(format.verticalAlignment,'top');assert.equal(format.borders.color,'#ffffff');
@@ -649,8 +710,8 @@ test('a new daily tab receives the timer duration without changing its source te
   const original = structuredClone(harness.grids.get('Temp'));
   const result = harness.request({ ...datedRequest, durationSeconds: 6620, actualDurationSeconds: 6620 });
   assert.equal(result.success, true, result.error); assert.equal(result.created, true);
-  assert.equal(harness.grids.get(result.sheet)[0][2], 6620 / 86400);
-  assert.equal(harness.grids.get(result.sheet)[1][2], '');
+  assert.equal(harness.grids.get(result.sheet)[1][2], 6620 / 86400);
+  assert.equal(harness.grids.get(result.sheet)[2][2], '');
   assert.deepEqual(harness.grids.get('Temp'), original);
 });
 
@@ -756,7 +817,7 @@ test('column stripes on a newly copied daily tab do not repaint the template', (
   const result = harness.request({ ...datedRequest, durationSeconds: 120, actualDurationSeconds: 120 });
   assert.equal(result.success, true, result.error);
   for (let column = 1; column < 33; column++) {
-    assert.equal(harness.formats.get(result.sheet)[0][column].background, column % 2 === 1 ? '#000000' : '#ffffff');
+    assert.equal(harness.formats.get(result.sheet)[1][column].background, column % 2 === 1 ? '#000000' : '#ffffff');
   }
   assert.deepEqual(harness.formats.get('Temp'), original);
 });
@@ -861,6 +922,18 @@ test('same-hour entries exclude only the new full-width row from conditional col
   assert.deepEqual(Array.from(ranges, (r) => r.getA1Notation()), ['A2:AG774']);
 });
 
+test('conditional colors cannot override headers, new reflections or their hour divider', () => {
+  const h = createHarness(['test']);
+  const sheet = h.sheets[0];
+  const makeRule = ranges => ({ getRanges: () => ranges,
+    copy() { return { setRanges(next) { return { build: () => makeRule(next) }; } }; } });
+  sheet.setConditionalFormatRules([makeRule([sheet.getRange(1, 1, 774, 33)])]);
+  h.context.ensureLogHeaders_(sheet);
+  assert.deepEqual(Array.from(sheet.getConditionalFormatRules()[0].getRanges(), r => r.getA1Notation()), ['A2:AG774']);
+  assert.equal(h.request({ ...datedRequest, isTest: true }).range, 'A2:J2');
+  assert.deepEqual(Array.from(sheet.getConditionalFormatRules()[0].getRanges(), r => r.getA1Notation()), ['A4:AG774']);
+});
+
 test('reflections beginning with equals are stored as literal text', () => {
   const harness = createHarness(['test']);
   harness.request({ ...datedRequest, isTest: true, message: '=1+1' });
@@ -929,15 +1002,15 @@ test('the first send copies Template once and clears only the copy log area', ()
   assert.equal(first.success, true);
   assert.equal(first.sheet, '09/05/2026');
   assert.equal(first.created, true);
-  assert.equal(first.range, 'A1:J1');
+  assert.equal(first.range, 'A2:J2');
   const dailyGrid = harness.grids.get(first.sheet);
-  assert.equal(dailyGrid[0][1], datedRequest.message);
-  assert.deepEqual(dailyGrid[18].slice(0, 4), ['', '', ...original[16].slice(2)]);
-  assert.equal(dailyGrid[2][32], 'keep unpaired column');
+  assert.equal(dailyGrid[1][1], datedRequest.message);
+  assert.deepEqual(dailyGrid[19].slice(0, 4), ['', '', ...original[16].slice(2)]);
+  assert.equal(dailyGrid[3][32], 'keep unpaired column');
   assert.deepEqual(harness.grid, original, 'source template is never cleared');
   const second = harness.request({ ...datedRequest, message: 'Next session' });
   assert.equal(second.created, false);
-  assert.equal(second.range, 'A1:J1');
+  assert.equal(second.range, 'A2:J2');
   assert.equal(harness.createdSheets.length, 1);
 });
 

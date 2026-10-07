@@ -11,7 +11,7 @@
  * the request works cleanly from a Manifest V3 service worker.
  */
 
-const APP_VERSION = '2.10.0';
+const APP_VERSION = '2.11.0';
 const DELIVERY_PROTOCOL = 'request-id-v1';
 const RECEIPT_PREFIX = 'RT_RECEIPT_';
 const ROWS_PER_BLOCK = 16;
@@ -19,6 +19,8 @@ const MAX_COLUMN_PAIRS = 100;
 const MAX_REFLECTION_LENGTH = 5000;
 const MAX_DURATION_SECONDS = 365 * 24 * 60 * 60;
 const NOTE_PREFIX = 'Reflection Timer: ';
+const LOG_HEADERS = ['Time', 'Response', 'Time spent', 'Time allotted', 'Status',
+  'Reason for ending early', 'Mode', 'Pause time', 'Pause Duration', 'Pause Reason'];
 const HOUR_THEMES = [
   ['#312e81', '#818cf8'], ['#3730a3', '#a5b4fc'], ['#4c1d95', '#a78bfa'],
   ['#581c87', '#c084fc'], ['#701a75', '#e879f9'], ['#831843', '#f472b6'],
@@ -62,6 +64,7 @@ function initializeReflectionTimer_(spreadsheetId, apiToken) {
         .setBorder(true, true, true, true, true, true, '#ffffff', SpreadsheetApp.BorderStyle.SOLID)
         .setWrap(true);
       [95, 440, 220, 220, 135, 300, 135].forEach((width, column) => sheet.setColumnWidth(column + 1, width));
+      ensureLogHeaders_(sheet);
     }
     props.setProperty('SPREADSHEET_ID', spreadsheetId);
     props.setProperty('REFLECTION_API_TOKEN', apiToken);
@@ -306,6 +309,7 @@ function createDailySheet_(spreadsheet, target) {
     if (sheet.getMaxRows() < ROWS_PER_BLOCK) {
       sheet.insertRowsAfter(sheet.getMaxRows(), ROWS_PER_BLOCK - sheet.getMaxRows());
     }
+    ensureLogHeaders_(sheet);
     sheet.showSheet();
     return sheet;
   } catch (error) {
@@ -458,6 +462,53 @@ function pauseDurationLabel_(seconds) {
   return [h?`${h} ${h===1?'hr':'hrs'}`:'',m?`${m} min`:'',s||(!h&&!m)?`${s} ${s===1?'sec':'secs'}`:''].filter(Boolean).join(' ');
 }
 
+function hasLogHeaders_(sheet) {
+  return sheet.getMaxColumns() >= LOG_HEADERS.length
+    && sheet.getRange(1, 1, 1, LOG_HEADERS.length).getValues()[0]
+      .every((value, index) => value === LOG_HEADERS[index]);
+}
+
+function ensureLogHeaders_(sheet) {
+  ensureColumns_(sheet, LOG_HEADERS.length);
+  if (!hasLogHeaders_(sheet)) {
+    // Shift the entire occupied row, including any user columns to the right.
+    reserveTopRows_(sheet, 1);
+    const header = sheet.getRange(1, 1, 1, LOG_HEADERS.length);
+    const backgrounds = LOG_HEADERS.map((_label, index) => index % 2 ? '#000000' : '#ffffff');
+    header.setNumberFormat('@').setValues([LOG_HEADERS])
+      .setBackgrounds([backgrounds])
+      .setFontColors([backgrounds.map(color => color === '#000000' ? '#ffffff' : '#000000')])
+      .setFontWeight('bold').setVerticalAlignment('middle').setWrap(true)
+      .setBorder(true, true, true, true, true, true, '#ffffff', SpreadsheetApp.BorderStyle.SOLID);
+    header.getCell(1, 1).setNote(NOTE_PREFIX + JSON.stringify({ kind: 'header' }));
+    ['Pauses in chronological order; numbers match across H–J.',
+      'Duration of each matching pause.', 'Reason for each matching pause; N/A means no reason entered.']
+      .forEach((note, index) => header.getCell(1, 8 + index).setNote(note));
+    excludeNewCellsFromConditionalRules_(sheet, 1);
+  }
+  sheet.setFrozenRows(Math.max(1, sheet.getFrozenRows()));
+}
+
+// Run once in the bound editor to upgrade existing logs. Not callable by HTTP.
+function addReflectionTimerHeaders() {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(15000);
+  try {
+    const props = PropertiesService.getScriptProperties();
+    const id = props.getProperty('SPREADSHEET_ID');
+    if (!id) throw new Error('Complete Reflection Timer setup first.');
+    const spreadsheet = SpreadsheetApp.openById(id);
+    const templateName = props.getProperty('TEMPLATE_SHEET_NAME') || 'Template';
+    const sheets = spreadsheet.getSheets().filter(sheet => !sheet.isSheetHidden()
+      && (sheet.getName() === templateName || sheet.getName() === 'test'
+        || /^\d{1,2}\/\d{1,2}\/(?:\d{4}|\d{2})$/.test(sheet.getName().trim())));
+    sheets.forEach(ensureLogHeaders_);
+    SpreadsheetApp.flush();
+    console.log('Reflection Timer headers ready on ' + sheets.length + ' tabs. Existing entries preserved.');
+    return { success: true, tabs: sheets.length };
+  } finally { lock.releaseLock(); }
+}
+
 function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds = null,
     session = { actualDurationSeconds: null, endedEarly: false, earlyEndReason: '' }) {
   ensureColumns_(sheet, 10);
@@ -465,17 +516,18 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   for (const [column, width] of [[3, 220], [4, 220], [5, 135], [6, 300], [7, 135], [8, 220], [9, 220], [10, 300]]) {
     if (sheet.getColumnWidth(column) < width) sheet.setColumnWidth(column, width);
   }
+  const firstRow = hasLogHeaders_(sheet) ? 2 : 1;
   const previous = previousEntry_(sheet, spreadsheet);
   const needsHour = !previous || previous.hourStart !== moment.hourStart;
   const rows = needsHour ? 2 : 1;
   const background = previous && textColor_(previous.background) === '#000000' ? '#595959' : '#ffffff';
-  reserveTopRows_(sheet, rows);
-  excludeNewCellsFromConditionalRules_(sheet, rows);
+  reserveTopRows_(sheet, rows, firstRow);
+  excludeNewCellsFromConditionalRules_(sheet, rows, firstRow);
 
   // Match column B's white cell outlines across every column.
-  sheet.getRange(1, 1, 1, sheet.getMaxColumns())
+  sheet.getRange(firstRow, 1, 1, sheet.getMaxColumns())
     .setBorder(true, true, true, true, true, false, '#ffffff', SpreadsheetApp.BorderStyle.SOLID);
-  const entry = sheet.getRange(1, 1, 1, 10);
+  const entry = sheet.getRange(firstRow, 1, 1, 10);
   // Treat reflections as plain text, including messages beginning with '='.
   entry.setNumberFormat('@');
   // Store a real Sheets duration (fraction of a day), not an uncalculable label.
@@ -485,7 +537,7 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   const pauses = session.pauses || [];
   const response = !message.trim() && (session.autoSent || pauses.length) ? 'N/A' : message;
   const pauseLines=format=>pauses.map((p,i)=>(pauses.length>1?`${i+1}. `:'')+format(p)).join('\n');
-  const pauseTimes=pauseLines(p=>Utilities.formatDate(new Date(p.pausedAt),spreadsheet.getSpreadsheetTimeZone(),'M/d/yyyy h:mm a'));
+  const pauseTimes=pauseLines(p=>Utilities.formatDate(new Date(p.pausedAt),spreadsheet.getSpreadsheetTimeZone(),'h:mm a M/d/yyyy'));
   const pauseDurations=pauseLines(p=>pauseDurationLabel_(p.durationSeconds));
   const pauseReasons=pauseLines(p=>p.reason||'N/A');
   entry.setValues([[clockLabel, response.startsWith('=') ? "'" + response : response,
@@ -506,17 +558,17 @@ function appendReflection_(sheet, message, moment, spreadsheet, durationSeconds 
   // New rows can inherit an hour band's fill. Restore column stripes explicitly:
   // B/D/F/... are black with white text; C/E/G/... are white with black text.
   // Leave A's independent alternation and the other cells' content/style intact.
-  const stripedCells = sheet.getRange(1, 2, 1, sheet.getMaxColumns() - 1);
+  const stripedCells = sheet.getRange(firstRow, 2, 1, sheet.getMaxColumns() - 1);
   const backgrounds = Array.from({ length: stripedCells.getNumColumns() },
     (_unused, index) => index % 2 === 0 ? '#000000' : '#ffffff');
   stripedCells.setBackgrounds([backgrounds])
     .setFontColors([backgrounds.map((color) => color === '#000000' ? '#ffffff' : '#000000')]);
-  sheet.getRange(1, 2, 1, 9).setWrap(true);
+  sheet.getRange(firstRow, 2, 1, 9).setWrap(true);
 
   if (needsHour) {
     const theme = HOUR_THEMES[moment.hour];
-    const marker = sheet.getRange(2, 1, 1, sheet.getMaxColumns());
-    sheet.getRange(2, 1, 1, 7).setNumberFormat('@')
+    const marker = sheet.getRange(firstRow + 1, 1, 1, sheet.getMaxColumns());
+    sheet.getRange(firstRow + 1, 1, 1, 7).setNumberFormat('@')
       .setValues([[`${moment.hour % 12 || 12}:00 ${moment.hour < 12 ? 'AM' : 'PM'}`, '', '', '', '', '', '']]).clearNote();
     marker.setBackground(theme[0]).setFontColor(textColor_(theme[0]))
       .setFontWeight('bold').setWrap(false)
@@ -537,7 +589,9 @@ function previousEntry_(sheet, spreadsheet) {
     if (note.startsWith(NOTE_PREFIX)) {
       try { metadata = JSON.parse(note.slice(NOTE_PREFIX.length)); } catch (_error) { /* Ordinary note. */ }
     }
-    if (metadata.kind === 'hour' || values[index][0] === '' || values[index][1] === '') continue;
+    if (metadata.kind === 'hour' || metadata.kind === 'header'
+        || (values[index][0] === LOG_HEADERS[0] && values[index][1] === LOG_HEADERS[1])
+        || values[index][0] === '' || values[index][1] === '') continue;
     let hourStart = metadata.kind === 'entry' && Number.isFinite(metadata.hourStart) ? metadata.hourStart : null;
     const value = values[index][0];
     if (hourStart === null && value instanceof Date && value.getUTCFullYear() >= 2000) {
@@ -548,18 +602,19 @@ function previousEntry_(sheet, spreadsheet) {
   return null;
 }
 
-function reserveTopRows_(sheet, rows) {
-  if (sheet.getMaxRows() < rows) sheet.insertRowsAfter(sheet.getMaxRows(), rows - sheet.getMaxRows());
+function reserveTopRows_(sheet, rows, firstRow = 1) {
+  const needed = firstRow + rows - 1;
+  if (sheet.getMaxRows() < needed) sheet.insertRowsAfter(sheet.getMaxRows(), needed - sheet.getMaxRows());
   let emptyRows = 0;
   // Reuse only entirely empty rows; keep data in other columns with its original row.
-  while (emptyRows < rows && sheet.getRange(emptyRows + 1, 1, 1, sheet.getMaxColumns()).isBlank()) emptyRows += 1;
+  while (emptyRows < rows && sheet.getRange(firstRow + emptyRows, 1, 1, sheet.getMaxColumns()).isBlank()) emptyRows += 1;
   const insert = rows - emptyRows;
-  if (insert > 0) sheet.insertRowsBefore(1, insert);
+  if (insert > 0) sheet.insertRowsBefore(firstRow, insert);
 }
 
-function excludeNewCellsFromConditionalRules_(sheet, rows) {
+function excludeNewCellsFromConditionalRules_(sheet, rows, firstRow = 1) {
   // Protect the new full-width entry/hour rows without changing neighboring rules.
-  const exclusions = [{ row: 1, col: 1, endRow: rows, endCol: sheet.getMaxColumns() }];
+  const exclusions = [{ row: 1, col: 1, endRow: firstRow + rows - 1, endCol: sheet.getMaxColumns() }];
   const rules = sheet.getConditionalFormatRules();
   let changed = false;
   const updated = [];

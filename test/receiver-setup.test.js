@@ -14,10 +14,15 @@ function fixture(names = [], initialProperties = {}, activeId = ID) {
   const lock = { locked: false, waitLock() { this.locked = true; }, releaseLock() { this.locked = false; }, hasLock() { return this.locked; } };
   function sheet(name) {
     return { name, edits: [], getName() { return name; }, getMaxRows() { return 1000; }, getMaxColumns() { return 26; },
+      getFrozenRows() { return 0; }, setFrozenRows(n) { this.edits.push(['frozenRows', n]); },
+      getConditionalFormatRules() { return []; },
       setColumnWidth(c, w) { this.edits.push(['width', c, w]); },
       getRange(...args) {
         const edits = this.edits; edits.push(['range', ...args]);
-        return Object.fromEntries(['setBackgrounds', 'setFontColors', 'setBorder', 'setWrap'].map(method => [method, function (...values) { edits.push([method, ...values]); return this; }]));
+        const range = Object.fromEntries(['setBackgrounds', 'setFontColors', 'setBorder', 'setWrap', 'setValues', 'setNumberFormat', 'setFontWeight', 'setVerticalAlignment', 'setNote'].map(method => [method, function (...values) { edits.push([method, ...values]); return this; }]));
+        range.getValues = () => [Array(args[3]).fill('')]; range.isBlank = () => true;
+        range.getCell = (r, c) => this.getRange(args[0] + r - 1, args[1] + c - 1, 1, 1);
+        return range;
       }
     };
   }
@@ -45,6 +50,11 @@ test('fresh receiver setup creates only missing Temp/test with consistent colors
   assert.deepEqual(f.sheets.get('Temp').edits.filter(x => x[0] === 'width').map(x => x.slice(1)),
     [[1, 95], [2, 440], [3, 220], [4, 220], [5, 135], [6, 300], [7, 135]]);
   assert.equal(f.logs.some(x => x.includes(TOKEN)), false); assert.equal(f.lock.locked, false);
+  for (const name of ['Temp', 'test']) {
+    assert.deepEqual([...f.sheets.get(name).edits.find(x => x[0] === 'setValues')[1][0]],
+      ['Time', 'Response', 'Time spent', 'Time allotted', 'Status', 'Reason for ending early', 'Mode', 'Pause time', 'Pause Duration', 'Pause Reason']);
+    assert.ok(f.sheets.get(name).edits.some(x => x[0] === 'frozenRows' && x[1] === 1));
+  }
 });
 for (const name of ['Temp', 'Template', 'My template']) test('receiver setup preserves existing ' + name + ' and test entirely, including receipts', () => {
   const f = fixture([name, 'test', '09/09/2026'], { TEMPLATE_SHEET_NAME: name, RT_RECEIPT_existing: 'preserve', unrelated: 'preserve' });
