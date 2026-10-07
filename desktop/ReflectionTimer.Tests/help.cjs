@@ -3,7 +3,7 @@ const {chromium}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
 (async()=>{
-  const browser=await chromium.launch({channel:'msedge',headless:true});let passed=0;
+  const browser=await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER||'msedge',headless:true});let passed=0;
   const check=(value,label)=>{assert.ok(value,label);passed++;console.log('PASS '+label);};
   try{
     const page=await browser.newPage({viewport:{width:739,height:642}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -39,8 +39,8 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     async function capture(name){if(process.env.REFLECTION_PREVIEW_SCREENSHOTS){await fs.mkdir(process.env.REFLECTION_PREVIEW_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.REFLECTION_PREVIEW_SCREENSHOTS,name+'.png')});}}
     await capture('Help-default-Timer');
     check(await page.locator('[data-help]').evaluateAll(nodes=>nodes.length>30&&nodes.every(n=>n.hidden)),'All marked explanations default to collapsed, including generated audio guidance');
-    check(await page.locator('.help-button').count()===22,'Every guidance section has one context-specific help button');
-    check(await page.locator('.help-button').evaluateAll(buttons=>buttons.every(b=>b.type==='button'&&b.textContent==='?'&&b.getAttribute('aria-expanded')==='false'&&b.getAttribute('aria-label').startsWith('Help for ')&&b.getAttribute('aria-controls').split(' ').every(id=>document.getElementById(id)))),'Circled question marks expose names, controls and collapsed state without submitting forms');
+    check(await page.locator('.help-button[id^="help-toggle-"]').count()===22,'Every guidance section has one context-specific help button');
+    check(await page.locator('.help-button[id^="help-toggle-"]').evaluateAll(buttons=>buttons.every(b=>b.type==='button'&&b.textContent==='?'&&b.getAttribute('aria-expanded')==='false'&&b.getAttribute('aria-label').startsWith('Help for ')&&b.getAttribute('aria-controls').split(' ').every(id=>document.getElementById(id)))),'Circled question marks expose names, controls and collapsed state without submitting forms');
     check(await page.locator('#minutes').getAttribute('aria-describedby')===null,'Collapsed duration guidance is removed from routine input descriptions');
     const cdp=await page.context().newCDPSession(page);
     const axButton=async()=>{const tree=await cdp.send('Accessibility.getFullAXTree');return tree.nodes.find(n=>!n.ignored&&n.role?.value==='button'&&n.name?.value==='Help for Timer and views');};

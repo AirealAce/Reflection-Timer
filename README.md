@@ -1,6 +1,8 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.3.2**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.3.3**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+
+Session-end prompts include a circled help button beside the title for keyboard shortcuts. Its panel can be read by a screen reader and closed with Escape without dismissing the reflection. An exclamation button appears to its left only while CSV or Sheets delivery has failed; it saves the current draft, opens the earliest failed submission in App → Outbox, and focuses its readable details without retrying it.
 
 **Search settings** at the top of Settings filters the existing sections by their names, labels and explanations. Multiple words narrow the results; **Clear search** restores everything. Edits remain in their original controls, and Ctrl+S / Ctrl+Enter still save Settings. Help icons sit beside their corresponding heading text in every theme.
 

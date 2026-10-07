@@ -91,6 +91,11 @@ public record OutboxItem
     [System.Text.Json.Serialization.JsonIgnore] public bool WantsSheets => !LocalOnly && SheetsRequested != false;
     [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryComplete => LocalOnly ? Status == DeliveryStatus.Sent
         : (!WantsSheets || Status == DeliveryStatus.Sent) && CsvStatus is CsvDeliveryStatus.NotRequested or CsvDeliveryStatus.Saved;
+    [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryFailed => !LocalOnly && !DeliveryComplete
+        && ((WantsSheets && (Status == DeliveryStatus.NeedsReview || (Status == DeliveryStatus.Pending && ErrorKind.Length > 0)))
+          || CsvStatus == CsvDeliveryStatus.NeedsReview || (CsvStatus == CsvDeliveryStatus.Pending && CsvError.Length > 0));
+    public static OutboxItem? EarliestFailed(IEnumerable<OutboxItem> entries) => entries
+        .Where(item => item.DeliveryFailed).OrderBy(item => item.SubmittedAt).FirstOrDefault();
     public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public Guid? SessionId { get; init; }

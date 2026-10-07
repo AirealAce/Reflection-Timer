@@ -5,7 +5,7 @@ const path = require('node:path');
 const assert = require('node:assert/strict');
 const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
 (async () => {
-  const browser = await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER==='chromium'?undefined:'msedge',headless:true});
+  const browser = await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER==='chromium'?undefined:process.env.REFLECTION_TEST_BROWSER||'msedge',headless:true});
   let count=0;
   const check = (condition, message) => { assert.ok(condition,message); count++; console.log('PASS '+message); };
   try {
@@ -509,6 +509,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./reflection-dismiss.cjs')(context,initial,check);
     await require('./reflection-lifecycle.cjs')(context,initial,check);
     await require('./reflection-navigation.cjs')(context,initial,check,settings);
+    await require('./reflection-header.cjs')(context,initial,check,settings);
     await require('./reflection-separators.cjs')(context,initial,settings,check);
     await require('./settings-shortcuts.cjs')(context,initial,settings,check);
     await require('./settings-success.cjs')(context,initial,settings,check);

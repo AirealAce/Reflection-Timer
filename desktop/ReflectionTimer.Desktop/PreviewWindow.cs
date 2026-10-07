@@ -29,6 +29,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     void IReflectionPromptWindow.ResumeEditing(){handoffInProgress=false;Post(new{type="resumeReflection"});}
     void IReflectionPromptWindow.CloseAfterSave()=>CloseAfterSave();
     private bool focusOnReady, selectTimerOnReady, chooseFocusOnReady;
+    private Guid? outboxEntryOnReady;
     private (ReflectionTimer.Core.AppColorTheme Theme,bool Contrast)? appliedTheme;
     private TaskCompletionSource? flush;
     internal PreviewWindow(PreviewApplication app, string view, Guid? prompt)
@@ -113,6 +114,12 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         if(View!="main"||IsDisposed)return;
         if(!interfaceReady.Task.IsCompletedSuccessfully){chooseFocusOnReady=true;return;}
         Post(new{type="focusChooseShortcut"});
+    }
+    internal void ShowOutboxEntry(Guid id)
+    {
+        if(View!="main"||IsDisposed)return;
+        if(!interfaceReady.Task.IsCompletedSuccessfully){outboxEntryOnReady=id;return;}
+        Post(new { type="showOutboxEntry", id, state=app.Session.View() });
     }
     internal async Task PrepareReflectionAsync()
     {
@@ -247,6 +254,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
                 interfaceReady.TrySetResult();
                 if(chooseFocusOnReady){chooseFocusOnReady=false;ChooseFocusTarget();}
+                if(outboxEntryOnReady is {} outboxId){outboxEntryOnReady=null;ShowOutboxEntry(outboxId);}
                 ScheduleAutoHide();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }
@@ -296,6 +304,13 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 return;
             }
             if (action == "main") { app.Open("main"); Reply(requestId); return; }
+            if(action=="showFailedDelivery") {
+                if(View!="reflection")throw new ArgumentException("Open delivery problems from a reflection window.");
+                var failed=OutboxItem.EarliestFailed(app.Session.Engine.Snapshot.Outbox);
+                if(failed is null)app.Services.AnnounceFeedback("No failed deliveries.");
+                else {app.Open("main");((PreviewWindow)app.MainForm!).ShowOutboxEntry(failed.Id);}
+                Reply(requestId);return;
+            }
             if(action=="navigateReflection") {
                 if(View!="reflection"||PromptId is not {} from)throw new ArgumentException("Navigate from a reflection window.");
                 var direction=ReadInt(data,"direction",-1,1);

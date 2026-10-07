@@ -12,8 +12,22 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.3.2</p>
-    <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
+    <p class="eyebrow">Reflection Timer 4.3.3</p>
+    <div class="page-title-row"><h1 id="page-title" tabindex="-1">Reflection Timer</h1><div id="reflection-title-actions" hidden><button id="reflection-failed" class="help-button delivery-warning" type="button" aria-label="Open earliest failed message in Outbox" title="Open earliest failed message in Outbox" hidden><span aria-hidden="true">!</span></button><button id="reflection-help-toggle" class="help-button" type="button" aria-label="Keyboard shortcuts for the session-end window" title="Keyboard shortcuts for the session-end window" popovertarget="reflection-shortcuts" aria-expanded="false" aria-controls="reflection-shortcuts"><span aria-hidden="true">?</span></button></div></div>
+    <section id="reflection-shortcuts" popover="auto" role="region" aria-labelledby="reflection-shortcuts-title" tabindex="0">
+      <h2 id="reflection-shortcuts-title">Session-end shortcuts</h2>
+      <p>These shortcuts work anywhere in this window.</p>
+      <dl>
+        <dt><kbd>Ctrl+Enter</kbd> / <kbd>Alt+S</kbd></dt><dd>Send and finish this session if it is still active. Skip if all response and reason boxes are empty.</dd>
+        <dt><kbd>Alt+Enter</kbd></dt><dd id="reflection-checkin-key-help">Send a check-in without ending the timer. Skip if all response and reason boxes are empty.</dd>
+        <dt><kbd>Ctrl+S</kbd></dt><dd id="reflection-save-key-help">Save the draft locally and close.</dd>
+        <dt><kbd>Escape</kbd></dt><dd>Save and close if any box contains text; otherwise skip.</dd>
+        <dt><kbd>Shift+Enter</kbd></dt><dd>Add a new line in a text box.</dd>
+        <dt><kbd>Ctrl+R</kbd></dt><dd>Reset the timer or stopwatch and refresh this window. Confirmation may be required.</dd>
+        <dt><kbd>Ctrl+Alt+/</kbd></dt><dd>Open or focus the reflection. If a reflection text box is already focused, save and close.</dd>
+      </dl>
+      <p class="hint">Escape closes this help first. Click the question mark again or outside this panel to close it.</p>
+    </section>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
   </header>
@@ -210,7 +224,7 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.2</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.3</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">

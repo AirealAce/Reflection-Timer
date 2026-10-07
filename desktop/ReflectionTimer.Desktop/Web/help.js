@@ -1,5 +1,34 @@
+import {setText} from './ui.js';
+
 // Only explicitly marked guidance is collapsible. Labels, values, delivery
 // state, errors, and private setup/draft controls never become Help content.
+export function mountReflectionHelp(view) {
+  const actions=document.getElementById('reflection-title-actions');
+  if(view!=='reflection')return {render(){}};
+  const button=document.getElementById('reflection-help-toggle'),panel=document.getElementById('reflection-shortcuts');
+  const failed=document.getElementById('reflection-failed');actions.hidden=false;
+  panel.addEventListener('toggle',()=>button.setAttribute('aria-expanded',String(panel.matches(':popover-open'))));
+  document.addEventListener('keydown',event=>{
+    if(event.key!=='Escape'||!panel.matches(':popover-open'))return;
+    event.preventDefault();event.stopImmediatePropagation();panel.hidePopover();button.focus();
+  },true);
+  document.addEventListener('focusin',event=>{
+    if(panel.matches(':popover-open')&&event.target!==button&&!panel.contains(event.target))panel.hidePopover();
+  });
+  return {render(outbox,prompt){
+    setText(document.getElementById('reflection-checkin-key-help'),prompt?.mode===1
+      ? 'Send and finish this stopwatch session. Skip if all response and reason boxes are empty.'
+      : 'Send a check-in without ending the timer. Skip if all response and reason boxes are empty.');
+    setText(document.getElementById('reflection-save-key-help'),prompt?.resumeOnSave
+      ? 'Save the draft locally, resume this stopwatch, and close.' : 'Save the draft locally and close.');
+    const count=outbox.filter(entry=>entry.deliveryFailed===true).length;
+    if(!count&&document.activeElement===failed)button.focus();
+    failed.hidden=count===0;
+    const label=`Open earliest failed message in Outbox (${count} ${count===1?'message':'messages'} with delivery problems)`;
+    failed.setAttribute('aria-label',label);failed.title=label;
+  }};
+}
+
 export function mountHelp({view,selectTab}) {
   if(view!=='main')return {render(){}};
   const titles={timer:'Timer and views','timer-low':'Timer low-on-time audio','timer-reached':'Stopwatch alert',

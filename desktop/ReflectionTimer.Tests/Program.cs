@@ -55,12 +55,14 @@ if(args.Contains("--clock-accuracy")){
 }
 
 if(args.Contains("--csv")){var checks=0;await CsvTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} CSV checks passed.");return;}
+if(args.Contains("--delivery-failures")){var checks=0;DeliveryFailureTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} delivery failure checks passed.");return;}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); passed++; Console.WriteLine("PASS " + name); }
 JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, PreviewSession.Json);
 var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
+DeliveryFailureTests.Run(Check);
 await RandomAudioTests.Run(Check);
 TimerToggleShortcutTests.Run(Check);
 ResetShortcutTests.Run(Check);

@@ -57,6 +57,18 @@ body[data-view=main] nav[role=tablist] button[aria-selected=true]{font-weight:40
 .help-title>.help-button,.help-label>.help-button{margin-left:8px;vertical-align:middle}
 .help-button{flex:none;width:26px;height:26px;min-width:26px;min-height:26px;padding:0;border:1px solid var(--border);border-radius:50%;display:inline-flex;align-items:center;justify-content:center;background:var(--raised);color:var(--text);font-size:17px;font-weight:700;line-height:1}
 .help-button[aria-expanded=true]{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
+body[data-view=reflection] .page-title-row{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+body[data-view=reflection] .page-title-row h1{flex:0 1 auto;min-width:0;margin:0}
+:root[data-theme="3"] body[data-view=reflection] .page-title-row{padding:4px 8px 12px;margin-bottom:12px;background:var(--raised);border-bottom:1px solid var(--decoration)}
+:root[data-theme="3"] body[data-view=reflection] .page-title-row #page-title{padding:0;margin:0;background:transparent;border:0}
+#reflection-title-actions{display:flex;align-items:center;gap:6px;flex:none}
+.delivery-warning{color:var(--warning);border-color:var(--warning)}
+#reflection-shortcuts{position:fixed;inset:64px 20px auto;margin:0;width:calc(100% - 40px);max-height:calc(100% - 84px);overflow:auto;padding:12px 14px;border:2px solid var(--accent);background:var(--background);color:var(--text);box-shadow:0 6px 20px #0006}
+#reflection-shortcuts h2{margin:0 0 8px}
+#reflection-shortcuts p{margin:8px 0;font-size:14px}
+#reflection-shortcuts dl{display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 12px;margin:12px 0;font-size:14px}
+#reflection-shortcuts dt,#reflection-shortcuts dd{margin:0}
+@media(max-width:420px){#reflection-shortcuts dl{grid-template-columns:1fr;gap:4px}#reflection-shortcuts dd{margin-bottom:8px}}
 #help-contents{columns:2;column-gap:32px;padding-left:20px}
 #help-contents li{break-inside:avoid;margin-bottom:6px}
 #help-topics>section{border-top:1px solid var(--border);padding-top:8px}
@@ -108,6 +120,7 @@ body[data-view=reflection] #pause-reasons{margin:0}
 .pause-reason .pause-timestamp{color:var(--accent);text-align:right;margin-left:auto}
 @media(max-height:400px){
   body[data-view=reflection] header{padding-top:12px}
+  body[data-view=reflection] .page-title-row{margin-bottom:8px}
   body[data-view=reflection] h1{font-size:22px;margin-bottom:8px}
   body[data-view=reflection] #reflection-context{font-size:14px;line-height:1.4;margin-bottom:8px}
   body[data-view=reflection] #reason-group label{font-size:14px;line-height:1.4;margin:4px 0}

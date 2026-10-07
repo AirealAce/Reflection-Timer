@@ -150,7 +150,7 @@ public sealed class PreviewSession
                 status = s.AwaitingDecision ? "Needs choice" : s.WaitingForCurrentSession ? "Waiting" : "Scheduled",
                 editStart = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("yyyy-MM-ddTHH:mm"), s.DurationSeconds, s.AutoRestartUntil, s.Volume }),
             outbox = !includeOutbox ? null : state.Outbox.Select(o => new { o.Id, saved = o.SubmittedAt.LocalDateTime.ToString("g"),
-                localOnly = o.LocalOnly, complete = o.DeliveryComplete, wantsSheets = o.WantsSheets,
+                localOnly = o.LocalOnly, complete = o.DeliveryComplete, deliveryFailed = o.DeliveryFailed, wantsSheets = o.WantsSheets,
                 csvStatus = o.CsvStatus.ToString(), csvError = o.CsvError, csvFile = o.CsvFile, o.CsvAttempts, o.CsvNextAttemptAt,
                 deliveryLabel = DeliveryLabel(o),
                 destination = o.LocalOnly ? "Local preview only" : string.Join(" · ", new[] {

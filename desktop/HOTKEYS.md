@@ -1,6 +1,6 @@
 # Keyboard shortcuts and upgrading another PC
 
-The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.3.2. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
+The current repository is [AirealAce/Reflection-Timer](https://github.com/AirealAce/Reflection-Timer). The current accessible desktop source is 4.3.3. Local branch builds are not automatically published to Releases; the old 3.6.4 build only had Ctrl+Alt+T. Downloading source or renaming a repository does not update an already installed app.
 
 ## App tab navigation
 
@@ -13,6 +13,8 @@ Ctrl+R resets the timer to the shared duration inputs, like Reset, and refreshes
 Reset, Ctrl+R, and Ctrl+Alt+R ask first when the selected timer/stopwatch is running or an unsent reflection contains text in either box, including closed drafts. The confirmation takes focus on OK and has its own Alt+Tab entry. Tab moves through OK, Cancel, and read-only warning text; Escape, Cancel, or closing the dialog prevents both reset and reload. The session keeps running while the confirmation is open. Settings → Timer and stopwatch → Confirm before resetting controls this behavior and is enabled by default.
 
 ## Current mappings
+
+The session-end window has a circled question mark beside its title. Enter or Space toggles its shortcut guide; Tab enters the readable guide, and Escape closes help first and returns focus to its button. Leaving help for a text box also closes the panel. The guide follows the reflection's Timer or Stopwatch mode. An exclamation mark to its left appears only for failed CSV/Sheets delivery, including a failed attempt waiting to retry. It opens App → Outbox at the earliest failed submission and focuses the message details, keeping the current draft saved and its window open.
 
 Ctrl+Alt+' (apostrophe) switches Timer ↔ Stopwatch from any app, pausing and preserving the unfinished session without starting the other mode. In the focused App or Compact view, that same press focuses the Stopwatch play button or selects the Timer duration field, using the same field as Ctrl+Alt+period. App selects its Timer tab. Hidden windows stay hidden, and Time-only stays small. S/T in Compact or Time-only and the App mode switch use the same pause-and-preserve behavior. The selected mode survives restarting the app.
 
@@ -63,9 +65,9 @@ These shortcuts work anywhere in the reflection window, including buttons and pa
 ## Upgrade without replacing the Sheet connection
 
 1. Finish or pause active work, save reflection drafts, and **Quit** the old app from its tray menu. Closing the main window normally leaves it running.
-2. Extract the verified 4.3.2 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
+2. Extract the verified 4.3.3 Windows x64 release to a new folder. Do not overwrite files in a running app's folder.
 3. Run the extracted ReflectionTimer.exe. To replace the regular per-user install from this source checkout, use **desktop/install.ps1**. The installer retains local settings/data and existing MP3 files. Do not import someone else's connection code.
-4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.3.2. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
+4. Launch the installed app and check its executable's **Properties → Details → Product version**. It should say 4.3.3. Existing desktop shortcuts should point to the installed copy, not an old extracted download.
 5. Check **Settings → Keyboard shortcuts** for individual registration failures. Another running copy or another app can own a chord. Quit the conflicting copy/app; Reflection Timer retries unavailable shortcuts automatically; there is no need to change the Sheets URL or token.
 
 The update does not require changing an already working receiver deployment or credentials. Receiver 2.6.0 or newer is needed for sending check-in rows; if an older receiver is detected, the entry remains saved locally. A receiver source file in a download is not deployed automatically.

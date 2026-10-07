@@ -1,6 +1,7 @@
 import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, focusTimerControl} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
+import {mountReflectionHelp} from './help.js';
 
 const $ = id => document.getElementById(id);
 announceSelectChanges();
@@ -9,6 +10,7 @@ if (!['main', 'compact', 'reflection'].includes(view)) view = 'main';
 document.body.dataset.view = view;
 setText($('page-title'), view === 'main' ? 'Reflection Timer' : view === 'compact' ? 'Compact timer' : 'How did you spend your time?');
 const layout=arrangeApp(view);
+const reflectionHelp=mountReflectionHelp(view);
 const bridge = window.chrome?.webview;
 const requests = new Map();
 // A delayed reply from a crashed document must not resolve a new request.
@@ -222,6 +224,7 @@ function render(next) {
   const historyChanged=next.outbox!=null||next.schedules!=null;
   // A null list in an incremental host update means unchanged, not empty.
   state = {...next,outbox:next.outbox??previous?.outbox??[],schedules:next.schedules??previous?.schedules??[]};
+  reflectionHelp.render(state.outbox,state.prompts.find(prompt=>prompt.id===promptId));
   settings.state(state);
   if (view === 'reflection') { renderReflection(); return; }
   const stopwatch=state.timer.mode===1;
@@ -289,6 +292,10 @@ bridge?.addEventListener('message', event => {
     render(message.state);setText($('draft-status'),'Draft saved locally.');
     $('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;
     run(()=>send('reflectionReady',{id:promptId}));
+  } else if(message.type==='showOutboxEntry'&&view==='main') {
+    render(message.state);layout.select('outbox');selectRow('outbox',message.id);
+    if(selectedRow('outbox'))$('outbox-detail').focus();
+    else announce('This entry is no longer in Outbox.');
   } else if (message.type === 'state') render(message.state);
   else if (message.type === 'clock') {if(state?.clock.status===message.clock.status&&Boolean(message.clock.stopwatch)===(state?.timer.mode===1))renderDuration(message.clock);}
   else if (message.type === 'timeRead') snapshot(message.clock,true);
@@ -363,6 +370,10 @@ if(view==='main'){
 bind('compact-mode',()=>{
   const tiny=document.body.dataset.tiny !== 'true'; document.body.dataset.tiny=String(tiny);
   $('compact-mode').setAttribute('aria-expanded',String(!tiny)); setText($('compact-mode'),tiny?'Show timer controls':'Time-only view');
+});
+bind('reflection-failed',async()=>{
+  if(view!=='reflection'||!loadedPrompt||reflectionBusy||savingAndClosing)return;
+  await saveDraft();await send('showFailedDelivery');
 });
 $('schedule-form').addEventListener('submit',event=>{event.preventDefault();run(async()=>{
   const seconds=durationSeconds(['schedule-hours','schedule-minutes','schedule-seconds'].map(id=>$(id).value.trim()));
