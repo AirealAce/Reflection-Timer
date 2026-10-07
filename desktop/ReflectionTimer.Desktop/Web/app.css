@@ -100,7 +100,7 @@ body[data-view=main][data-tab=outbox] main{padding-bottom:8px}
 #diagnostic-recent{flex:1 0 280px;height:280px;min-height:280px}
 #panel-diagnostics>details{flex:none;margin:0}
 #guided-dialog{width:min(940px,96vw);height:min(800px,94vh);max-height:94vh;padding:20px}#guided-dialog[open]{display:flex;flex-direction:column}#guided-pages{flex:1;min-height:0;overflow:auto;padding:12px 4px}#guided-dialog [role=tablist]{display:flex;gap:10px;flex-wrap:wrap}#guided-dialog [role=tab][aria-selected=true]{background:var(--accent);color:var(--accent-text)}#guided-dialog>.actions{margin-bottom:0}
-body[data-view=reflection] .messages{height:auto;min-height:0;padding:0 20px!important}
+body[data-view=reflection] .messages{position:relative;height:auto;min-height:0;padding:0 20px!important}
 /* Let the writing area yield space to context, the optional reason, and actions. */
 body[data-view=reflection] .reflection-actions{justify-content:space-between;gap:8px}
 .reflection-navigation,.reflection-save-actions{display:flex;gap:6px;align-items:center}

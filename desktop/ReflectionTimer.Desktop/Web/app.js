@@ -8,6 +8,11 @@ announceSelectChanges();
 let view = new URLSearchParams(location.search).get('view') || 'main';
 if (!['main', 'compact', 'reflection'].includes(view)) view = 'main';
 document.body.dataset.view = view;
+// Keep live feedback accessible without using the reflection's writing space.
+if(view==='reflection'){
+  $('session-status').hidden=true;
+  $('status').classList.add('sr-only');
+}
 setText($('page-title'), view === 'main' ? 'Reflection Timer' : view === 'compact' ? 'Compact timer' : 'How did you spend your time?');
 const layout=arrangeApp(view);
 const reflectionHelp=mountReflectionHelp(view);

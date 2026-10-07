@@ -55,6 +55,36 @@ module.exports=async function reflectionHeader(context,initial,check,settings){
     const ax=await context.newCDPSession(page),tree=await ax.send('Accessibility.getFullAXTree');
     check(tree.nodes.some(n=>!n.ignored&&n.role?.value==='button'&&n.name?.value==='Keyboard shortcuts for the session-end window')
       &&tree.nodes.some(n=>!n.ignored&&n.role?.value==='heading'&&n.name?.value==='How did you spend your time?'),'Reader names describe the help button without changing the heading');
+    const footerGeometry=()=>page.locator('main,#reflection-text,.reflection-actions').evaluateAll(nodes=>nodes.map(node=>{
+      const r=node.getBoundingClientRect();return {id:node.id,x:r.x,y:r.y,width:r.width,height:r.height};
+    }));
+    const writingArea=await footerGeometry();
+    await page.evaluate(()=>{
+      window.previewDispatch({type:'sessionStatus',message:'Time-only view.'});
+      window.previewDispatch({type:'announcement',message:'Time reached. 5 minutes elapsed.'});
+    });
+    await page.waitForFunction(()=>document.querySelector('#status').textContent==='Time reached. 5 minutes elapsed.');
+    check(JSON.stringify(writingArea)===JSON.stringify(await footerGeometry())
+      &&await page.locator('.messages').evaluate(node=>node.getBoundingClientRect().height===0),
+      'Timer/view announcements leave all reclaimed height available to the original response and sticky actions: '+theme+'/'+mode+'/'+early);
+    const announced=await ax.send('Accessibility.getFullAXTree'),nodes=new Map(announced.nodes.map(node=>[node.nodeId,node]));
+    const includesText=(node,text)=>node.name?.value===text||(node.childIds??[]).some(id=>nodes.has(id)&&includesText(nodes.get(id),text));
+    check(announced.nodes.some(node=>!node.ignored&&node.role?.value==='status'&&includesText(node,'Time reached. 5 minutes elapsed.'))
+      &&!announced.nodes.some(node=>!node.ignored&&node.name?.value==='Time-only view.'),
+      'The hidden announcement remains a readable status while duplicate passive view text is omitted from accessibility: '+theme+'/'+mode+'/'+early);
+    check(await page.evaluate(()=>{
+      const main=document.querySelector('main'),root=document.documentElement,actions=document.querySelector('.reflection-actions').getBoundingClientRect();
+      return main.scrollHeight<=main.clientHeight+1&&root.scrollHeight<=innerHeight+1&&actions.bottom<=innerHeight;
+    }),'Hidden reflection announcements create no outer or writing-page overflow: '+theme+'/'+mode+'/'+early);
+    await page.evaluate(()=>window.previewDispatch({type:'reflectionCloseFailed',message:'Could not save this reflection. Try again.'}));
+    check(await page.locator('#error').isVisible()&&await page.locator('#error').getAttribute('role')==='alert'
+      &&await page.locator('#error').textContent()==='Could not save this reflection. Try again.',
+      'A genuine reflection save failure remains visible and announced as an alert: '+theme+'/'+mode+'/'+early);
+    check(await page.evaluate(()=>{
+      const main=document.querySelector('main'),root=document.documentElement,error=document.querySelector('#error').getBoundingClientRect();
+      const actions=document.querySelector('.reflection-actions').getBoundingClientRect();
+      return error.top>=0&&error.bottom<=innerHeight&&actions.bottom<=error.top&&main.scrollHeight<=main.clientHeight+1&&root.scrollHeight<=innerHeight+1;
+    }),'Visible reflection errors fit below the controls without overflowing the popup: '+theme+'/'+mode+'/'+early);
     await page.close();
   }
   const page=await open(),help=page.locator('#reflection-help-toggle'),failed=page.locator('#reflection-failed'),before=await geometry(page);

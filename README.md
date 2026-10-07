@@ -1,6 +1,6 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.3.4**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.3.5**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
 
 Session-end prompts include a circled help button beside the title for keyboard shortcuts. Its panel can be read by a screen reader and closed with Escape without dismissing the reflection. An exclamation button appears to its left only while CSV or Sheets delivery has failed; it saves the current draft and opens the most recent unsent message in the same popup, with the cursor in its response box. Send retries that message's undelivered destinations while keeping its original date and session details. Save retains the edited draft; Skip leaves the original unsent entry in Outbox. Retrying an uncertain delivery or changing an attempted message requires review first.
 
