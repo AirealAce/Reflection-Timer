@@ -47,6 +47,8 @@ kbd{display:inline-block;padding:1px 6px;border:1px solid var(--accent);border-b
 body[data-view=main] .page-header{flex:none}
 /* Keep visually hidden reading text inside the page's scrolling container. */
 main{position:relative}
+/* Hidden row selectors scroll with their table instead of extending the page. */
+.table-scroll{position:relative}
 body[data-view=main] nav[role=tablist]{gap:8px;flex-wrap:wrap;overflow:visible;padding:3px 0 5px}
 body[data-view=main] nav[role=tablist] button{flex:0 0 auto;min-width:100px;padding:8px 16px;white-space:nowrap;min-height:40px;font-weight:400}
 body[data-view=main] nav[role=tablist] button[aria-selected=true]{font-weight:400}
@@ -88,6 +90,9 @@ body[data-view=reflection] .page-title-row h1{flex:0 1 auto;min-width:0;margin:0
 #panel-outbox>#outbox,#panel-diagnostics>#diagnostics{flex:1;display:flex;flex-direction:column;margin-bottom:0}
 #panel-outbox>#outbox>*,#panel-diagnostics>#diagnostics>*{flex-shrink:0}
 #panel-outbox>#outbox>p,#panel-diagnostics>#diagnostics>p{margin:0 0 12px}
+body[data-view=main][data-tab=outbox] main{padding-bottom:8px}
+#outbox>.actions{margin-bottom:0}
+#outbox>#local-preview-actions{margin:12px 0 0}
 #panel-diagnostics #diagnostic-recent{margin:0 0 18px}
 #panel-diagnostics #diagnostics>.actions{margin:0 0 18px}
 #panel-diagnostics #diagnostics>details{margin:0 0 20px}

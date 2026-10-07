@@ -226,6 +226,43 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.evaluate(state=>window.previewDispatch({type:'state',state}),changed);
     check(await page.locator('#outbox .actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Send pending now','Retry selected…','Retry all','Already in Sheet','Open Google Sheet'])),'Outbox adds Retry all to the shared button row');
     check(await page.locator('#outbox-rows button').count()===0&&await page.locator('#outbox thead th').count()===4,'Outbox preserves its original columns without per-row action buttons');
+    // Long tables must scroll inside their own region. Absolutely positioned,
+    // visually hidden row radios must not create thousands of blank pixels
+    // below the visible App panel or send keyboard focus into that blank area.
+    await page.setViewportSize({width:940,height:780});
+    for(const [tab,section,rows] of [['Outbox','outbox','outbox'],['Scheduler','schedules','schedule']]){
+      const many=structuredClone(initial);
+      if(section==='outbox')many.outbox=Array.from({length:100},(_,i)=>({...initial.outbox[0],id:'overflow-outbox-'+i,
+        saved:'Synthetic saved '+i,localOnly:false,wantsSheets:false,status:'Sent',csvStatus:'Saved',complete:true}));
+      else many.schedules=Array.from({length:100},(_,i)=>({...initial.schedules[0],id:'overflow-schedule-'+i,start:'Synthetic session '+i}));
+      await page.evaluate(state=>window.previewDispatch({type:'state',state}),many);
+      await page.getByRole('tab',{name:tab,exact:true}).click();
+      check(await page.locator('#'+section+' .table-scroll').evaluate(list=>list.scrollHeight>list.clientHeight+1000),tab+' keeps a hundred entries scrollable within its table');
+      check(await page.locator('main').evaluate((main,section)=>{
+        const panel=document.querySelector(section==='outbox'?'#panel-outbox':'#panel-schedules');
+        const padding=parseFloat(getComputedStyle(main).paddingTop)+parseFloat(getComputedStyle(main).paddingBottom);
+        const margin=parseFloat(getComputedStyle(panel.lastElementChild).marginBottom);
+        return main.scrollHeight<=Math.max(main.clientHeight,panel.offsetHeight+padding+margin)+2;
+      },section),tab+' row selection controls cannot create a scrollable blank area below its panel');
+      if(section==='outbox')check(await page.locator('main').evaluate(main=>main.scrollHeight<=main.clientHeight+2),'A long Outbox list does not extend the outer App scroll area at its default size');
+      await page.evaluate(section=>{document.querySelector('main').scrollTop=0;document.querySelector('#'+section+' .table-scroll').scrollTop=0;},section);
+      const last=page.locator('#'+rows+'-rows tr').last(),radio=last.locator('input[type=radio]');
+      await radio.focus();await radio.press('Space');
+      check(await radio.isChecked()&&await last.getAttribute('data-selected')==='true',tab+' keyboard focus can select the last row of a long list');
+      check(await last.evaluate(row=>{
+        const list=row.closest('.table-scroll'),visible=list.getBoundingClientRect(),bounds=row.getBoundingClientRect();
+        return list.scrollTop>0&&bounds.bottom>visible.top&&bounds.top<visible.bottom;
+      }),tab+' brings the focused last row into the internal table viewport');
+      check(await page.locator('main').evaluate((main,section)=>{
+        const panel=document.querySelector(section==='outbox'?'#panel-outbox':'#panel-schedules');
+        const padding=parseFloat(getComputedStyle(main).paddingTop)+parseFloat(getComputedStyle(main).paddingBottom);
+        const margin=parseFloat(getComputedStyle(panel.lastElementChild).marginBottom);
+        return main.scrollTop<=Math.max(0,panel.offsetHeight+padding+margin-main.clientHeight)+2;
+      },section),tab+' last-row focus does not scroll the App into empty space below its controls');
+    }
+    await page.evaluate(state=>window.previewDispatch({type:'state',state}),initial);
+    await page.getByRole('tab',{name:'Outbox',exact:true}).click();
+    await page.locator('main').evaluate(main=>main.scrollTop=0);
     const settings={sheetUrl:'',webAppUrl:'',sheetMode:'date',sheetName:'Reflections',hasToken:false,connected:false,volume:50,threshold:15,
       showFloatingTimer:true,placement:4,popup:4,theme:0,overlap:2,loggingEnabled:true,
       tracks:[{id:0,name:'Default'},{id:3,name:'Level up'},{id:9,name:'None'}],
