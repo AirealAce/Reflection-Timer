@@ -50,6 +50,12 @@ public sealed class CsvLog
     private static string Field(string value) => value.IndexOfAny([',', '"', '\r', '\n']) >= 0
         || value.Length > 0 && (char.IsWhiteSpace(value[0]) || char.IsWhiteSpace(value[^1]))
         ? "\"" + value.Replace("\"", "\"\"") + "\"" : value;
+    private static string TimeFirstPauses(string value) => string.Join("\n", value.Split('\n').Select(line => {
+        var separator = line.IndexOf(". ", StringComparison.Ordinal);
+        var prefix = separator > 0 && line[..separator].All(char.IsAsciiDigit) ? line[..(separator + 2)] : "";
+        return DateTime.TryParseExact(line[prefix.Length..], "M/d/yyyy h:mm tt", CultureInfo.InvariantCulture, DateTimeStyles.None, out var timestamp)
+            ? prefix + timestamp.ToString("h:mm tt M/d/yyyy", CultureInfo.InvariantCulture) : line;
+    }));
     internal static string[] Row(OutboxItem item)
     {
         var pauses = item.Pauses.OrderBy(p => p.PausedAt).ToArray();
@@ -61,7 +67,7 @@ public sealed class CsvLog
             item.Mode == SessionMode.Stopwatch ? "" : Duration(item.DurationSeconds),
             string.Join(" · ", new[] { item.IsCheckIn ? "Check-in" : item.EndedEarly ? "ended early" : "", item.AutoSent ? "auto-sent" : "" }.Where(s => s.Length > 0)),
             item.EarlyEndReason, item.Mode == SessionMode.Stopwatch ? "stop watch" : "timer",
-            PauseLines(p => DateTimeOffset.FromUnixTimeMilliseconds(p.PausedAt).ToOffset(item.SubmittedAt.Offset).ToString("M/d/yyyy h:mm tt", CultureInfo.InvariantCulture)),
+            PauseLines(p => DateTimeOffset.FromUnixTimeMilliseconds(p.PausedAt).ToOffset(item.SubmittedAt.Offset).ToString("h:mm tt M/d/yyyy", CultureInfo.InvariantCulture)),
             PauseLines(p => Duration((p.DurationMilliseconds ?? 0) / 1000)),
             PauseLines(p => string.IsNullOrWhiteSpace(p.Reason) ? "N/A" : p.Reason),
             (item.CsvEntryId ?? item.Id).ToString()
@@ -88,6 +94,9 @@ public sealed class CsvLog
                     while (!parser.EndOfData) {
                         var existing = parser.ReadFields()!;
                         if (existing.Length != Headers.Count) return new(false, Error: "csv_format");
+                        // Older exports put the date first. Formatting that cell
+                        // consistently keeps retries safe across the upgrade.
+                        existing[7] = TimeFirstPauses(existing[7]);
                         if (existing[^1] == row[^1]) return existing.SequenceEqual(row) ? new(true, file) : new(false, Error: "csv_conflict");
                         rows.Add(existing);
                     }

@@ -45,7 +45,13 @@ static class CsvTests
             check(log.Write(watch).Success,"Stopwatch, blank auto-send and pause records export");
             var watchRow=Read(reply.File).Last();
             check(watchRow[1]=="N/A"&&watchRow[2]=="1:01:01"&&watchRow[3]==""&&watchRow[4]=="auto-sent"&&watchRow[6]=="stop watch","Stopwatch and auto-sent values match the Sheets column semantics");
-            check(watchRow[7]=="1. 10/7/2026 8:49 AM\n2. 10/7/2026 8:51 AM"&&watchRow[8]=="1. 1:01\n2. 0:03"&&watchRow[9]=="1. Phone, \"call\"\nBack soon\n2. N/A","Pause columns retain chronological numbering, local dates, durations and multiline reasons");
+            check(watchRow[7]=="1. 8:49 AM 10/7/2026\n2. 8:51 AM 10/7/2026"&&watchRow[8]=="1. 1:01\n2. 0:03"&&watchRow[9]=="1. Phone, \"call\"\nBack soon\n2. N/A","Pause columns retain time-first local dates, chronological numbering, durations and multiline reasons");
+            var dateFirst=watch with{CsvDirectory=Path.Combine(root,"old-pause-order")};Directory.CreateDirectory(dateFirst.CsvDirectory);
+            var dateFirstRow=(string[])watchRow.Clone();dateFirstRow[7]="1. 10/7/2026 8:49 AM\n2. 10/7/2026 8:51 AM";
+            File.WriteAllText(CsvLog.FilePath(dateFirst),string.Join("\r\n",new[]{CsvLog.Headers.ToArray(),dateFirstRow}.Select(row=>string.Join(",",row.Select(value=>"\""+value.Replace("\"","\"\"")+"\""))))+"\r\n",new UTF8Encoding(true));
+            var dateFirstBytes=File.ReadAllBytes(CsvLog.FilePath(dateFirst));
+            check(log.Write(dateFirst).Success&&dateFirstBytes.SequenceEqual(File.ReadAllBytes(CsvLog.FilePath(dateFirst))),"Retrying an older date-first pause entry succeeds without duplication or rewriting");
+            check(log.Write(dateFirst with{Id=Guid.NewGuid(),Message="Next reflection"}).Success&&Read(CsvLog.FilePath(dateFirst))[1].SequenceEqual(watchRow),"Appending normalizes older pause timestamps to time-first while retaining the other columns");
             log.Write(entry with{Id=Guid.NewGuid(),Message="=SUM(1,2)",EarlyEndReason="@command",EndedEarly=true});
             check(Read(reply.File).Last()[1]=="'=SUM(1,2)"&&Read(reply.File).Last()[5]=="'@command","Spreadsheet formulas stay plain text");
             check(CsvLog.FileName(entry with{IsTest=true})=="test-10-07-2026.csv","Practice reflections have a separate daily file");
