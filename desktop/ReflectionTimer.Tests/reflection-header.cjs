@@ -59,7 +59,7 @@ module.exports=async function reflectionHeader(context,initial,check,settings){
   }
   const page=await open(),help=page.locator('#reflection-help-toggle'),failed=page.locator('#reflection-failed'),before=await geometry(page);
   await page.evaluate(()=>{window.headerState.outbox=[{id:'old-failed',deliveryFailed:true}];window.previewDispatch({type:'state',state:window.headerState});});
-  check(await failed.isVisible()&&await failed.getAttribute('aria-label').then(t=>t.includes('earliest failed message')),'A delivery failure displays a named warning button');
+  check(await failed.isVisible()&&await failed.getAttribute('aria-label').then(t=>t.includes('most recent unsent message')),'A delivery failure displays a named warning button');
   check(await failed.evaluate(button=>button.getBoundingClientRect().right<document.querySelector('#reflection-help-toggle').getBoundingClientRect().left),'Warning is immediately to the left of help');
   check(JSON.stringify(before)===JSON.stringify(await geometry(page)),'Showing the warning does not move the reflection fields or action row');
   if(process.env.REFLECTION_PREVIEW_SCREENSHOTS)await page.screenshot({path:path.join(process.env.REFLECTION_PREVIEW_SCREENSHOTS,'Reflection-warning.png')});
@@ -69,7 +69,17 @@ module.exports=async function reflectionHeader(context,initial,check,settings){
     const sent=window.previewMessages,open=sent.findIndex(m=>m.action==='showFailedDelivery');
     return sent.slice(0,open).some(m=>m.action==='draft'&&m.data.text==='Keep this draft while reviewing delivery.');
   }),'Opening failed delivery saves the current draft first');
-  check((await sideEffects(page)).length===0,'Opening Outbox cannot send, skip or retry the current reflection');
+  check((await sideEffects(page)).length===0,'Opening failed delivery cannot send, skip or retry the current reflection');
+  await page.evaluate(()=>{
+    const retry={...window.headerState.prompts[0],id:'retry-latest',retryOutboxId:'new-failed',draft:'Latest failed reflection.',resumeOnSave:false};
+    window.headerState={...window.headerState,prompts:[...window.headerState.prompts,retry]};
+    window.previewDispatch({type:'showReflection',state:window.headerState,promptId:retry.id});
+  });
+  check(await page.locator('#reflection-text').inputValue()==='Latest failed reflection.'&&await page.locator('#reflection-text').evaluate(e=>document.activeElement===e),'Failed delivery opens in the same reflection editor with its text box focused');
+  check(await page.locator('#reflection-heading').textContent()==='Unsent reflection'&&await page.locator('#reflection-context').textContent().then(t=>t.includes('undelivered destinations')),'Retry editor describes saved delivery without implying the active session ends');
+  check(await page.locator('#reflection-form').getAttribute('aria-description').then(t=>t.includes('undelivered destinations')&&!t.includes('ends this session')),'Retry editor announces destination-only sending instead of active-session commands');
+  check(await page.locator('#reflection-form button[type=submit]').getAttribute('title').then(t=>t.includes('undelivered destinations')&&!t.includes('end this session')),'Retry send tooltip describes the saved message action');
+  check(await page.locator('#reflection-send-key-help').textContent().then(t=>t.includes('undelivered destinations')),'Retry help explains that successful destinations are kept');
   await failed.focus();await page.evaluate(()=>{window.headerState.outbox=[];window.previewDispatch({type:'state',state:window.headerState});});
   check(await failed.isHidden()&&await help.evaluate(e=>document.activeElement===e),'Resolving the last issue removes its warning and keeps keyboard focus usable');
   await help.click();await page.locator('#page-title').click();
@@ -88,11 +98,7 @@ module.exports=async function reflectionHeader(context,initial,check,settings){
     localOnly:false,wantsSheets:false,complete:false,csvStatus:'NeedsReview',csvError:'csv_locked',attempts:0,message:'Later failed reflection.',duration:'15 minutes'}];
   await app.evaluate(({initial,settings,outbox})=>{
     const state={...initial,outbox};window.previewDispatch({type:'init',state});window.previewDispatch({type:'settings',settings});
-    window.previewDispatch({type:'showOutboxEntry',state,id:'old-failed'});
   },{initial,settings,outbox});
-  check(await app.locator('#tab-outbox').getAttribute('aria-selected')==='true'
-    &&await app.locator('#outbox-rows tr[data-id="old-failed"] input').isChecked(),'Host navigation opens Outbox and selects the requested failed entry');
-  check(await app.locator('#outbox-detail').evaluate(node=>document.activeElement===node)&&await app.locator('#outbox-detail').textContent().then(t=>t.includes('Earlier failed reflection.')),'Navigation focuses the failed message in the readable details region');
   check(await app.locator('#reflection-title-actions').isHidden(),'Reflection header controls do not appear in App view');
   await app.close();
 };

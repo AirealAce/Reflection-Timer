@@ -50,6 +50,8 @@ public enum ScheduleOverlapPolicy { EndWithReflection = 0, Ask = 1, Wait = 2 }
 public enum ScheduleDecision { StartNow = 0, Wait = 1, Skip = 2 }
 public record ReflectionPrompt(Guid Id, long CompletedAt, int DurationSeconds, int Volume, bool IsTest, string Draft = "")
 {
+    // An Outbox editor retains its original delivery record until explicitly sent.
+    public Guid? RetryOutboxId { get; init; }
     public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public bool ResumeStopwatchOnSave { get; init; }
@@ -91,11 +93,17 @@ public record OutboxItem
     [System.Text.Json.Serialization.JsonIgnore] public bool WantsSheets => !LocalOnly && SheetsRequested != false;
     [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryComplete => LocalOnly ? Status == DeliveryStatus.Sent
         : (!WantsSheets || Status == DeliveryStatus.Sent) && CsvStatus is CsvDeliveryStatus.NotRequested or CsvDeliveryStatus.Saved;
-    [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryFailed => !LocalOnly && !DeliveryComplete
-        && ((WantsSheets && (Status == DeliveryStatus.NeedsReview || (Status == DeliveryStatus.Pending && ErrorKind.Length > 0)))
-          || CsvStatus == CsvDeliveryStatus.NeedsReview || (CsvStatus == CsvDeliveryStatus.Pending && CsvError.Length > 0));
+    [System.Text.Json.Serialization.JsonIgnore] public bool SheetsFailed => WantsSheets && (Status == DeliveryStatus.NeedsReview || (Status == DeliveryStatus.Pending && ErrorKind.Length > 0));
+    [System.Text.Json.Serialization.JsonIgnore] public bool CsvFailed => !LocalOnly && (CsvStatus == CsvDeliveryStatus.NeedsReview || (CsvStatus == CsvDeliveryStatus.Pending && CsvError.Length > 0));
+    [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryFailed => !DeliveryComplete && (SheetsFailed || CsvFailed);
+    [System.Text.Json.Serialization.JsonIgnore] public bool RetryReviewRequired =>
+        WantsSheets && Status != DeliveryStatus.Sent && (ErrorKind is "write_uncertain" or "id_conflict" || Attempts > 0 && !RetryProtected)
+        || !LocalOnly && CsvStatus is CsvDeliveryStatus.Pending or CsvDeliveryStatus.NeedsReview && CsvError == "csv_conflict";
     public static OutboxItem? EarliestFailed(IEnumerable<OutboxItem> entries) => entries
         .Where(item => item.DeliveryFailed).OrderBy(item => item.SubmittedAt).FirstOrDefault();
+    public static OutboxItem? LatestUnsent(IEnumerable<OutboxItem> entries) => entries
+        .Where(item => !item.LocalOnly && !item.DeliveryComplete && item.Status != DeliveryStatus.Sending)
+        .OrderByDescending(item => item.SubmittedAt).FirstOrDefault();
     public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public Guid? SessionId { get; init; }

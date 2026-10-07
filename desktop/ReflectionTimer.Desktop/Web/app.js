@@ -16,7 +16,7 @@ const requests = new Map();
 // A delayed reply from a crashed document must not resolve a new request.
 const requestPrefix=crypto.randomUUID();
 let requestSequence = 0, state, promptId, initial = true, durationDirty = false, loadedPrompt;
-let reflectionBusy=false, savingAndClosing=false, repeatPending=false, repeatDraft=false;
+let reflectionBusy=false, savingAndClosing=false, repeatPending=false, repeatDraft=false, retryAllBusy=false, retryAllNativeBusy=false;
 function setReflectionBusy(busy){
   reflectionBusy=busy;const blocked=busy||savingAndClosing;
   $('reflection-form').setAttribute('aria-busy',String(blocked));
@@ -30,7 +30,7 @@ function send(action, data = {}) {
   return new Promise((resolve, reject) => {
     if (!bridge) { reject(new Error('Open this interface through the Reflection Timer app.')); return; }
     const requestId = `${requestPrefix}:${++requestSequence}`;
-    const nativeDialog=['browseSound','browseLowSound','setupScript','exportDiagnostics','importSchedules','reset','resetAndReload'].includes(action);
+    const nativeDialog=['browseSound','browseLowSound','setupScript','exportDiagnostics','importSchedules','reset','resetAndReload','showFailedDelivery'].includes(action);
     const timeout = nativeDialog ? undefined : setTimeout(() => { requests.delete(requestId); reject(new Error('The app did not respond. Check its status before trying again.')); }, 35000);
     requests.set(requestId, {resolve, reject, timeout});
     bridge.postMessage({requestId, action, data});
@@ -108,8 +108,14 @@ function renderReflection() {
   renderReflectionNavigation();
   const prompt = state.prompts.find(p => p.id === promptId);
   if (!prompt) return;
-  setText($('reflection-heading'), prompt.mode===1?'Stopwatch reflection':prompt.isCheckIn ? 'Session check-in' : 'Session reflection');
-  setText($('reflection-context'), prompt.mode===1?`${prompt.actual} active time. ${prompt.resumeOnSave?'Save resumes this stopwatch.':'Save keeps this draft for later.'} Send finishes the reflection.`:`${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted.`);
+  setText($('reflection-heading'), prompt.retryOutboxId?'Unsent reflection':prompt.mode===1?'Stopwatch reflection':prompt.isCheckIn ? 'Session check-in' : 'Session reflection');
+  setText($('reflection-context'), prompt.retryOutboxId?'Send retries only undelivered destinations.':prompt.mode===1?`${prompt.actual} active time. ${prompt.resumeOnSave?'Save resumes this stopwatch.':'Save keeps this draft for later.'} Send finishes the reflection.`:`${prompt.endedEarly ? 'Session ended early. ' : ''}${prompt.actual} spent; ${prompt.allotted} allotted.`);
+  $('reflection-form').setAttribute('aria-description',prompt.retryOutboxId
+    ? 'Ctrl+Enter, Alt+S, or Alt+Enter sends this saved message only to its undelivered destinations. Successful deliveries are kept. Review may be required. Ctrl+S saves the draft locally and closes.'
+    : 'Ctrl+Enter or Alt+S sends and ends this session early if it is still running or paused; both skip when all reflection and reason fields are completely empty. Ctrl+S saves the draft locally and closes. Alt+Enter sends without ending the timer.');
+  $('reflection-form').querySelector('button[type=submit]').title=prompt.retryOutboxId
+    ? 'Ctrl+Enter, Alt+S, or Alt+Enter: send only to undelivered destinations.'
+    : 'Alt+Enter: send without ending the timer. Ctrl+Enter or Alt+S: send and end this session early if it is still active, or skip if all reflection and reason fields are empty.';
   setText($('reflection-timestamp'), prompt.completed);
   $('reason-group').hidden = !(prompt.showEarlyEndReason??prompt.endedEarly);
   if($('reason-group').hidden&&document.activeElement===$('early-reason')&&document.hasFocus())$('reflection-text').focus();
@@ -133,13 +139,29 @@ function createTableRow(columns) {
 }
 function reviewDelivery(id, action) {
   const entry=state.outbox.find(o=>o.id===id),uncertain=['write_uncertain','id_conflict'].includes(entry?.error);
-  if(action==='retry'&&(entry?.wantsSheets===false||entry?.status==='Sent')){run(()=>send('retry',{id}));return;}
-  deliveryDecision={id,action};
+  if(action==='retry'&&!entry?.retryReviewRequired&&(entry?.wantsSheets===false||entry?.status==='Sent')){run(()=>send('retry',{id}));return;}
+  deliveryDecision={id,action,origin:$('retry-selected')};
   setText($('delivery-explanation'),action==='retry'
-    ? uncertain?'This receiver reported an uncertain write. Check your Google sheet first. Retrying creates a new request and could duplicate an entry already saved there.':'Check the Google Sheet first. Retrying an entry that already arrived can create a duplicate. Send it again?'
+    ? entry?.csvError==='csv_conflict'?'This entry ID is already in the CSV with different contents. Check the CSV first. Retrying uses a new entry ID and could create a duplicate. Send it again?':uncertain?'This receiver reported an uncertain write. Check your Google sheet first. Retrying creates a new request and could duplicate an entry already saved there.':'Check the Google Sheet first. Retrying an entry that already arrived can create a duplicate. Send it again?'
     : 'Check that this exact reflection is already in your Google sheet. Confirming removes it from pending delivery without sending it.');
   setText($('delivery-confirm'),action==='retry'?(uncertain?'I checked the sheet — retry as a new request':'Retry selected entry'):'I found this entry in my sheet — mark already sent');
   $('delivery-dialog').showModal();$('delivery-title').focus();
+}
+function confirmDelivery(explanation,caption,origin){
+  return new Promise(resolve=>{
+    deliveryDecision={resolve,origin};
+    setText($('delivery-explanation'),explanation);setText($('delivery-confirm'),caption);
+    available($('delivery-confirm'),true);$('delivery-dialog').showModal();$('delivery-title').focus();
+  });
+}
+async function retryAll(){
+  if(retryAllBusy||retryAllNativeBusy||!state.outbox.some(entry=>entry.deliveryFailed===true))return;
+  retryAllBusy=true;renderSelections();
+  try{
+    const needsReview=state.outbox.some(entry=>entry.deliveryFailed===true&&entry.retryReviewRequired===true);
+    if(needsReview&&!await confirmDelivery('Some failed messages may already be in Google Sheets or CSV. Check those destinations before retrying. Retry all retries only failed destinations; a previously uncertain write could create a duplicate.','I checked — retry failed deliveries',$('retry-all')))return;
+    await send('retryAll',{confirmed:needsReview});announce('Failed deliveries queued for retry.');
+  }finally{retryAllBusy=false;renderSelections();}
 }
 function clearScheduleEdit() {
   scheduleEdit=undefined;setText($('schedule-legend'),'Add a scheduled session');setText($('schedule-save'),'Add session');
@@ -169,6 +191,8 @@ function renderSelections() {
   $('schedule-decision').hidden=schedule?.status!=='Needs choice';
   available($('retry-selected'),!!entry&&entry.localOnly===false&&entry.status!=='Sending'&&
     ((entry.wantsSheets!==false&&!['Sent','Simulated success'].includes(entry.status))||['Pending','NeedsReview'].includes(entry.csvStatus)));
+  available($('retry-all'),!retryAllBusy&&!retryAllNativeBusy&&state.outbox.some(item=>item.deliveryFailed===true));
+  $('retry-all').setAttribute('aria-busy',String(retryAllBusy||retryAllNativeBusy));
   available($('mark-selected'),entry?.status==='NeedsReview'&&entry?.localOnly===false&&entry?.wantsSheets!==false);
   $('local-preview-actions').hidden=!entry||entry.localOnly===false;
   let text='';
@@ -221,6 +245,7 @@ function tables() {
 
 function render(next) {
   const previous = state;
+  if(typeof next.retryAllBusy==='boolean')retryAllNativeBusy=next.retryAllBusy;
   const historyChanged=next.outbox!=null||next.schedules!=null;
   // A null list in an incremental host update means unchanged, not empty.
   state = {...next,outbox:next.outbox??previous?.outbox??[],schedules:next.schedules??previous?.schedules??[]};
@@ -292,11 +317,8 @@ bridge?.addEventListener('message', event => {
     render(message.state);setText($('draft-status'),'Draft saved locally.');
     $('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;
     run(()=>send('reflectionReady',{id:promptId}));
-  } else if(message.type==='showOutboxEntry'&&view==='main') {
-    render(message.state);layout.select('outbox');selectRow('outbox',message.id);
-    if(selectedRow('outbox'))$('outbox-detail').focus();
-    else announce('This entry is no longer in Outbox.');
-  } else if (message.type === 'state') render(message.state);
+  } else if(message.type==='retryAllState') {retryAllNativeBusy=message.busy===true;if(state&&view!=='reflection')renderSelections();}
+  else if (message.type === 'state') render(message.state);
   else if (message.type === 'clock') {if(state?.clock.status===message.clock.status&&Boolean(message.clock.stopwatch)===(state?.timer.mode===1))renderDuration(message.clock);}
   else if (message.type === 'timeRead') snapshot(message.clock,true);
   else if (message.type === 'announcement') announce(message.message);
@@ -324,8 +346,15 @@ bridge?.addEventListener('message', event => {
 const settings=settingsUI({send,run,bind,view,announce,selectTab:layout.select});
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>state&&(view!=='reflection'||(loadedPrompt&&!queued&&!reflectionBusy&&!savingAndClosing)),selectTab:layout.select});
 bind('delivery-confirm',async()=>{
-  const decision=deliveryDecision;await send(decision.action,{id:decision.id,confirmed:true});$('delivery-dialog').close();
-  $('retry-selected').focus();
+  const decision=deliveryDecision;if(!decision)return;
+  if(decision.resolve){decision.resolve(true);$('delivery-dialog').close();return;}
+  available($('delivery-confirm'),false);
+  try{await send(decision.action,{id:decision.id,confirmed:true});$('delivery-dialog').close();}
+  finally{available($('delivery-confirm'),true);}
+});
+$('delivery-dialog').addEventListener('close',()=>{
+  const decision=deliveryDecision;deliveryDecision=undefined;decision?.resolve?.(false);
+  decision?.origin?.focus();
 });
 ['hours','minutes','seconds'].forEach(id => {
   const changed=()=>{const parts=['hours','minutes','seconds'].map(id=>$(id).value);sharedDuration(parts);run(()=>send('durationDraft',{parts}));};
@@ -360,6 +389,7 @@ if(view==='main'){
   bind('remove-schedule',async()=>{if(!selectedSchedule)return;const id=selectedSchedule;await send('removeSchedule',{id});if(scheduleEdit===id)clearScheduleEdit();($('schedule-rows').querySelector('input:checked')||$('schedule-start')).focus();});
   for(const [id,decision] of [['schedule-start-now',0],['schedule-wait',1],['schedule-skip',2]])bind(id,()=>selectedSchedule&&send('resolveSchedule',{id:selectedSchedule,decision}));
   bind('retry-selected',()=>selectedOutbox&&reviewDelivery(selectedOutbox,'retry'));
+  bind('retry-all',retryAll);
   bind('mark-selected',()=>selectedOutbox&&send('markSent',{id:selectedOutbox,confirmed:true}));
   bind('simulate-selected',()=>selectedOutbox&&send('simulate',{id:selectedOutbox}));
   $('schedule-volume').addEventListener('input',()=>setText($('schedule-volume-caption'),'App sound ('+$('schedule-volume').value+'%)'));
@@ -372,8 +402,10 @@ bind('compact-mode',()=>{
   $('compact-mode').setAttribute('aria-expanded',String(!tiny)); setText($('compact-mode'),tiny?'Show timer controls':'Time-only view');
 });
 bind('reflection-failed',async()=>{
-  if(view!=='reflection'||!loadedPrompt||reflectionBusy||savingAndClosing)return;
-  await saveDraft();await send('showFailedDelivery');
+  if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
+  setReflectionBusy(true);
+  try{await saveDraft();await send('showFailedDelivery');}
+  finally{setReflectionBusy(false);}
 });
 $('schedule-form').addEventListener('submit',event=>{event.preventDefault();run(async()=>{
   const seconds=durationSeconds(['schedule-hours','schedule-minutes','schedule-seconds'].map(id=>$(id).value.trim()));
@@ -387,14 +419,27 @@ document.addEventListener('input',event=>{if(!reflectionInputs().includes(event.
 });
 async function submitReflection(endSession=false){
   if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing)return;
+  const retry=!!state.prompts.find(prompt=>prompt.id===promptId)?.retryOutboxId;
   // Start the optional audio fade before validation or a durable draft save.
   // Audio feedback must not delay or prevent saving the response.
-  send('reflectionSendStarted',{id:promptId}).catch(()=>{});
+  if(!retry)send('reflectionSendStarted',{id:promptId}).catch(()=>{});
   if(!$('reflection-text').value.trim()&&![...document.querySelectorAll('#pause-reasons textarea')].some(input=>input.value.trim())) { $('reflection-text').setAttribute('aria-invalid','true'); $('reflection-text').focus(); throw new Error('Write a reflection before sending.'); }
   $('reflection-text').removeAttribute('aria-invalid');
   // Lock before the draft flush so another shortcut cannot submit it twice.
   savingAndClosing=true;setReflectionBusy(reflectionBusy);
-  try { await saveDraft(); queued=true; await send('queue',{...draft(),endSession}); }
+  try {
+    let retryConfirmed=false;
+    if(retry){
+      const review=await send('reviewRetryReflection',draft());
+      if(review.needsConfirmation){
+        if(!await confirmDelivery('Check the destinations that already received this message before retrying. Edited content or an uncertain Google Sheets write may require a new request and could create a duplicate. Successful destinations will not be sent again.','I checked — send to undelivered destinations',$('reflection-text'))){
+          savingAndClosing=false;setReflectionBusy(reflectionBusy);return;
+        }
+        retryConfirmed=true;
+      }
+    }
+    await saveDraft();queued=true;await send('queue',{...draft(),endSession,...(retry?{retryConfirmed}:{})});
+  }
   catch(e) {
     queued=false;savingAndClosing=false;setReflectionBusy(reflectionBusy);
     if(e.message==='Write a reflection between 1 and 5,000 characters.') {

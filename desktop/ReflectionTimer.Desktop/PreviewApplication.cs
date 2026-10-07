@@ -36,9 +36,12 @@ internal sealed partial class PreviewApplication : ApplicationContext
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
         notifyScreenReader=screenReaderNotification??ScreenReaderAnnouncements.TryAnnounce;
         Services = new(session.Engine, directory, speech:speech); Services.Announcement += Announce;
+        session.DeliveryFailure=Services.IsFailedDelivery;
+        session.DeliveryRetryBusy=()=>Services.RetryAllBusy;
         InitializeFocusMode();
         Services.SessionAnnouncement += AnnounceSession;
-        Services.DeliveryIssueChanged += () => Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });
+        Services.DeliveryIssueChanged += () => {Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });Broadcast(new {type="state",state=Session.View()});};
+        Services.RetryAllStateChanged += () => Broadcast(new {type="retryAllState",busy=Services.RetryAllBusy});
         Services.Log.Record("app.started");
         Services.Log.Record("theme.loaded",value:(int)session.Engine.Snapshot.Theme);
         promptCoordinator=new(session,()=>windows.Where(w=>w.ReflectionOpen&&!w.IsDisposed).Cast<IReflectionPromptWindow>().ToArray(),ShowReflection,()=>{_ = Services.Sync();});
@@ -251,6 +254,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch {Announce("The reflection could not be opened. Existing drafts are retained; any current editor stays open. Try Pending reflections again.");}
     }
     internal Task NavigateReflectionAsync(Guid from,int direction)=>promptCoordinator.NavigateAsync(from,direction,()=>closing);
+    internal Task ShowSavedUnsentReflectionAsync(Guid id)=>promptCoordinator.OpenAsync(id,true,()=>closing);
     internal async Task CompleteSubmittedSessionAsync(Guid id)
     {
         try {await promptCoordinator.CompleteSubmittedAsync(id,()=>closing);}

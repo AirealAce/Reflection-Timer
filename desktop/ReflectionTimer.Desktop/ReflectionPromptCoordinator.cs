@@ -48,7 +48,7 @@ internal sealed class ReflectionPromptCoordinator(PreviewSession session,
     }
     private async Task AutoSendPriorAsync(IEnumerable<ReflectionPrompt> prompts, Func<bool>? stopping)
     {
-        foreach(var prior in prompts) {
+        foreach(var prior in prompts.Where(prompt=>prompt.RetryOutboxId is null)) {
             if(stopping?.Invoke()==true)return;
             var window=openWindows().FirstOrDefault(w=>w.ReflectionId==prior.Id);
             try {

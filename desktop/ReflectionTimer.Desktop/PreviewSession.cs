@@ -10,6 +10,10 @@ public sealed class PreviewSession
 {
     public static readonly JsonSerializerOptions Json = new(JsonSerializerDefaults.Web);
     public TimerEngine Engine { get; }
+    internal Func<OutboxItem,bool>? DeliveryFailure { get; set; }
+    internal Func<bool>? DeliveryRetryBusy { get; set; }
+    internal bool ReviewRetryReflection(JsonElement data) => Engine.RetryReflectionNeedsConfirmation(Id(data),
+        Text(data,"text",5000),Text(data,"reason",1000),ReadPauseReasons(data));
     public event Action<string>? Announcement;
     public event Action<string[]?>? DurationDraftChanged;
     private string[]? durationDraft;
@@ -132,12 +136,14 @@ public sealed class PreviewSession
         var countdown=state.Timer.Mode==SessionMode.Timer?state.Timer:state.ParkedTimer??new();
         return new {
             clock = Clock(state.Timer), durationDraft, theme = (int)state.Theme, state.ShowFloatingTimer, appVolume = state.Timer.Volume, connected = state.ExtensionDisabledConfirmed && SheetsClient.Validate(state.Connection) is null,
+            retryAllBusy = DeliveryRetryBusy?.Invoke() ?? false,
             focusMode = FocusView(state.FocusMode), state.ShowAllExplanations,
             timer = new { mode=(int)state.Timer.Mode, countdown.DurationSeconds, countdown.AutoRestart, countdown.LowTime.Enabled, countdown.AutoRestartUntil,
                 endTime = state.Timer.EndTime is { } end ? Engine.CalendarTimestamp(end) : (long?)null,
                 threshold = countdown.LowTime.ThresholdSeconds ?? AudioSettings.From(state).LowTimeThresholdSeconds,
                 low=LowView(countdown.LowTime,AudioSettings.From(state).LowTimeThresholdSeconds) },
-            prompts = state.Prompts.Select(p => new { p.Id, mode=(int)p.Mode, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
+            prompts = state.Prompts.Select(p => new { p.Id, p.RetryOutboxId, mode=(int)p.Mode, p.IsCheckIn, p.EndedEarly, draft = ReflectionDrafts.ForEditing(p), p.EarlyEndReason,
+                retryRequiresConfirmation=p.RetryOutboxId is not null && Engine.RetryReflectionNeedsConfirmation(p.Id,p.Draft,p.EarlyEndReason),
                 pauses = Engine.PausesFor(p).Select(pause => new { pause.Id, pause.Reason,
                     paused = DateTimeOffset.FromUnixTimeMilliseconds(pause.PausedAt).ToLocalTime().ToString("g"),
                     duration = pause.DurationMilliseconds is { } duration ? SpeakTime((int)(duration/1000)) : "Still paused" }),
@@ -150,7 +156,8 @@ public sealed class PreviewSession
                 status = s.AwaitingDecision ? "Needs choice" : s.WaitingForCurrentSession ? "Waiting" : "Scheduled",
                 editStart = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("yyyy-MM-ddTHH:mm"), s.DurationSeconds, s.AutoRestartUntil, s.Volume }),
             outbox = !includeOutbox ? null : state.Outbox.Select(o => new { o.Id, saved = o.SubmittedAt.LocalDateTime.ToString("g"),
-                localOnly = o.LocalOnly, complete = o.DeliveryComplete, deliveryFailed = o.DeliveryFailed, wantsSheets = o.WantsSheets,
+                localOnly = o.LocalOnly, complete = o.DeliveryComplete, deliveryFailed = DeliveryFailure?.Invoke(o) ?? o.DeliveryFailed,
+                retryReviewRequired = o.RetryReviewRequired, wantsSheets = o.WantsSheets,
                 csvStatus = o.CsvStatus.ToString(), csvError = o.CsvError, csvFile = o.CsvFile, o.CsvAttempts, o.CsvNextAttemptAt,
                 deliveryLabel = DeliveryLabel(o),
                 destination = o.LocalOnly ? "Local preview only" : string.Join(" · ", new[] {
@@ -251,7 +258,7 @@ public sealed class PreviewSession
                 var skipped=Id(data);RequiredPrompt(skipped);Engine.SkipPrompt(skipped);return new("Reflection skipped.",Close:true);
             case "queue":
                 var localOnly = isolatedProfile && SheetsClient.Validate(state.Connection) is not null;
-                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"), requestedAt: requestedAt, pauseReasons: ReadPauseReasons(data));
+                var ended = Engine.QueueReflection(Id(data), Text(data, "text", 5000), Text(data, "reason", 1000), localOnly, endSession: Flag(data,"endSession"), requestedAt: requestedAt, pauseReasons: ReadPauseReasons(data),retryConfirmed:Flag(data,"retryConfirmed"));
                 return new((ended ? "Session ended. " : "") + (localOnly ? "Reflection saved locally in the Outbox." : "Reflection saved in Outbox for Sheets delivery when enabled."), Close: true, SessionCompleted: ended);
             case "schedule":
                 var date = Text(data, "start", 40);
@@ -279,7 +286,7 @@ public sealed class PreviewSession
             case "retry":
                 var retry = state.Outbox.SingleOrDefault(o => o.Id == Id(data)) ?? throw new ArgumentException("Entry not found.");
                 if (retry.LocalOnly) throw new ArgumentException("This preview entry stays local. Save a new reflection after enabling your connection.");
-                if (retry.ErrorKind is "write_uncertain" or "id_conflict" && !Flag(data,"confirmed")) throw new ArgumentException("Check your sheet and confirm before retrying this uncertain write.");
+                if (retry.RetryReviewRequired && !Flag(data,"confirmed")) throw new ArgumentException("Check the logging destination and confirm before retrying this uncertain delivery.");
                 Engine.RetryUpload(retry.Id); return new("Entry queued for retry.");
             case "markSent":
                 var reviewed = state.Outbox.SingleOrDefault(o => o.Id == Id(data)) ?? throw new ArgumentException("Entry not found.");

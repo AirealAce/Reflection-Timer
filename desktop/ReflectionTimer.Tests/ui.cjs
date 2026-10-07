@@ -224,7 +224,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await page.evaluate(state=>window.previewDispatch({type:'state',state}),autoSentState);
     check((await page.locator('#outbox-rows').textContent()).includes('auto-sent')&&await page.locator('#outbox-detail').textContent().then(text=>text.includes('auto-sent')&&text.includes('ended early')&&text.includes('Appointment')),'Outbox exposes auto-sent alongside early-end status, reason, and delivery status');
     await page.evaluate(state=>window.previewDispatch({type:'state',state}),changed);
-    check(await page.locator('#outbox .actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Send pending now','Retry selected…','Already in Sheet','Open Google Sheet'])),'Outbox actions match the original shared button row');
+    check(await page.locator('#outbox .actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Send pending now','Retry selected…','Retry all','Already in Sheet','Open Google Sheet'])),'Outbox adds Retry all to the shared button row');
     check(await page.locator('#outbox-rows button').count()===0&&await page.locator('#outbox thead th').count()===4,'Outbox preserves its original columns without per-row action buttons');
     const settings={sheetUrl:'',webAppUrl:'',sheetMode:'date',sheetName:'Reflections',hasToken:false,connected:false,volume:50,threshold:15,
       showFloatingTimer:true,placement:4,popup:4,theme:0,overlap:2,loggingEnabled:true,
@@ -510,6 +510,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./reflection-lifecycle.cjs')(context,initial,check);
     await require('./reflection-navigation.cjs')(context,initial,check,settings);
     await require('./reflection-header.cjs')(context,initial,check,settings);
+    await require('./retry-delivery.cjs')(context,initial,check,settings);
     await require('./reflection-separators.cjs')(context,initial,settings,check);
     await require('./settings-shortcuts.cjs')(context,initial,settings,check);
     await require('./settings-success.cjs')(context,initial,settings,check);

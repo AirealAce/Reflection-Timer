@@ -400,7 +400,7 @@ public sealed partial class TimerEngine
         Change("prompt.later", s => {
             var prompt = s.Prompts.SingleOrDefault(p => p.Id == id) ?? throw new ArgumentException("That reflection is no longer pending.");
             var saved = SavePauseReasons(s,prompt,pauseReasons) with {
-                Draft = ReflectionDrafts.Content(prompt, text), ContinuationSeparator = s.ReflectionSeparator,
+                Draft = ReflectionDrafts.Content(prompt, text), ContinuationSeparator = prompt.RetryOutboxId.HasValue ? null : s.ReflectionSeparator,
                 ResumeStopwatchOnSave = false,
                 EarlyEndReason = prompt.EndedEarly || prompt.IsCheckIn ? earlyEndReason ?? prompt.EarlyEndReason : prompt.EarlyEndReason
             };
@@ -413,16 +413,21 @@ public sealed partial class TimerEngine
     {
         lock(gate) {
             var prompt=state.Prompts.SingleOrDefault(p=>p.Id==promptId);
-            if(prompt is null)return false; // A manual submission may already have finished.
+            if(prompt is null || prompt.RetryOutboxId.HasValue)return false; // A manual submission may already have finished; retries require an explicit send.
             QueueReflection(promptId,prompt.Draft,prompt.EarlyEndReason,localOnly,autoSent:true);
             return true;
         }
     }
-    public bool QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false, bool endSession = false, long? requestedAt = null, IReadOnlyDictionary<Guid,string>? pauseReasons = null)
+    public bool QueueReflection(Guid promptId, string text, string? earlyEndReason = null, bool localOnly = false, bool autoSent = false, bool endSession = false, long? requestedAt = null, IReadOnlyDictionary<Guid,string>? pauseReasons = null, bool retryConfirmed = false)
     {
         requestedAt ??= ElapsedNow;
         lock (gate) {
             var saved = state.Prompts.SingleOrDefault(p => p.Id == promptId) ?? throw new ArgumentException("This reflection has already been saved or dismissed.");
+            if (saved.RetryOutboxId.HasValue) {
+                if (autoSent) return false;
+                QueueRetryReflection(saved, text, earlyEndReason, pauseReasons, retryConfirmed);
+                return false;
+            }
             text = ReflectionDrafts.Content(saved, text);
             text = text.Trim();
             var hasPauseReason = MergePauseReasons(PausesFor(saved),pauseReasons).Any(p=>!string.IsNullOrWhiteSpace(p.Reason));
@@ -468,7 +473,8 @@ public sealed partial class TimerEngine
                 });
                 s.Prompts.RemoveAll(x => x.Id == promptId);
                 // Keep at most 200 sent entries. Never automatically prune unsent work.
-                var oldSent = s.Outbox.Where(x => x.DeliveryComplete).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
+                var heldEntries = s.Prompts.Where(p => p.RetryOutboxId.HasValue).Select(p => p.RetryOutboxId!.Value).ToHashSet();
+                var oldSent = s.Outbox.Where(x => x.DeliveryComplete && !heldEntries.Contains(x.Id)).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
                 s.Outbox.RemoveAll(x => oldSent.Contains(x.Id));
             }, promptId);
             return complete;
@@ -493,11 +499,12 @@ public sealed partial class TimerEngine
             return (true, QueueReflection(promptId, text, reason, localOnly, endSession: attached, requestedAt: requestedAt, pauseReasons: pauseReasons));
         }
     }
-    public OutboxItem? BeginUpload(bool supportsSafeRetry = false)
+    public OutboxItem? BeginUpload(bool supportsSafeRetry = false, IReadOnlySet<Guid>? onlyIds = null)
     {
         lock (gate)
         {
-            var item = state.Outbox.FirstOrDefault(x => x.WantsSheets && x.Status == DeliveryStatus.Pending && !(x.NextAttemptAt > Now));
+            var item = state.Outbox.FirstOrDefault(x => x.WantsSheets && x.Status == DeliveryStatus.Pending && !(x.NextAttemptAt > Now)
+                && (onlyIds is null || onlyIds.Contains(x.Id)) && !IsOutboxBeingEdited(x.Id));
             if (item is null) return null;
             if ((item.RetryProtected && !supportsSafeRetry) || (item.ReceiverUrl.Length > 0 && !ConnectionSetup.SameReceiver(item.ReceiverUrl, state.Connection.WebAppUrl))) {
                 Change("upload.needsReview", s => s.Outbox = s.Outbox.Select(x => x.Id == item.Id
@@ -529,18 +536,13 @@ public sealed partial class TimerEngine
                 NextAttemptAt = retry ? Now + Math.Min(300, 15 * (1 << Math.Clamp(x.Attempts - 1, 0, 5))) * 1000L : null,
                 ErrorKind = success ? "" : SafeError(errorKind), SavedTab = success ? tab : "" };
         }).ToList(), id);
-    public void RetryUpload(Guid id) => Change("upload.retryRequested", s => {
-        if (s.Outbox.Any(x => x.Id == id && x.Status == DeliveryStatus.Sending)) throw new ArgumentException("This reflection is still sending.");
-        s.Outbox = s.Outbox.Select(x => x.Id == id && x.CsvStatus is CsvDeliveryStatus.Pending or CsvDeliveryStatus.NeedsReview
-            ? x with { CsvStatus = CsvDeliveryStatus.Pending, CsvError = "", CsvNextAttemptAt = null, CsvAttempts = 0, CsvDirectory = s.Csv.ResolvedDirectory } : x).ToList();
-        s.Outbox = s.Outbox.Select(x => x.Id == id && x.WantsSheets && x.Status != DeliveryStatus.Sent
-            ? x with { Status = DeliveryStatus.Pending, ErrorKind = "", NextAttemptAt = null,
-                // Explicit UI confirmation is required before retrying a partial write as new.
-                Id = x.ErrorKind is "write_uncertain" or "id_conflict" ? Guid.NewGuid() : x.Id,
-                Attempts = x.ErrorKind is "write_uncertain" or "id_conflict" ? 0 : x.Attempts } : x).ToList();
+    public void RetryUpload(Guid id) => RetryDestinations(id, sheets: true, csv: true, confirmed: true);
+    public void MarkAlreadySent(Guid id) => Change("upload.confirmedByUser", s => {
+        if (s.Prompts.Any(prompt => prompt.RetryOutboxId == id))
+            throw new ArgumentException("Finish editing this message in its reflection window before marking it already sent.");
+        s.Outbox = s.Outbox.Select(x => x.Id == id && x.Status == DeliveryStatus.NeedsReview
+            ? x with { Status = DeliveryStatus.Sent, ErrorKind = "" } : x).ToList();
     }, id);
-    public void MarkAlreadySent(Guid id) => Change("upload.confirmedByUser", s =>
-        s.Outbox = s.Outbox.Select(x => x.Id == id && x.Status == DeliveryStatus.NeedsReview ? x with { Status = DeliveryStatus.Sent, ErrorKind = "" } : x).ToList(), id);
     public void SetFloatingTimer(bool visible) => Change("display.changed", s => s.ShowFloatingTimer = visible);
     public void SetAppViewVisibility(bool visible)
     {

@@ -306,10 +306,21 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (action == "main") { app.Open("main"); Reply(requestId); return; }
             if(action=="showFailedDelivery") {
                 if(View!="reflection")throw new ArgumentException("Open delivery problems from a reflection window.");
-                var failed=OutboxItem.EarliestFailed(app.Session.Engine.Snapshot.Outbox);
-                if(failed is null)app.Services.AnnounceFeedback("No failed deliveries.");
-                else {app.Open("main");((PreviewWindow)app.MainForm!).ShowOutboxEntry(failed.Id);}
+                var prompt=await app.Services.PrepareLatestUnsentReflectionAsync();
+                if(prompt is null)app.Services.AnnounceFeedback("No unsent messages.");
+                else await app.ShowSavedUnsentReflectionAsync(prompt.Value);
                 Reply(requestId);return;
+            }
+            if(action=="retryAll") {
+                if(View!="main")throw new ArgumentException("Retry failed deliveries from Outbox in App view.");
+                var confirmed=ReadFlag(data,"confirmed");
+                if(!confirmed&&app.Session.Engine.Snapshot.Outbox.Any(item=>!app.Session.Engine.IsOutboxBeingEdited(item.Id)&&app.Services.RetryReviewRequired(item)))
+                    throw new ArgumentException("Review uncertain deliveries in the Sheet or CSV and confirm before retrying all.");
+                Reply(requestId);_ = RetryAllInBackgroundAsync(confirmed);return;
+            }
+            if(action=="reviewRetryReflection") {
+                if(View!="reflection"||PromptId is null||data.GetProperty("id").GetGuid()!=PromptId)throw new ArgumentException("Review this reflection's retry from its editor.");
+                Post(new{type="reply",requestId,needsConfirmation=app.Session.ReviewRetryReflection(data)});return;
             }
             if(action=="navigateReflection") {
                 if(View!="reflection"||PromptId is not {} from)throw new ArgumentException("Navigate from a reflection window.");
@@ -343,6 +354,12 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         }
     }
     private void Reply(string requestId,bool cancelled=false) => Post(new { type = "reply", requestId, cancelled });
+    private async Task RetryAllInBackgroundAsync(bool confirmed)
+    {
+        try {await app.Services.RetryAllFailed(confirmed);}
+        catch(OperationCanceledException) { }
+        catch(Exception error) {app.Announce(error is ArgumentException?error.Message:"Retry all could not finish. Your messages remain saved in Outbox.");}
+    }
     internal void Post(object message)
         => PostJson(JsonSerializer.Serialize(message, PreviewSession.Json));
     internal void PostJson(string json)

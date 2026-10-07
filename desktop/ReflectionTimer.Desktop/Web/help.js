@@ -16,15 +16,20 @@ export function mountReflectionHelp(view) {
     if(panel.matches(':popover-open')&&event.target!==button&&!panel.contains(event.target))panel.hidePopover();
   });
   return {render(outbox,prompt){
-    setText(document.getElementById('reflection-checkin-key-help'),prompt?.mode===1
+    const retry=!!prompt?.retryOutboxId;
+    setText(document.getElementById('reflection-send-key-help'),retry
+      ? 'Send this saved message to its undelivered destinations only. Review may be required before retrying.'
+      : 'Send and finish this session if it is still active. Skip if all response and reason boxes are empty.');
+    setText(document.getElementById('reflection-checkin-key-help'),retry
+      ? 'Send this saved message to its undelivered destinations only. Review may be required before retrying.' : prompt?.mode===1
       ? 'Send and finish this stopwatch session. Skip if all response and reason boxes are empty.'
       : 'Send a check-in without ending the timer. Skip if all response and reason boxes are empty.');
-    setText(document.getElementById('reflection-save-key-help'),prompt?.resumeOnSave
+    setText(document.getElementById('reflection-save-key-help'),!retry&&prompt?.resumeOnSave
       ? 'Save the draft locally, resume this stopwatch, and close.' : 'Save the draft locally and close.');
     const count=outbox.filter(entry=>entry.deliveryFailed===true).length;
     if(!count&&document.activeElement===failed)button.focus();
     failed.hidden=count===0;
-    const label=`Open earliest failed message in Outbox (${count} ${count===1?'message':'messages'} with delivery problems)`;
+    const label=`Edit most recent unsent message (${count} ${count===1?'message':'messages'} with delivery problems)`;
     failed.setAttribute('aria-label',label);failed.title=label;
   }};
 }

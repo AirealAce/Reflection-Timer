@@ -21,6 +21,7 @@ if(args.Contains("--focus-target-scan")){
 if(args.Contains("--pauses")){var checks=0;await PauseTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} pause checks passed.");return;}
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
+if(args.Contains("--native-retry-delivery")){NativeRetryDeliverySmoke.Run();return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
@@ -53,9 +54,11 @@ if(args.Contains("--clock-accuracy")){
     ClockAccuracyTests.Run((condition,name)=>{if(!condition)throw new Exception(name);clockPassed++;Console.WriteLine("PASS "+name);});
     Console.WriteLine($"{clockPassed} clock accuracy checks passed.");return;
 }
+if(args.Contains("--outbox-retry")){var checks=0;OutboxRetryTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} Outbox retry checks passed.");return;}
 
 if(args.Contains("--csv")){var checks=0;await CsvTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} CSV checks passed.");return;}
 if(args.Contains("--delivery-failures")){var checks=0;DeliveryFailureTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} delivery failure checks passed.");return;}
+if(args.Contains("--retry-all-services")){var checks=0;await RetryAllServicesTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} retry-all service checks passed.");return;}
 
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); passed++; Console.WriteLine("PASS " + name); }
@@ -63,12 +66,14 @@ JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, Previ
 var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
 DeliveryFailureTests.Run(Check);
+await RetryAllServicesTests.Run(Check);
 await RandomAudioTests.Run(Check);
 TimerToggleShortcutTests.Run(Check);
 ResetShortcutTests.Run(Check);
 ResetConfirmationTests.Run(Check);
 ClockDisplayTests.Run(Check);
 ClockAccuracyTests.Run(Check);
+OutboxRetryTests.Run(Check);
 PerformanceTests.Run(Check);
 ViewPreferenceTests.Run(Check);
 ViewerAutoHideTests.Run(Check);

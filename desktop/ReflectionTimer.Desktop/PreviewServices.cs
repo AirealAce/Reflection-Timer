@@ -6,7 +6,7 @@ namespace ReflectionTimer.Accessible;
 
 public sealed record SheetDeliveryIssue(string ErrorKind, string Message, long? NextRetryAt = null);
 
-public sealed class PreviewServices : IDisposable
+public sealed partial class PreviewServices : IDisposable
 {
     private readonly TimerEngine engine;
     private readonly SheetsClient sheets;
@@ -14,7 +14,7 @@ public sealed class PreviewServices : IDisposable
     private readonly SessionVoice voice;
     private readonly CsvLog csv = new();
     private readonly CancellationTokenSource stop = new();
-    private bool syncing;
+    private readonly SemaphoreSlim syncGate = new(1,1);
     private bool disposed;
     private readonly object focusAudioGate = new();
     private CancellationTokenSource? focusAudioLifetime;
@@ -39,7 +39,7 @@ public sealed class PreviewServices : IDisposable
         voice=new(engine,speech??new WindowsVoiceOutput(),(message,supplementary)=>SessionAnnouncement?.Invoke(message,supplementary));
         this.time = time ?? TimeProvider.System;
         Log = new(directory) { Enabled = engine.SettingsSnapshot.LoggingEnabled };
-        foreach (var prompt in engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn)) sounded.Add(prompt.Id);
+        foreach (var prompt in engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn&&p.RetryOutboxId is null)) sounded.Add(prompt.Id);
         engine.ActivityRecorded += Record;
         engine.LowTimeReached += LowTime;
         engine.TimeReached += TimeReached;
@@ -57,7 +57,7 @@ public sealed class PreviewServices : IDisposable
         // Session transitions must let the incoming sound's playback behavior
         // decide whether existing audio is mixed, ducked, or interrupted.
         var state=engine.Snapshot;
-        var completed=state.Prompts.Any(p=>!p.IsCheckIn&&!sounded.Contains(p.Id));
+        var completed=state.Prompts.Any(p=>!p.IsCheckIn&&p.RetryOutboxId is null&&!sounded.Contains(p.Id));
         if (!completed&&(activity.Event is "timer.paused" or "timer.reset" or "timer.started" ||
             activity.Event=="timer.lowTimeOptions"&&!state.Timer.LowTime.Enabled)) sounds.Stop(SoundEvent.LowTime);
         if(activity.Event is "timer.paused" or "timer.reset" or "stopwatch.started" or "session.modeChanged")sounds.Stop(SoundEvent.TimeReached);
@@ -81,8 +81,8 @@ public sealed class PreviewServices : IDisposable
     {
         var state = engine.Snapshot; Log.Enabled = state.LoggingEnabled;
         sounds.UpdateVolumes(state.Timer.Volume, AudioSettings.From(state));
-        var added = state.Prompts.Any(p => !p.IsCheckIn && !sounded.Contains(p.Id));
-        sounded.UnionWith(state.Prompts.Where(p=>!p.IsCheckIn).Select(p => p.Id)); sounded.IntersectWith(state.Prompts.Select(p => p.Id));
+        var added = state.Prompts.Any(p => !p.IsCheckIn && p.RetryOutboxId is null && !sounded.Contains(p.Id));
+        sounded.UnionWith(state.Prompts.Where(p=>!p.IsCheckIn&&p.RetryOutboxId is null).Select(p => p.Id)); sounded.IntersectWith(state.Prompts.Select(p => p.Id));
         if (added) _ = Play(SoundEvent.SessionEnd);
     }
     public object Settings()
@@ -138,8 +138,7 @@ public sealed class PreviewServices : IDisposable
     }
     public async Task Sync(bool requested = false)
     {
-        if (syncing || stop.IsCancellationRequested) return;
-        syncing = true;
+        if (stop.IsCancellationRequested || !syncGate.Wait(0)) return;
         try {
             // A receiver result can outlive a failed local disk write. Commit it
             // before considering another request, even while offline/paused.
@@ -204,14 +203,15 @@ public sealed class PreviewServices : IDisposable
             }
         }
         catch { if (!stop.IsCancellationRequested) Announcement?.Invoke("Delivery could not be finalized. Check Outbox before retrying."); }
-        finally { syncing = false; }
+        finally { syncGate.Release(); }
     }
-    private async Task<bool> SyncCsv(bool requested)
+    private async Task<bool> SyncCsv(bool requested, IReadOnlySet<Guid>? onlyIds = null)
     {
         var processed = false;
-        var entries = engine.Snapshot.Outbox.Where(item => !item.LocalOnly &&
+        var entries = engine.Snapshot.Outbox.Where(item => !item.LocalOnly && !engine.IsOutboxBeingEdited(item.Id)
+            && (onlyIds is null || onlyIds.Contains(item.Id)) &&
             (item.CsvStatus == CsvDeliveryStatus.Pending && (requested || !(item.CsvNextAttemptAt > engine.Now))
-                || requested && item.CsvStatus == CsvDeliveryStatus.NeedsReview)).Take(20).ToArray();
+                || requested && item.CsvStatus == CsvDeliveryStatus.NeedsReview)).Take(onlyIds?.Count ?? 20).ToArray();
         foreach (var item in entries) {
             if (stop.IsCancellationRequested) break;
             processed = true;
