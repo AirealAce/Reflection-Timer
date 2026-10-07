@@ -8,7 +8,7 @@ export function arrangeApp(view) {
   const panels=new Map(),buttons=new Map(),scroll=new Map();let current='timer';
   for(const [id,label] of definitions){const button=document.createElement('button');button.type='button';button.id=`tab-${id}`;button.textContent=label;button.setAttribute('role','tab');button.setAttribute('aria-controls',`panel-${id}`);nav.append(button);buttons.set(id,button);
     const panel=document.createElement('div');panel.id=`panel-${id}`;panel.setAttribute('role','tabpanel');panel.setAttribute('aria-labelledby',button.id);panels.set(id,panel);
-    if(id!=='settings')panel.append($(id));else panel.append($('appearance'),$('audio'),$('duplicate-timers'),$('connection'),$('startup'));
+    if(id!=='settings')panel.append($(id));else panel.append($('appearance'),$('audio'),$('destinations'),$('connection'),$('startup'));
     main.append(panel);button.addEventListener('click',()=>select(id));
     button.addEventListener('keydown',event=>{const offset=event.key==='ArrowRight'?1:event.key==='ArrowLeft'?-1:0;let next;
       if(offset)next=definitions[(definitions.findIndex(x=>x[0]===id)+offset+definitions.length)%definitions.length][0];

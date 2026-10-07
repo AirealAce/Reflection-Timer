@@ -45,12 +45,12 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
   const dirtyFields=new Map();
   const displayRevisions=new Map();
   let displaySaving=Promise.resolve();
-  const trackedForms=new Set(['appearance-form','volume-form','settings-volume-form','connection-form','cutoff-form']);
+  const trackedForms=new Set(['appearance-form','volume-form','settings-volume-form','connection-form','csv-form','cutoff-form']);
   for(const name of ['input','change'])document.addEventListener(name,event=>{const id=event.target.form?.id;if(!trackedForms.has(id))return;dirty.add(id);if(!dirtyFields.has(id))dirtyFields.set(id,new Set());dirtyFields.get(id).add(event.target.id);});
   function cleanField(form,field){dirtyFields.get(form)?.delete(field);if(!dirtyFields.get(form)?.size)dirty.delete(form);}
   function connection() {
     return {sheetUrl:$('sheet-url').value,webAppUrl:$('receiver-url').value,token:$('connection-token').value,
-      sheetMode:$('sheet-mode').value,sheetName:$('sheet-name').value,enabled:$('extension-off').checked};
+      sheetMode:$('sheet-mode').value,sheetName:$('sheet-name').value,enabled:$('connection-enabled').checked};
   }
   function populateConnection(c) {
     $('sheet-url').value=c.sheetUrl; $('receiver-url').value=c.webAppUrl;
@@ -67,8 +67,11 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
       $('viewerAutoHideSeconds').value=settings.viewerAutoHideSeconds??3;
       ['compactAlwaysOnTop','timeOnlyAlwaysOnTop','promptAlwaysOnTop','sessionEndPopups','autoSendIncompleteReflections','confirmBeforeReset'].forEach(id=>$(id).checked=settings[id]!==false);
     } else if(form==='volume-form'&&!dirty.has('settings-volume-form')) setMasterVolume(settings.volume);
+    else if(form==='csv-form') {
+      $('csv-enabled').checked=settings.csvEnabled!==false;$('csv-directory').value=settings.csvDirectory??'';
+    }
     else if(form==='connection-form') {
-      populateConnection(settings); $('connection-token').value=''; $('connection-enabled').checked=settings.connected;$('extension-off').checked=!!settings.extensionDisabledConfirmed;
+      populateConnection(settings); $('connection-token').value=''; $('connection-enabled').checked=settings.sheetsEnabled??settings.extensionDisabledConfirmed??settings.connected;
       setText($('token-help'),settings.hasToken?'Leave blank to keep the saved token. A token is saved.':'Leave blank to keep the saved token. No saved token yet.');
       $('restore-setup').setAttribute('aria-disabled',String(!settings.hasDraft));
     }
@@ -85,6 +88,13 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
   submit('appearance-form','saveAppearance',appearance);
   submit('volume-form','volume',()=>({volume:Number($('app-volume').value)}));
   submit('connection-form','connectionSave',connection);
+  const csvData=()=>({enabled:$('csv-enabled').checked,directory:$('csv-directory').value,quiet:true});
+  async function saveCsv(){
+    try{await send('csvSave',csvData());dirty.delete('csv-form');dirtyFields.delete('csv-form');populate('csv-form');}
+    catch(error){const field=$('csv-directory');field.setCustomValidity(error.message);field.reportValidity();field.setCustomValidity('');field.focus();throw error;}
+  }
+  $('csv-form').addEventListener('submit',event=>{event.preventDefault();run(saveSettings);});
+  bind('csv-browse',()=>send('csvBrowse',{directory:$('csv-directory').value,quiet:true}));
   let savePending=false;
   async function saveSettings(){
     if(savePending)return;
@@ -92,6 +102,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
     try{
       if(!settings)throw new Error('Settings are still loading. Please wait before saving.');
       if(!$('appearance-form').reportValidity())return;
+      if(!$('csv-form').reportValidity())return;
       // Explicit Save retries all display values, including an earlier failed
       // autosave. Other pending writes still must succeed before success audio.
       const pendingDisplay=displaySaving;
@@ -99,6 +110,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
       if(displaySaving===pendingDisplay)displaySaving=Promise.resolve();
       dirty.delete('appearance-form');dirtyFields.delete('appearance-form');
       if(dirty.has('volume-form')){await send('volume',{volume:Number($('app-volume').value),quiet:true});dirty.delete('volume-form');dirtyFields.delete('volume-form');}
+      if(dirty.has('csv-form'))await saveCsv();
       if(dirty.has('connection-form')){await send('connectionStore',connection());dirty.delete('connection-form');dirtyFields.delete('connection-form');populate('connection-form');}
       // One success sound after every part of this explicit save has succeeded.
       await send('settingsSaveComplete');
@@ -171,8 +183,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
   $('settings-volume-form').addEventListener('submit',event=>event.preventDefault());
   $('default-threshold').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.isComposing){event.preventDefault();$('settings-low-time').focus();}});
   $('sheet-mode').addEventListener('change',()=>{$('sheet-name').disabled=$('sheet-mode').value!=='fixed';});
-  $('connection-enabled').closest('label').hidden=true;
-  bind('pause-delivery',async()=>{await send('connectionPause');$('connection-enabled').checked=false;$('extension-off').checked=false;});
+  bind('pause-delivery',async()=>{await send('connectionPause');$('connection-enabled').checked=false;});
   bind('save-script',()=>send('setupScript',connection()));
   bind('new-token',()=>send('setupNewToken',connection()));bind('restore-setup',()=>send('setupRestore'));
   submit('import-form','setupImport',()=>({code:$('setup-import').value}));
@@ -183,7 +194,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
   document.addEventListener('appTabChanged',event=>{if(event.detail==='diagnostics')run(()=>send('diagnostics'));});
   bind('mark-issue',()=>send('markIssue')); bind('show-diagnostics',()=>send('diagnostics')); bind('export-diagnostics',()=>send('exportDiagnostics'));
   bind('send-pending',()=>send('sendPending'));
-  bind('import-schedules',()=>send('importSchedules'));bind('open-sheet',()=>send('openSheet'));
+  bind('open-sheet',()=>send('openSheet'));
   bind('clear-diagnostics',()=>{$('clear-log-dialog').showModal();$('clear-log-title').focus();});
   bind('clear-log-confirm',async()=>{await send('clearDiagnostics',{confirmed:true});$('clear-log-dialog').close();$('clear-diagnostics').focus();});
   return {
@@ -213,7 +224,12 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
       }
       if(message.type==='settingsSaveShortcut'){if(canSaveFromShortcut())run(saveSettings);return;}
       if(message.type==='deliveryIssue') { deliveryIssue=message.issue;renderDelivery(); }
-      else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form'].forEach(populate);help.render(dirtyFields.get('appearance-form')?.has('showAllExplanations')?$('showAllExplanations').checked:settings.showAllExplanations);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme.');updateTheme(settings.theme); }
+      else if(message.type==='settings') { settings=message.settings; deliveryIssue=settings.deliveryIssue??null;deliveryEnabled=!!settings.connected;renderDelivery(); ['appearance-form','volume-form','connection-form','csv-form'].forEach(populate);help.render(dirtyFields.get('appearance-form')?.has('showAllExplanations')?$('showAllExplanations').checked:settings.showAllExplanations);audio.render(settings);lowTime.settings(settings);timeReached.render(settings);const theme=['Dark','Light','High Contrast','Glamour'][settings.theme]||'Dark';setText($('theme-notice'),theme+' theme.');updateTheme(settings.theme); }
+      else if(message.type==='csvFolder') {
+        $('csv-directory').value=message.directory;dirty.add('csv-form');
+        if(!dirtyFields.has('csv-form'))dirtyFields.set('csv-form',new Set());dirtyFields.get('csv-form').add('csv-directory');
+        $('csv-directory').focus();announce('CSV folder selected. Save settings to apply it.');
+      }
       else if(message.type==='shortcuts'){
         const descriptions=['Ctrl+Alt+T · hide or bring forward App.','Ctrl+Alt+` (backtick) · start, resume, or end the current session.','Ctrl+Alt+, · cycle compact controls → time-only → hidden → controls.','Ctrl+Alt+. (period) · once for Compact; twice within 0.8 seconds for App. Selects the Timer duration or focuses the Stopwatch play button.','Ctrl+Alt+/ (slash) · focus the reflection box; if either reflection box is already focused, Save the draft and close. Otherwise reopen a pending reflection or open a check-in. Never opens App.','Ctrl+Space · start, resume, or pause the timer from any app, including when all timer windows are hidden. Uses the shared duration inputs, like Compact. Time-only stays small when pausing or resuming. With viewer auto-hide enabled, pausing shows the saved floating layout again without taking focus.','Ctrl+Alt+Space · same as Ctrl+Space: start, resume, or pause from any app. Time-only stays small. With viewer auto-hide enabled, pausing shows the viewer again.',"Ctrl+Alt+' (apostrophe) · switch Timer ↔ Stopwatch from any app. In the focused App or Compact view, the same press focuses the Stopwatch play button or selects the Timer duration. Pauses and preserves the current session; the other mode stays paused. Time-only stays small, and hidden windows stay hidden.",'Ctrl+Alt+R · reset the selected timer or stopwatch from any app. Uses the reset confirmation setting. With viewer auto-hide enabled, shows the saved floating layout without taking focus; otherwise hidden viewers stay hidden. Time-only stays small.'];
         descriptions[2]+=' Entering time-only returns focus to the previous usable window.';
@@ -232,7 +248,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
       else if(message.type==='scheduledLow')lowTime.scheduled(message.low);
       else if(message.type==='setupImported') {
         populateConnection(message.connection); $('connection-token').value=message.connection.apiToken;
-        $('connection-enabled').checked=false;$('extension-off').checked=false; dirty.add('connection-form'); $('setup-import').value='';
+        $('connection-enabled').checked=false; dirty.add('connection-form'); $('setup-import').value='';
         if(message.advance)setup.imported();if(setup.opened&&!message.advance)$('connection-token').focus();else $('receiver-url').focus();
       } else if(message.type==='setupCode') {
         $('setup-export-group').hidden=false; $('setup-export').value=message.code; $('setup-export').focus();

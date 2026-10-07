@@ -9,7 +9,7 @@ static class ServiceTests
     internal static async Task Run(Action<bool,string> check)
     {
         var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-Services-"+Guid.NewGuid().ToString("N"));
-        var state=PreviewSession.SampleState(DateTimeOffset.Now);state.StartAtLogin=true;
+        var state=PreviewSession.SampleState(DateTimeOffset.Now);state.StartAtLogin=true;state.Csv=new(){Enabled=false};
         state.Outbox=state.Outbox.Select(o=>o with { LocalOnly=false }).ToList(); // Upgrade a 0.1 profile.
         var session=new PreviewSession(new MemoryStore { State=state }, isolatedProfile: true);
         var handler=new Receiver(); var audio=new SilentAudio();

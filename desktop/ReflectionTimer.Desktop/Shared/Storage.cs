@@ -69,6 +69,7 @@ public sealed class DiagnosticLog : IDisposable
         "schedule.saved", "schedule.removed", "prompt.test", "prompt.shown", "prompt.later", "prompt.draftSaved", "prompt.skipped",
         "reflection.queued", "reflection.endedAndQueued", "reflection.autoSent", "upload.started", "upload.sent", "upload.needsReview", "upload.recovered", "upload.retryRequested",
         "upload.confirmedByUser", "settings.saved", "connection.checked", "issue.marked", "error.storage", "error.unexpected",
+        "csv.saved", "csv.failed",
         "sound.changed", "sound.preview", "sound.played", "sound.fallback", "sound.muted", "sound.stopped", "sound.failed", "display.changed", "theme.changed", "theme.loaded",
         "shortcut.registered", "shortcut.unavailable", "shortcut.used", "timer.endedEarly", "timer.lowTime", "timer.lowTimeOptions", "sound.thresholdChanged", "sound.requested",
         "schedule.policy", "schedule.resolved", "prompt.checkIn", "webview.processFailed", "webview.failureReason", "webview.exitCode",
@@ -153,7 +154,7 @@ public sealed class DiagnosticLog : IDisposable
         ParkedTimer = state.ParkedTimer is {} parked ? parked with { LowTime=parked.LowTime with { Mp3Path="" } } : null,
         Outbox = state.Outbox.Select(x => new { x.Id, Mode=x.Mode.ToString(), x.SubmittedAt, x.Status, x.IsTest, x.Attempts, x.RetryProtected,
             x.NextAttemptAt, x.DurationSeconds, x.ActualDurationSeconds, x.EndedEarly, x.IsCheckIn, x.AutoSent, ErrorKind = TimerEngine.SafeError(x.ErrorKind) }),
-        state.ExtensionDisabledConfirmed
+        SheetsEnabled=state.ExtensionDisabledConfirmed, CsvEnabled=state.Csv.Enabled
     };
 }
 

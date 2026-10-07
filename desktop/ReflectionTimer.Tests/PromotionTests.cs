@@ -41,29 +41,35 @@ static class PromotionTests
             check(JsonSerializer.Serialize(session.Engine.Snapshot, DataJson.Options) == JsonSerializer.Serialize(existing, DataJson.Options)
                 && bytes.SequenceEqual(File.ReadAllBytes(Path.Combine(directory, "state.dat"))),
                 "Opening an original encrypted profile preserves connection, preferences, paused time, drafts, schedules and Outbox without rewriting it");
-            var offline = new PreviewSession(new MemoryStore());
+            var offline = new PreviewSession(new MemoryStore { State=new(){Csv=new(){Directory=Path.Combine(directory,"csv")}} });
             var id = offline.Engine.TestPrompt();
             offline.Execute("queue", JsonSerializer.SerializeToElement(new { id, text = "Queued offline", reason = "" }));
-            check(!offline.Engine.Snapshot.Outbox.Single().LocalOnly, "A new primary reflection saved offline can later be delivered");
+            check(!offline.Engine.Snapshot.Outbox.Single().LocalOnly && !offline.Engine.Snapshot.Outbox.Single().WantsSheets,
+                "A new primary reflection defaults to CSV without opting into Sheets");
             var receiver = new Receiver();
             using var services = new PreviewServices(offline.Engine, directory, new SheetsClient(receiver),speech:new SilentSpeech());
             offline.Engine.SetAppVolume(0);
             services.SaveConnection(connection, false);
             var bound = offline.Engine.Snapshot.Outbox.Single();
-            check(bound.Id == id && bound.SheetUrl == connection.SheetUrl && bound.ReceiverUrl == connection.WebAppUrl
-                && bound.SheetName == connection.SheetName, "First connection binds offline entries without replacing their request IDs");
+            check(bound.Id == id && bound.SheetUrl == "" && bound.ReceiverUrl == "" && bound.CsvStatus==CsvDeliveryStatus.Pending,
+                "Setting up Sheets does not retroactively upload a CSV-only entry");
             await services.Sync(true);
             check(receiver.Writes == 0, "Paused Sheets delivery remains paused after promotion");
             services.SaveConnection(connection, true);
             await services.Sync(true);
-            check(receiver.Writes == 1 && receiver.Id == id && offline.Engine.Snapshot.Outbox.Single().Status == DeliveryStatus.Sent,
-                "An offline primary reflection uploads exactly once to its configured Sheet");
+            check(receiver.Writes == 0 && offline.Engine.Snapshot.Outbox.Single().CsvStatus==CsvDeliveryStatus.Saved,
+                "Enabling Sheets retains the previous entry's CSV-only destination");
+            var connectedId=offline.Engine.TestPrompt();offline.Engine.QueueReflection(connectedId,"New both-destination entry");await services.Sync(true);
+            check(receiver.Writes==1&&receiver.Id==connectedId&&offline.Engine.Snapshot.Outbox.Single(o=>o.Id==connectedId).DeliveryComplete,
+                "A new reflection after enabling Sheets reaches both chosen destinations");
             session.Engine.SaveSettings(connection, false, true, true);
             var restored = new PreviewSession(store, () => now).Engine.Snapshot;
             check(restored.Outbox[1].SheetUrl == connection.SheetUrl && !restored.Outbox[1].LocalOnly && restored.Outbox[2].LocalOnly
                 && restored.Outbox[2].SheetUrl == "", "Existing offline entries are deliverable while earlier preview samples stay local");
         }
         finally {
+            var csvFolder=Path.Combine(directory,"csv");
+            if(Directory.Exists(csvFolder)){foreach(var file in Directory.EnumerateFiles(csvFolder))File.Delete(file);Directory.Delete(csvFolder);}
             foreach (var name in new[] { "state.dat", "state.dat.bak", "diagnostics.dat", "diagnostics.dat.bak" })
                 File.Delete(Path.Combine(directory, name));
             if (Directory.Exists(directory)) Directory.Delete(directory);

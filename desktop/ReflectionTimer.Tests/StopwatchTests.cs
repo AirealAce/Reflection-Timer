@@ -84,7 +84,7 @@ static class StopwatchTests
         check(handoff.Snapshot.Prompts.Count==2&&handoff.Snapshot.Prompts.Any(p=>p.Mode==SessionMode.Timer&&p.ActualDurationSeconds==7)
             &&handoff.Snapshot.Prompts.Any(p=>p.Mode==SessionMode.Stopwatch&&p.ActualDurationSeconds==10),"Scheduled replacement retains reflections for both interrupted stopwatch and parked countdown");
         var handler=new Receiver();using var client=new SheetsClient(handler);
-        var upload=item with{LocalOnly=false,SheetUrl=settings.SheetUrl,ReceiverUrl=settings.WebAppUrl};
+        var upload=item with{LocalOnly=false,SheetsRequested=true,SheetUrl=settings.SheetUrl,ReceiverUrl=settings.WebAppUrl};
         var reply=await client.Upload(settings,upload);
         check(!reply.Success&&reply.ErrorKind=="receiver_update_required"&&handler.Writes==0,"Old Sheets receiver cannot receive mislabeled stopwatch data");
         handler.Stopwatch=true;reply=await client.Upload(settings,upload);

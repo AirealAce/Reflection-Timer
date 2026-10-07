@@ -183,7 +183,7 @@ static class UploadRecoveryTests
 
         public Fixture(bool safeRetry = true)
         {
-            Store = new(new() { Connection = Connection, ExtensionDisabledConfirmed = true, LoggingEnabled = false,
+            Store = new(new() { Connection = Connection, ExtensionDisabledConfirmed = true, LoggingEnabled = false, Csv=new(){Enabled=false},
                 Outbox = [new() { Message = "Synthetic recovery reflection", SubmittedAt = Now, SheetUrl = Connection.SheetUrl,
                     ReceiverUrl = Connection.WebAppUrl, SheetMode = "fixed", SheetName = Connection.SheetName, DurationSeconds = 300, ActualDurationSeconds = 60 }] });
             Engine = new(Store, () => Now); Receiver = new(safeRetry);

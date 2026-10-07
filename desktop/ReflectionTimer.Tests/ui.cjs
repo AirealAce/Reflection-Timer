@@ -343,7 +343,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     check(await page.evaluate(()=>{const options=window.previewMessages.findLast(m=>m.action==='lowTime').data;return !options.inherit&&options.threshold===27&&options.track===3;}),'Session low-time changes retain the explicit threshold and sound');
     await page.getByRole('tab',{name:'Scheduler',exact:true}).click();
     check(await page.locator('#schedules>.table-scroll thead th').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Start time','Duration','Auto-start','Auto-start cutoff','Sound','Low on time','Status'])),'Scheduling columns match the original');
-    check(await page.locator('#schedules>.actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Edit selected','Remove selected','Import extension schedules…']))&&await page.locator('#schedule-rows button').count()===0,'Scheduling actions are below the table and act on the selected entry');
+    check(await page.locator('#schedules>.actions button').allTextContents().then(labels=>JSON.stringify(labels)===JSON.stringify(['Edit selected','Remove selected']))&&await page.locator('#schedule-rows button').count()===0,'Scheduling retains its selected-entry actions without abandoned extension import');
     await page.getByRole('button',{name:'Edit selected',exact:true}).click();
     check(await page.locator('#schedule-start').evaluate(e=>document.activeElement===e)&&await page.locator('#schedule-minutes').inputValue()==='15','Schedule editing moves focus to a populated labeled form');
     await page.locator('#schedule-hours').fill('1');await page.locator('#schedule-seconds').fill('9');

@@ -25,7 +25,7 @@ export function mountSetup({send,run}){
     for(const id of ['token-help','new-token','restore-setup'])move($(id),panels[0]);
     move($('import-form').closest('details'),panels[0]);
     move($('setup-guide-content'),panels[1]);$('setup-guide-content').open=true;move($('save-script'),panels[1]);
-    move($('extension-off').closest('label'),panels[2]);
+    move($('connection-enabled').closest('label'),panels[2]);
     select(0);dialog.showModal();$('sheet-url').focus();
   },imported(){if(dialog.open)select(2);},get opened(){return dialog.open;}};
 }

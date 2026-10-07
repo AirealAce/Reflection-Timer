@@ -150,12 +150,27 @@ public sealed class PreviewSession
                 status = s.AwaitingDecision ? "Needs choice" : s.WaitingForCurrentSession ? "Waiting" : "Scheduled",
                 editStart = DateTimeOffset.FromUnixTimeMilliseconds(s.StartTime).ToLocalTime().ToString("yyyy-MM-ddTHH:mm"), s.DurationSeconds, s.AutoRestartUntil, s.Volume }),
             outbox = !includeOutbox ? null : state.Outbox.Select(o => new { o.Id, saved = o.SubmittedAt.LocalDateTime.ToString("g"),
-                localOnly = o.LocalOnly,
-                destination = o.LocalOnly ? "Local preview only" : o.IsTest ? "test" : o.SheetMode == "fixed" ? o.SheetName : o.SubmittedAt.ToString("MM/dd/yyyy"),
+                localOnly = o.LocalOnly, complete = o.DeliveryComplete, wantsSheets = o.WantsSheets,
+                csvStatus = o.CsvStatus.ToString(), csvError = o.CsvError, csvFile = o.CsvFile, o.CsvAttempts, o.CsvNextAttemptAt,
+                deliveryLabel = DeliveryLabel(o),
+                destination = o.LocalOnly ? "Local preview only" : string.Join(" · ", new[] {
+                    o.CsvStatus != CsvDeliveryStatus.NotRequested ? "CSV: " + CsvLog.FileName(o) : "",
+                    o.WantsSheets ? "Sheets: " + (o.IsTest ? "test" : o.SheetMode == "fixed" ? o.SheetName : o.SubmittedAt.ToString("MM/dd/yyyy")) : ""
+                }.Where(value => value.Length > 0)) is { Length: > 0 } destination ? destination : "Saved locally",
                 status = o.Status == DeliveryStatus.Sent && o.LocalOnly ? "Simulated success" : o.Status.ToString(),
                 pauses=o.Pauses.Select(p=>new {p.Reason,paused=DateTimeOffset.FromUnixTimeMilliseconds(p.PausedAt).ToLocalTime().ToString("g"),duration=SpeakTime((int)((p.DurationMilliseconds??0)/1000))}),
                 mode=(int)o.Mode,o.Attempts, o.Message, o.DurationSeconds, o.ActualDurationSeconds, o.EndedEarly, o.EarlyEndReason, o.IsCheckIn, o.AutoSent, o.NextAttemptAt, duration = SpeakTime(o.DurationSeconds), error = o.ErrorKind.Length == 0 ? "" : TimerEngine.SafeError(o.ErrorKind) })
         };
+    }
+    private static string DeliveryLabel(OutboxItem item)
+    {
+        if (item.LocalOnly) return item.Status == DeliveryStatus.Sent ? "Simulated success" : item.Status.ToString();
+        var csv = item.CsvStatus switch {
+            CsvDeliveryStatus.Saved => "CSV saved", CsvDeliveryStatus.Pending => "CSV pending",
+            CsvDeliveryStatus.NeedsReview => "CSV needs review", _ => ""
+        };
+        var sheets = item.WantsSheets ? (csv.Length > 0 ? "Sheets " : "") + item.Status : "";
+        return string.Join(" · ", new[] { csv, sheets }.Where(value => value.Length > 0)) is { Length: > 0 } label ? label : "Saved locally";
     }
     public IReadOnlyList<ReflectionPrompt> Tick()
     {

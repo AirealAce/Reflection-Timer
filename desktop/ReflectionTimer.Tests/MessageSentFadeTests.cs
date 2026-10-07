@@ -63,7 +63,7 @@ static class MessageSentFadeTests
     private static async Task Delivery(Action<bool,string> check,string ending)
     {
         var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-SentFade-"+Guid.NewGuid().ToString("N"));
-        var now=DateTimeOffset.Now;var memory=new MemoryStore{State=new(){LoggingEnabled=false,ExtensionDisabledConfirmed=true,
+        var now=DateTimeOffset.Now;var memory=new MemoryStore{State=new(){LoggingEnabled=false,ExtensionDisabledConfirmed=true,Csv=new(){Enabled=false},
             Connection=new(){SheetUrl="https://docs.google.com/spreadsheets/d/abcdefghijklmnopqrstuvwxyz/edit",WebAppUrl="https://script.google.com/macros/s/syntheticReceiver/exec",ApiToken=new string('a',64)},
             Audio=new(){LowTime=new(){Behavior=SoundBehavior.Polite,FadeOutAfterMessageSent=true,MessageSentFadeSeconds=4},SessionEnd=new(){Track=LibrarySound.None},Success=new(){Track=LibrarySound.None},Failure=new(){Track=LibrarySound.None}}}};
         var engine=new TimerEngine(memory,()=>now);var backend=new HoldingAudio();var receiver=new Receiver();

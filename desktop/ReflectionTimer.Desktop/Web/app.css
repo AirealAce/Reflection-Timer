@@ -37,7 +37,7 @@ footer.main-only{height:64px;align-items:center;padding:8px 20px}body[data-tab=s
 .random-audio tbody th{font-weight:400}
 @media(max-width:400px){.random-audio th,.random-audio td{padding:6px}.random-audio thead th:nth-child(2){width:70px}.random-audio thead th:nth-child(3){width:64px}}
 #diagnostic-recent{height:230px;overflow:auto;background:var(--field);border:1px solid var(--border);padding:12px}#theme-preview{display:flex;align-items:center;gap:20px;border:1px solid var(--border);width:420px;max-width:100%;padding:12px}.theme-sample-field{background:var(--field);border:1px solid var(--border);padding:8px 20px}#theme-preview button{pointer-events:none}
-#duplicate-timers h2,#startup h2{padding:8px 10px;background:var(--raised)}#cutoff-help{position:static;width:auto;height:auto;overflow:visible;clip-path:none;white-space:normal;color:var(--muted)}
+#startup h2{padding:8px 10px;background:var(--raised)}#cutoff-help{position:static;width:auto;height:auto;overflow:visible;clip-path:none;white-space:normal;color:var(--muted)}
 @media(min-width:800px){.clock{font-size:76px}.page-header h1{font-size:44px}nav[role=tablist]{gap:14px}button{border-radius:3px;min-height:44px}#timer{max-width:750px}#timer-editor .duration{margin-top:6px}}
 @media(max-width:640px){#quick-schedule-form>input{width:100%;max-width:300px}.audio-source-row{gap:8px}.audio-source-row select{max-width:100%}}
 .messages{height:auto;min-height:0;flex:none}.messages:has(p:empty):not(:has(p:not(:empty))){padding:0}body[data-tab=settings] .messages{min-height:64px;padding:8px 190px 8px 24px}footer.main-only{position:absolute;right:0;bottom:0;width:auto;height:64px;padding:8px 20px}#save-settings{background:var(--accent);color:var(--accent-text);border-color:var(--accent)}
@@ -170,3 +170,7 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 #focus-target-list .focus-selection-cell{padding-left:8px;padding-right:8px}
 #focus-target-list .focus-selection-cell input[type=checkbox]{padding:0;width:16px;height:16px}
 #focus-target-list .focus-number-cell{padding-left:8px;padding-right:8px;text-align:left;white-space:nowrap}
+#destinations-heading{padding:8px 10px;background:var(--raised)}
+.csv-folder-row{gap:10px;align-items:center}
+.csv-folder-row input{flex:1 1 300px;width:auto;max-width:550px;min-width:0;margin:0}
+.csv-folder-row button{margin:0}

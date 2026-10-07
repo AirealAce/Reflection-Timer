@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.2.52</p>
+    <p class="eyebrow">Reflection Timer 4.3.0</p>
     <h1 id="page-title" tabindex="-1">Reflection Timer</h1>
     <p class="main-only">Your timer, saved reflections, and Google Sheets connection are kept on this device.</p>
     <nav aria-label="Page sections" class="main-only"><a href="#timer">Timer</a><a href="#pending">Reflections</a><a href="#schedules">Scheduler</a><a href="#outbox">Outbox</a><a href="#appearance">Display and behavior</a><a href="#audio">Audio</a><a href="#connection">Connection setup</a><a href="#diagnostics">Diagnostics</a><a href="#review">Review guide</a></nav>
@@ -50,7 +50,7 @@
       <div class="table-scroll" role="region" aria-label="Scheduled sessions table" tabindex="0"><table>
         <caption>Scheduled sessions</caption><thead><tr><th scope="col">Start time</th><th scope="col">Duration</th><th scope="col">Auto-start</th><th scope="col">Auto-start cutoff</th><th scope="col">Sound</th><th scope="col">Low on time</th><th scope="col">Status</th></tr></thead><tbody id="schedule-rows"></tbody>
       </table></div><p id="schedule-empty" hidden>No sessions scheduled.</p>
-      <div class="actions"><button id="edit-schedule" type="button">Edit selected</button><button id="remove-schedule" type="button">Remove selected</button><button id="import-schedules" type="button">Import extension schedules…</button></div>
+      <div class="actions"><button id="edit-schedule" type="button">Edit selected</button><button id="remove-schedule" type="button">Remove selected</button></div>
       <div id="schedule-decision" hidden><p>This scheduled session needs a choice.</p><div class="actions"><button id="schedule-start-now" type="button">Start now</button><button id="schedule-wait" type="button">Wait</button><button id="schedule-skip" type="button">Skip</button></div></div>
       <form id="schedule-form" novalidate><fieldset><legend id="schedule-legend">Add a scheduled session</legend>
         <label>Start date and time (your local time zone)<input id="schedule-start" type="datetime-local" required aria-describedby="schedule-help"></label><p id="schedule-help" class="hint" data-help="scheduler">Use your local date and time.</p>
@@ -140,7 +140,19 @@
       </form>
       <button id="stop-all-audio" type="button">Stop all app audio</button><p data-help="audio">Sound selections, volume levels, playback modes, and fade-out settings autosave silently. Volume changes apply to playing audio too. Fade out after applies to each new playback; unchecked sounds play to their normal end. Previews with Fade out after enabled play through the selected delay and one-second fade, unless the track ends sooner. Other previews stop after 5 seconds. This applies to Preview audio and previews when selecting a sound. None is silent. Each new preview replaces the previous one; Stop all app audio stops it immediately. All audio uses App sound × its audio volume. A scheduled session adopts its saved App sound level when it starts. Custom files stay at their selected location; audio paths are never uploaded.</p>
     </section>
-    <section id="duplicate-timers" class="main-only"><h2 data-help-heading="duplicates">Avoid duplicate timers</h2><p data-help="duplicates">Never used the Chrome extension? Check the confirmation below. If you have it, turn it off in chrome://extensions first. This desktop app is independent and does not read Chrome profiles or browsing activity.</p><label class="check"><input id="extension-off" form="connection-form" type="checkbox">The Chrome timer extension is off, or I never installed it</label></section>
+    <section id="destinations" class="main-only" aria-labelledby="destinations-heading">
+      <h2 id="destinations-heading" data-help-heading="destinations">Save reflection data</h2>
+      <form id="csv-form">
+        <fieldset><legend>Logging destinations</legend>
+          <label class="check"><input id="csv-enabled" type="checkbox" checked>CSV files</label>
+          <label class="check"><input id="connection-enabled" form="connection-form" type="checkbox">Google Sheets</label>
+        </fieldset>
+        <label for="csv-directory">CSV folder</label>
+        <div class="option-row csv-folder-row"><input id="csv-directory" type="text" maxlength="4096" aria-describedby="csv-directory-help"><button id="csv-browse" type="button">Choose folder…</button></div>
+        <p id="csv-directory-help" class="hint">Daily files use MM-dd-yyyy.csv, matching the daily Sheets tab name with filename-safe separators.</p>
+        <p data-help="destinations">Select either destination or both. CSV is selected by default; Google Sheets is optional. The folder and daily file are created when an entry is sent. CSV files have column headers and the same response, duration, session status and pause details as Sheets, plus an entry ID to prevent duplicate retries. Test entries use test-MM-dd-yyyy.csv. CSV files are ordinary readable files. Changing the folder applies to future entries; Retry selected also uses the current folder for a failed CSV entry.</p>
+      </form>
+    </section>
     <section id="startup" class="main-only"><h2 data-help-heading="startup">Startup &amp; diagnostics</h2><label class="check"><input id="start-at-login" form="appearance-form" type="checkbox">Start in the tray when I sign in to Windows</label><p class="preview-note" data-help="startup">Reflection Timer starts in the tray using your saved settings.</p><label class="check"><input id="logging" form="appearance-form" type="checkbox" checked>Record local diagnostic events</label><h2>Save settings</h2><p data-help="startup"><kbd>Ctrl+Enter</kbd> or the bottom-right Save settings button saves your settings from anywhere on this page.</p><p data-help="startup">The API token, reflections, and drafts are encrypted for your Windows account in <code>%USERPROFILE%\.reflection-timer</code>. This is the single active settings folder for every launch method. Connection settings may be saved incomplete; sending waits until they are valid. Windows sign-in startup is optional and off by default.</p></section>
     <section id="connection" class="main-only" aria-labelledby="connection-heading">
       <h2 id="connection-heading" data-help-heading="connection">Google Sheets connection</h2>
@@ -151,12 +163,11 @@
         <li>In your spreadsheet, open Extensions, then Apps Script. Paste the saved script into the editor and save it.</li>
         <li>Run <code>setupReflectionTimer</code> once and authorize it with the Google account that owns the sheet.</li>
         <li>Deploy a new web app that executes as you, with access set to Anyone. Copy its deployed URL ending in <code>/exec</code> into the Receiver URL field.</li>
-        <li>Stop the other timer or browser extension from sending to this sheet, select Enable Sheets delivery, then choose Save &amp; test connection. The app verifies the receiver before enabling delivery.</li>
+        <li>Select Google Sheets under Logging destinations, then choose Save &amp; test connection. The app verifies the receiver before enabling delivery.</li>
       </ol><p>The token protects requests to the receiver. Keep your personalized script and setup code private.</p></details>
       <form id="connection-form" novalidate><label>Google Sheets URL<input id="sheet-url" type="url" autocomplete="off" required></label><label>Apps Script deployment URL (must end in /exec)<input id="receiver-url" type="url" autocomplete="off"></label>
         <label>Private Reflection API token — Guided setup creates one, or reuse your existing connection<input id="connection-token" type="password" autocomplete="new-password" maxlength="512" aria-describedby="token-help"></label><p id="token-help">Leave blank to keep the saved token. No saved token yet.</p>
         <label>Destination tab<select id="sheet-mode"><option value="date">Automatically match the date when I save</option><option value="fixed">Always use a fixed tab</option></select></label><label>Fixed tab name<input id="sheet-name" type="text" maxlength="100" value="Reflections"></label>
-        <label class="check"><input id="connection-enabled" type="checkbox">Enable Sheets delivery; other timer senders are stopped</label>
         <div class="actions"><button type="submit">Save & test connection</button><button id="pause-delivery" type="button">Pause Sheets delivery</button><button id="save-script" type="button">Save private receiver script</button><button id="new-token" type="button">Generate new token in setup draft</button><button id="restore-setup" type="button" aria-disabled="true">Restore saved setup draft</button></div>
       </form>
       <details><summary>Transfer a private connection setup code</summary><p>A setup code contains your sheet connection and token. It is not encrypted. Keep it private.</p><form id="import-form"><label>Private setup code<textarea id="setup-import" rows="3" maxlength="16000" autocomplete="off"></textarea></label><button type="submit">Load code into setup form</button></form><button id="export-setup" type="button">Show saved setup code</button><div id="setup-export-group" hidden><label>Saved private setup code<textarea id="setup-export" rows="3" readonly></textarea></label><button id="hide-setup" type="button">Hide setup code</button></div></details>
@@ -199,7 +210,7 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.2.52</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.0</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">

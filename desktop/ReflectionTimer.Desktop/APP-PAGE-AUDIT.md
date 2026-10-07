@@ -12,7 +12,7 @@ Compared against the original 3.12.9 `MainWindow.cs`, `Controls.cs`, `AudioContr
 | Timer | Test reflection prompt, Pending reflections, Mark issue, pending/unsent counts, floating visibility, Quit | Present. Pending reflections opens the latest draft; Prev/Next traverse saved unsent drafts with only one visible reflection. Closing App still hides to tray; Quit flushes drafts. |
 | Scheduling | Overlap policy and explanation | Restored to this tab, with the original three choices. |
 | Scheduling | Start time, Duration, Auto-start, Auto-start cutoff, Sound, Low on time, Status | Original seven columns restored. Selection retains native table cells and stable row identities. |
-| Scheduling | Edit selected, Remove selected, Import extension schedules | One action row below the table. No repeated action buttons or added action column. |
+| Scheduling | Edit selected, Remove selected | One action row below the table. No repeated action buttons or added action column. |
 | Scheduling | Start date/time, three duration fields, repeat/cutoff, low-time settings, App sound, Add/Save, Cancel edit / new session | Present. Edit retains the entry ID. Reset restores the initial editor values. Hours/minutes/seconds are preserved in the saved duration. |
 | Scheduling | Start / Wait / Skip for a due appointment needing a decision | Shared conditional controls operate on the selected appointment. |
 | Outbox | Saved locally, Destination, Status, Attempts | Original four columns restored; newest entries first. |
@@ -54,6 +54,12 @@ The browser popup now lists 1 Window / 2 Tab / 3 Tab Group, omitting Tab Group w
 ## Browser target selector layout in 4.2.47
 
 The Ctrl+Alt+] browser dialog shows a bold numbered target type, the full name's visual preview on a second line, and a consistently aligned checked/unchecked state. Long names use visual ellipsis while native list item names retain the complete target and state for screen readers. Rows have room for both lines at normal and larger text sizes. The horizontal scrollbar is removed, every available option is fully visible, the heading and keyboard hint share the list's left edge, and the action buttons align to its right edge. Native list selection, arrow/Enter/number shortcuts, cancellation, vocalizer routing, themes and saved target behavior are retained. Tests verify row visibility, alignment and full native accessibility names for two/three targets and larger text across all palettes.
+
+## Independent CSV and Sheets destinations in 4.3.0
+
+Settings has a searchable Save reflection data section with independently labeled CSV and Google Sheets checkboxes, an editable CSV folder and native Choose folder dialog. Ctrl+S / Ctrl+Enter save these choices from anywhere on Settings. The abandoned extension confirmation and schedule import are absent. Guided Sheets setup retains the same connection fields and tests, with the Google Sheets checkbox replacing extension confirmation. Existing Sheets delivery remains selected on upgrade; new profiles prefer CSV. Each queued entry snapshots its selected destinations. CSV-only entries never become Google uploads when Sheets is enabled later; legacy pending Sheets entries keep their existing routing.
+
+CSV creates missing folders and daily UTF-8 files on entry, with quoted fields, headers, local dates, multiline responses, pause columns and stable entry IDs. The filename replaces Sheets date slashes with hyphens. Atomic replacement and per-file locking retain existing data; retries deduplicate by entry ID even after a failed profile commit. Invalid or unrelated existing files are preserved and reported in Outbox. CSV and Sheets delivery statuses, backoff and retries are independent. Test profiles never export preview-only records. Core checks cover formatting, migration, all destination combinations, concurrency, offline delivery and crash recovery; browser checks cover labels, keyboard saves, folder selection, Settings search, Guided setup, themes and CSV-only retries.
 
 ## Focus chooser checkbox clearance in 4.2.52
 

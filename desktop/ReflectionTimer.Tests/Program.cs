@@ -54,6 +54,8 @@ if(args.Contains("--clock-accuracy")){
     Console.WriteLine($"{clockPassed} clock accuracy checks passed.");return;
 }
 
+if(args.Contains("--csv")){var checks=0;await CsvTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} CSV checks passed.");return;}
+
 var passed = 0;
 void Check(bool condition, string name) { if (!condition) throw new Exception(name); passed++; Console.WriteLine("PASS " + name); }
 JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, PreviewSession.Json);
@@ -79,6 +81,7 @@ ConditionalReflectionTests.Run(Check);
 EarlyEndGraceTests.Run(Check);
 await StopwatchTests.Run(Check);
 await PauseTests.Run(Check);
+await CsvTests.Run(Check);
 var store = new MemoryStore { State = PreviewSession.SampleState(now) };
 var session = new PreviewSession(store, () => now, isolatedProfile: true);
 Check(session.Engine.Snapshot.Timer.DurationSeconds == 900 && session.Engine.Snapshot.Timer.LowTime.Enabled, "Fresh timer and low-time defaults");

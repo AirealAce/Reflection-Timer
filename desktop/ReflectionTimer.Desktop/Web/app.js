@@ -130,7 +130,8 @@ function createTableRow(columns) {
   return row;
 }
 function reviewDelivery(id, action) {
-  const uncertain=['write_uncertain','id_conflict'].includes(state.outbox.find(o=>o.id===id)?.error);
+  const entry=state.outbox.find(o=>o.id===id),uncertain=['write_uncertain','id_conflict'].includes(entry?.error);
+  if(action==='retry'&&(entry?.wantsSheets===false||entry?.status==='Sent')){run(()=>send('retry',{id}));return;}
   deliveryDecision={id,action};
   setText($('delivery-explanation'),action==='retry'
     ? uncertain?'This receiver reported an uncertain write. Check your Google sheet first. Retrying creates a new request and could duplicate an entry already saved there.':'Check the Google Sheet first. Retrying an entry that already arrived can create a duplicate. Send it again?'
@@ -164,8 +165,9 @@ function renderSelections() {
   const schedule=selectedRow('schedule'),entry=selectedRow('outbox');
   available($('edit-schedule'),!!schedule);available($('remove-schedule'),!!schedule);
   $('schedule-decision').hidden=schedule?.status!=='Needs choice';
-  available($('retry-selected'),!!entry&&!['Sent','Sending','Simulated success'].includes(entry.status)&&entry.localOnly===false);
-  available($('mark-selected'),entry?.status==='NeedsReview'&&entry?.localOnly===false);
+  available($('retry-selected'),!!entry&&entry.localOnly===false&&entry.status!=='Sending'&&
+    ((entry.wantsSheets!==false&&!['Sent','Simulated success'].includes(entry.status))||['Pending','NeedsReview'].includes(entry.csvStatus)));
+  available($('mark-selected'),entry?.status==='NeedsReview'&&entry?.localOnly===false&&entry?.wantsSheets!==false);
   $('local-preview-actions').hidden=!entry||entry.localOnly===false;
   let text='';
   if(entry){
@@ -175,8 +177,13 @@ function renderSelections() {
     else if(entry.endedEarly)text+=' · ended early\nReason: '+(entry.earlyEndReason||'Not supplied');
     for(const [index,pause] of (entry.pauses??[]).entries())text+=`\n\nPause ${index+1}: ${pause.paused} · ${pause.duration}\n${pause.reason||'No reason provided.'}`;
     if(entry.autoSent)text+='\nauto-sent';
+    if(entry.csvStatus&&entry.csvStatus!=='NotRequested'){
+      text+='\nCSV: '+entry.csvStatus+(entry.csvFile?'\n'+entry.csvFile:'');
+      if(entry.csvError)text+='\nCSV could not be saved ('+entry.csvError+'). Close a locked file or choose a writable CSV folder, then Retry selected.';
+      if(entry.csvNextAttemptAt)text+='\nNext CSV retry: '+new Date(entry.csvNextAttemptAt).toLocaleTimeString();
+    }
     if(entry.status==='Pending'&&entry.nextAttemptAt)text+='\nNext retry: '+new Date(entry.nextAttemptAt).toLocaleTimeString();
-    if(entry.status==='NeedsReview')text+='\nNeeds review: '+entry.error+'. Check the Sheet before retrying.';
+    if(entry.status==='NeedsReview'&&entry.wantsSheets!==false)text+='\nSheets needs review: '+entry.error+'. Check the Sheet before retrying.';
     if(entry.localOnly!==false)text+='\nLocal preview only.';
   }
   setText($('outbox-detail'),text);
@@ -203,7 +210,8 @@ function tables() {
   $('schedule-empty').hidden=state.schedules.length!==0;
   reconcileRows($('outbox-rows'),entries,()=>selectableRow(4,'outbox'),(row,record)=>{
     setText(row.cells[0].querySelector('.cell-text'),record.saved);
-    [record.destination,record.status+(record.autoSent?' · auto-sent':''),record.attempts].forEach((value,i)=>setText(row.cells[i+1],value));
+    const attempts=record.csvAttempts?record.wantsSheets===false?record.csvAttempts+' CSV':record.attempts+' Sheets · '+record.csvAttempts+' CSV':record.attempts;
+    [record.destination,(record.deliveryLabel??record.status)+(record.autoSent?' · auto-sent':''),attempts].forEach((value,i)=>setText(row.cells[i+1],value));
     row.querySelector('input').setAttribute('aria-label','Select entry saved '+record.saved);
   });
   $('outbox-empty').hidden=state.outbox.length!==0;renderSelections();
@@ -244,7 +252,7 @@ function render(next) {
     $('playback-compact').setAttribute('aria-pressed',String(Boolean(state.showFloatingTimer)));
     $('playback-compact').title=state.showFloatingTimer?'Hide floating timer':'Show compact view';
     setText($('compact-view-status'),state.showFloatingTimer?'The floating timer is visible.':'The floating timer is hidden.');
-    setText($('pending-count'),`${state.prompts.length} pending reflection(s) · ${state.outbox.filter(o=>!['Sent','Simulated success'].includes(o.status)).length} unsent entry/entries`);
+    setText($('pending-count'),`${state.prompts.length} pending reflection(s) · ${state.outbox.filter(o=>o.complete===false||o.complete==null&&!['Sent','Simulated success'].includes(o.status)).length} unsent entry/entries`);
     reconcileRows($('pending-list'),state.prompts,record => {
       const li=document.createElement('li'), button=document.createElement('button'); button.type='button'; li.append(button);
       button.addEventListener('click',()=>run(()=>send('openReflection',{id:record.id}))); return li;

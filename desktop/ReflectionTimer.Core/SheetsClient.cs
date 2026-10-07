@@ -57,6 +57,7 @@ public sealed class SheetsClient : IDisposable
     private async Task<SheetReply> Send(ConnectionSettings settings, OutboxItem? item, CancellationToken cancellation, bool pingTest = false, SheetReply? verified = null)
     {
         if (item?.LocalOnly == true) return new(false, "settings_required", "This entry is local only and cannot be uploaded.");
+        if (item is not null && !item.WantsSheets) return new(false, "settings_required", "Google Sheets was not selected for this entry.");
         var invalid = Validate(settings);
         if (invalid is not null) return new(false, "settings_required", invalid);
         if (item is not null && item.ReceiverUrl.Length > 0 && !ConnectionSetup.SameReceiver(item.ReceiverUrl, settings.WebAppUrl))

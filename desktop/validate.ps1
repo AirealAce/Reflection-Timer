@@ -12,6 +12,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed.' }
     & $Node desktop/ReflectionTimer.Tests/ui.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Browser accessibility tests failed.' }
+    & $Node desktop/ReflectionTimer.Tests/csv.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'CSV destination settings checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/pause-reasons.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Pause editor checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/random-audio.cjs

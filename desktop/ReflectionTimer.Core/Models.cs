@@ -79,6 +79,18 @@ public enum AppColorTheme { Dark = 0, Light = 1, HighContrast = 2, Glamour = 3 }
 public enum FloatingTimerPlacement { Custom = 0, Center = 1, TopLeft = 2, TopRight = 3, BottomLeft = 4, BottomRight = 5, TopCenter = 6, BottomCenter = 7 }
 public record OutboxItem
 {
+    // Null preserves pending Sheets delivery for entries from older versions.
+    public bool? SheetsRequested { get; init; }
+    public CsvDeliveryStatus CsvStatus { get; init; }
+    public string CsvDirectory { get; init; } = "";
+    public Guid? CsvEntryId { get; init; }
+    public string CsvFile { get; init; } = "";
+    public string CsvError { get; init; } = "";
+    public int CsvAttempts { get; init; }
+    public long? CsvNextAttemptAt { get; init; }
+    [System.Text.Json.Serialization.JsonIgnore] public bool WantsSheets => !LocalOnly && SheetsRequested != false;
+    [System.Text.Json.Serialization.JsonIgnore] public bool DeliveryComplete => LocalOnly ? Status == DeliveryStatus.Sent
+        : (!WantsSheets || Status == DeliveryStatus.Sent) && CsvStatus is CsvDeliveryStatus.NotRequested or CsvDeliveryStatus.Saved;
     public ImmutableList<SessionPause> Pauses { get; init; } = [];
     public SessionMode Mode { get; init; }
     public Guid? SessionId { get; init; }
@@ -128,6 +140,7 @@ public record AppState
     public List<ReflectionPrompt> Prompts { get; set; } = [];
     public List<OutboxItem> Outbox { get; set; } = [];
     public ConnectionSettings Connection { get; set; } = new();
+    public CsvSettings Csv { get; set; } = new();
     public ConnectionSettings? SetupDraft { get; set; } // Encrypted; never used for uploads before setup completes.
     public bool? SetupDraftUsesExistingReceiver { get; set; }
     public string AlertSoundPath { get; set; } = ""; // Empty means the bundled extension sound.
@@ -155,6 +168,8 @@ public record AppState
     public AppColorTheme Theme { get; set; } = AppColorTheme.Dark;
     public bool LoggingEnabled { get; set; } = true;
     public bool StartAtLogin { get; set; }
+    // Legacy persisted name retained to preserve existing Sheets preferences.
+    // This now represents only the Google Sheets delivery checkbox.
     public bool ExtensionDisabledConfirmed { get; set; }
 }
 

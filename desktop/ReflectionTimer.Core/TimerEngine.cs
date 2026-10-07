@@ -461,11 +461,14 @@ public sealed partial class TimerEngine
                     ActualDurationSeconds = actual, EndedEarly = prompt.EndedEarly, IsCheckIn = prompt.Mode==SessionMode.Timer&&prompt.IsCheckIn, AutoSent = autoSent,
                     EarlyEndReason = prompt.EndedEarly ? (earlyEndReason ?? prompt.EarlyEndReason).Trim() : "",
                     ReceiverUrl = s.Connection.WebAppUrl,
-                    IsTest = prompt.IsTest, SheetUrl = s.Connection.SheetUrl, SheetMode = s.Connection.SheetMode, SheetName = s.Connection.SheetName
+                    IsTest = prompt.IsTest, SheetUrl = s.Connection.SheetUrl, SheetMode = s.Connection.SheetMode, SheetName = s.Connection.SheetName,
+                    SheetsRequested = !localOnly && s.ExtensionDisabledConfirmed,
+                    CsvStatus = !localOnly && s.Csv.Enabled ? CsvDeliveryStatus.Pending : CsvDeliveryStatus.NotRequested,
+                    CsvDirectory = !localOnly && s.Csv.Enabled ? s.Csv.ResolvedDirectory : "", CsvEntryId = promptId
                 });
                 s.Prompts.RemoveAll(x => x.Id == promptId);
                 // Keep at most 200 sent entries. Never automatically prune unsent work.
-                var oldSent = s.Outbox.Where(x => x.Status == DeliveryStatus.Sent).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
+                var oldSent = s.Outbox.Where(x => x.DeliveryComplete).OrderByDescending(x => x.SubmittedAt).Skip(200).Select(x => x.Id).ToHashSet();
                 s.Outbox.RemoveAll(x => oldSent.Contains(x.Id));
             }, promptId);
             return complete;
@@ -494,7 +497,7 @@ public sealed partial class TimerEngine
     {
         lock (gate)
         {
-            var item = state.Outbox.FirstOrDefault(x => !x.LocalOnly && x.Status == DeliveryStatus.Pending && !(x.NextAttemptAt > Now));
+            var item = state.Outbox.FirstOrDefault(x => x.WantsSheets && x.Status == DeliveryStatus.Pending && !(x.NextAttemptAt > Now));
             if (item is null) return null;
             if ((item.RetryProtected && !supportsSafeRetry) || (item.ReceiverUrl.Length > 0 && !ConnectionSetup.SameReceiver(item.ReceiverUrl, state.Connection.WebAppUrl))) {
                 Change("upload.needsReview", s => s.Outbox = s.Outbox.Select(x => x.Id == item.Id
@@ -528,7 +531,9 @@ public sealed partial class TimerEngine
         }).ToList(), id);
     public void RetryUpload(Guid id) => Change("upload.retryRequested", s => {
         if (s.Outbox.Any(x => x.Id == id && x.Status == DeliveryStatus.Sending)) throw new ArgumentException("This reflection is still sending.");
-        s.Outbox = s.Outbox.Select(x => x.Id == id && x.Status != DeliveryStatus.Sent
+        s.Outbox = s.Outbox.Select(x => x.Id == id && x.CsvStatus is CsvDeliveryStatus.Pending or CsvDeliveryStatus.NeedsReview
+            ? x with { CsvStatus = CsvDeliveryStatus.Pending, CsvError = "", CsvNextAttemptAt = null, CsvAttempts = 0, CsvDirectory = s.Csv.ResolvedDirectory } : x).ToList();
+        s.Outbox = s.Outbox.Select(x => x.Id == id && x.WantsSheets && x.Status != DeliveryStatus.Sent
             ? x with { Status = DeliveryStatus.Pending, ErrorKind = "", NextAttemptAt = null,
                 // Explicit UI confirmation is required before retrying a partial write as new.
                 Id = x.ErrorKind is "write_uncertain" or "id_conflict" ? Guid.NewGuid() : x.Id,
@@ -633,15 +638,15 @@ public sealed partial class TimerEngine
     public void SaveSetupDraft(ConnectionSettings draft, bool? usesExistingReceiver = null) => Change("settings.saved", s => {
         s.SetupDraft = draft; s.SetupDraftUsesExistingReceiver = usesExistingReceiver;
     });
-    public void CompleteSetup(ConnectionSettings connection, bool extensionDisabled) => Change("settings.saved", s => {
+    public void CompleteSetup(ConnectionSettings connection, bool sheetsEnabled) => Change("settings.saved", s => {
         var error = SheetsClient.Validate(connection);
         if (error is not null) throw new ArgumentException(error);
-        if (!extensionDisabled) throw new ArgumentException("Confirm that the Chrome extension is off or not installed.");
+        if (!sheetsEnabled) throw new ArgumentException("Select Google Sheets to enable Sheets delivery.");
         ProtectConnectionChange(s, connection);
         BindFirstConnection(s, connection);
         s.Connection = connection; s.SetupDraft = null; s.SetupDraftUsesExistingReceiver = null; s.ExtensionDisabledConfirmed = true;
     });
-    public void SaveSettings(ConnectionSettings connection, bool logging, bool startAtLogin, bool extensionDisabled, int? lowTimeThresholdSeconds = null) => Change("settings.saved", s => {
+    public void SaveSettings(ConnectionSettings connection, bool logging, bool startAtLogin, bool sheetsEnabled, int? lowTimeThresholdSeconds = null) => Change("settings.saved", s => {
         ProtectConnectionChange(s, connection);
         BindFirstConnection(s, connection);
         if (lowTimeThresholdSeconds is { } seconds) {
@@ -649,12 +654,12 @@ public sealed partial class TimerEngine
             s.Audio = AudioSettings.From(s) with { LowTimeThresholdSeconds = seconds };
         }
         if (s.Connection != connection) { s.SetupDraft = null; s.SetupDraftUsesExistingReceiver = null; }
-        s.Connection = connection; s.LoggingEnabled = logging; s.StartAtLogin = startAtLogin; s.ExtensionDisabledConfirmed = extensionDisabled;
+        s.Connection = connection; s.LoggingEnabled = logging; s.StartAtLogin = startAtLogin; s.ExtensionDisabledConfirmed = sheetsEnabled;
     });
     private static bool NeverAttempted(OutboxItem item) => item.Attempts == 0 && !item.RetryProtected && item.Status == DeliveryStatus.Pending;
     private static bool CanUseConnection(OutboxItem item, ConnectionSettings connection)
     {
-        if (item.LocalOnly) return true;
+        if (!item.WantsSheets) return true;
         var sameSheet = ConnectionSetup.SameSpreadsheet(item.SheetUrl, connection.SheetUrl);
         var sameReceiver = ConnectionSetup.SameReceiver(item.ReceiverUrl, connection.WebAppUrl);
         return (sameSheet && sameReceiver) || (NeverAttempted(item)
@@ -681,7 +686,7 @@ public sealed partial class TimerEngine
     {
         if (SheetsClient.Validate(connection) is not null) return;
         s.Outbox = s.Outbox.Select(x => {
-            if (x.LocalOnly || !NeverAttempted(x) || !CanUseConnection(x, connection)) return x;
+            if (!x.WantsSheets || !NeverAttempted(x) || !CanUseConnection(x, connection)) return x;
             var hasSheet = ConnectionSetup.HasSpreadsheet(x.SheetUrl); var hasReceiver = ConnectionSetup.IsReceiverUrl(x.ReceiverUrl);
             if (hasSheet && hasReceiver) return x;
             return x with {

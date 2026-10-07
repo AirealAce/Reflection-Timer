@@ -12,6 +12,7 @@ public sealed class PreviewServices : IDisposable
     private readonly SheetsClient sheets;
     private readonly AlertSoundPlayer sounds;
     private readonly SessionVoice voice;
+    private readonly CsvLog csv = new();
     private readonly CancellationTokenSource stop = new();
     private bool syncing;
     private bool disposed;
@@ -90,6 +91,7 @@ public sealed class PreviewServices : IDisposable
         return new { s.Connection.SheetUrl, s.Connection.WebAppUrl, s.Connection.SheetMode, s.Connection.SheetName,
             hasToken = s.Connection.ApiToken.Length > 0, hasDraft = s.SetupDraft is not null, s.ExtensionDisabledConfirmed, s.LoggingEnabled, s.StartAtLogin,
             connected = SheetsClient.Validate(s.Connection) is null && s.ExtensionDisabledConfirmed, deliveryIssue = DeliveryIssue,
+            sheetsEnabled = s.ExtensionDisabledConfirmed, csvEnabled = s.Csv.Enabled, csvDirectory = s.Csv.ResolvedDirectory,
             volume = s.Timer.Volume, threshold = audio.LowTimeThresholdSeconds, s.ShowFloatingTimer,
             s.ViewerAutoHide, s.ViewerAutoHideSeconds,
             focusMode = PreviewSession.FocusView(s.FocusMode),
@@ -144,21 +146,22 @@ public sealed class PreviewServices : IDisposable
             // No credentials or reflection text are needed for this local retry.
             var recoveringResult = pendingUploadResult is not null;
             if (!CompletePendingUpload(requested)) return;
+            var csvProcessed = await SyncCsv(requested);
             var state = engine.Snapshot;
             var settings = state.Connection;
             var revision = connectionRevision;
             if (failedConnection != settings) ClearPreflightFailure();
             if (!state.ExtensionDisabledConfirmed) {
                 ClearPreflightFailure();
-                if (requested && !recoveringResult) Announcement?.Invoke("Set up and enable Sheets delivery in Connection setup first."); return;
+                if (requested && !recoveringResult && !csvProcessed) Announcement?.Invoke("No entries are waiting for an enabled logging destination."); return;
+            }
+            if (!state.Outbox.Any(o => o.WantsSheets && o.Status == DeliveryStatus.Pending && !(o.NextAttemptAt > engine.Now))) {
+                if (requested && !recoveringResult && !csvProcessed) Announcement?.Invoke("No connected entries are waiting to send."); return;
             }
             if (SheetsClient.Validate(settings) is { } invalid) {
                 if (DeliveryIssue is null) RecordPreflightFailure(settings, new(false, "settings_required", invalid));
                 if (requested && !recoveringResult) Announcement?.Invoke(DeliveryIssue!.Message);
                 return;
-            }
-            if (!state.Outbox.Any(o => !o.LocalOnly && o.Status == DeliveryStatus.Pending && !(o.NextAttemptAt > engine.Now))) {
-                if (requested && !recoveringResult) Announcement?.Invoke("No connected entries are waiting to send."); return;
             }
             // A ping is not an append attempt. Back off at connection level,
             // leaving each reflection's attempt count and retry ID untouched.
@@ -202,6 +205,31 @@ public sealed class PreviewServices : IDisposable
         }
         catch { if (!stop.IsCancellationRequested) Announcement?.Invoke("Delivery could not be finalized. Check Outbox before retrying."); }
         finally { syncing = false; }
+    }
+    private async Task<bool> SyncCsv(bool requested)
+    {
+        var processed = false;
+        var entries = engine.Snapshot.Outbox.Where(item => !item.LocalOnly &&
+            (item.CsvStatus == CsvDeliveryStatus.Pending && (requested || !(item.CsvNextAttemptAt > engine.Now))
+                || requested && item.CsvStatus == CsvDeliveryStatus.NeedsReview)).Take(20).ToArray();
+        foreach (var item in entries) {
+            if (stop.IsCancellationRequested) break;
+            processed = true;
+            var reply = await Task.Run(() => csv.Write(item));
+            try { engine.FinishCsv(item.Id, reply); }
+            catch {
+                Announcement?.Invoke("The CSV result could not be saved in the app. Your reflection is retained; retrying will not duplicate a CSV row.");
+                continue;
+            }
+            if (reply.Success) {
+                Announcement?.Invoke($"Reflection saved to CSV: {Path.GetFileName(reply.File)}.");
+                if (!item.WantsSheets) _ = Play(SoundEvent.Success);
+            } else {
+                Announcement?.Invoke("Reflection retained in Outbox. " + reply.DisplayMessage);
+                _ = Play(SoundEvent.Failure);
+            }
+        }
+        return processed;
     }
     private bool ConnectionStillCurrent(ConnectionSettings connection, int revision)
     {
@@ -255,7 +283,8 @@ public sealed class PreviewServices : IDisposable
         pendingUploadResult = null;
         uploadResultSaveFailed = false;
         if (completed) {
-            Announcement?.Invoke(reply.Success ? $"Reflection sent to {reply.Tab}." : "Reflection retained in Outbox. " + reply.DisplayMessage);
+            var csvPending = engine.Snapshot.Outbox.Any(item => item.Id == pending.Id && item.CsvStatus is CsvDeliveryStatus.Pending or CsvDeliveryStatus.NeedsReview);
+            Announcement?.Invoke(reply.Success ? $"Reflection sent to {reply.Tab}." + (csvPending ? " CSV delivery remains in Outbox." : "") : "Reflection retained in Outbox. " + reply.DisplayMessage);
             _ = Play(reply.Success ? SoundEvent.Success : SoundEvent.Failure);
         }
         return true;

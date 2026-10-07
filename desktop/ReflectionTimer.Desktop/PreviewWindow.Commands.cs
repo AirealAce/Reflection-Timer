@@ -7,7 +7,7 @@ namespace ReflectionTimer.Accessible;
 
 internal sealed partial class PreviewWindow
 {
-    private static readonly HashSet<string> SettingsCommands = ["settingsSaveComplete", "settingsLoad", "connectionSave", "connectionPause", "setupImport", "setupExport", "setupScript", "setupRestore", "setupNewToken", "saveAppearance", "displayOption", "saveSound", "browseSound", "previewSound", "stopSound", "volume", "diagnostics", "exportDiagnostics", "markIssue", "sendPending", "setCutoff", "importSchedules", "openSheet", "clearDiagnostics", "editScheduleDraft", "browseLowSound", "previewLowSound", "connectionStore", "setupGuide"];
+    private static readonly HashSet<string> SettingsCommands = ["settingsSaveComplete", "settingsLoad", "connectionSave", "connectionPause", "setupImport", "setupExport", "setupScript", "setupRestore", "setupNewToken", "saveAppearance", "displayOption", "saveSound", "browseSound", "previewSound", "stopSound", "volume", "diagnostics", "exportDiagnostics", "markIssue", "sendPending", "setCutoff", "openSheet", "clearDiagnostics", "editScheduleDraft", "browseLowSound", "previewLowSound", "connectionStore", "setupGuide"];
     private static string ReadString(JsonElement data, string key, int max = 4096) => data.TryGetProperty(key,out var value) && value.ValueKind == JsonValueKind.String && value.GetString() is { } text && text.Length <= max
         ? text : throw new ArgumentException($"Enter valid {key}.");
     private static int ReadInt(JsonElement data, string key, int min, int max) => data.TryGetProperty(key,out var value) && value.TryGetInt32(out var result) && result >= min && result <= max
@@ -22,11 +22,19 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action) && action is not ("timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode" or "focusAnimation")) return false;
+        if (!SettingsCommands.Contains(action) && action is not ("csvSave" or "csvBrowse" or "timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode" or "focusAnimation")) return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
         switch (action) {
+            case "csvSave":
+                engine.SaveCsvSettings(new() { Enabled = ReadFlag(data,"enabled"), Directory = ReadString(data,"directory") });
+                message="CSV preferences saved.";break;
+            case "csvBrowse":
+                using(var folder=new FolderBrowserDialog { Description="Choose the folder for daily reflection CSV files", UseDescriptionForTitle=true, ShowNewFolderButton=true,
+                    InitialDirectory=CsvSettings.NormalizeDirectory(ReadString(data,"directory")) }) {
+                    if(folder.ShowDialog(this)==DialogResult.OK)Post(new {type="csvFolder",directory=folder.SelectedPath});
+                }break;
             case "focusTargets":
                 var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,2);
                 Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")) });break;
@@ -89,17 +97,6 @@ internal sealed partial class PreviewWindow
                     case "showAllExplanations":engine.SetShowAllExplanations(ReadInt(data,"value",0,1)==1);break;
                     case "reflectionSeparator":engine.SetReflectionSeparator((ReflectionSeparator)ReadInt(data,"value",0,3));break;
                     default:throw new ArgumentException("Choose an available display preference.");
-                }break;
-            case "importSchedules":
-                using(var picker=new OpenFileDialog{Title="Import extension schedules",Filter="Extension diagnostic report (*.json)|*.json",CheckFileExists=true}){
-                    if(picker.ShowDialog(this)==DialogResult.OK){
-                        if(new FileInfo(picker.FileName).Length>1024*1024)throw new ArgumentException("Choose a diagnostic report smaller than one megabyte.");
-                        using var report=JsonDocument.Parse(File.ReadAllText(picker.FileName));
-                        var entries=report.RootElement.GetProperty("snapshot").GetProperty("scheduledSessions");
-                        if(entries.GetArrayLength()>1000)throw new ArgumentException("The report contains too many appointments.");
-                        var importedSchedules=entries.EnumerateArray().Select(x=>new ScheduledSession(Guid.NewGuid(),x.GetProperty("targetTime").GetInt64(),x.GetProperty("requestedDurationSeconds").GetInt32(),x.GetProperty("autoRestart").GetBoolean(),x.GetProperty("sfxVolume").GetInt32())).ToList();
-                        engine.ImportSchedules(importedSchedules);message="Future schedules imported. Past appointments and duplicate start times were skipped.";
-                    }
                 }break;
             case "openSheet":
                 System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(ConnectionSetup.NormalizeSheetUrl(state.Connection.SheetUrl)){UseShellExecute=true});break;
