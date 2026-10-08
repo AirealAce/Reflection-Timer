@@ -7,13 +7,16 @@ internal static class BackgroundFocusTests
     internal static void Run(Action<bool,string> check)
     {
         var choices=Enum.GetValues<FocusTargetKind>().SelectMany(k=>PreviewApplication.FocusChoices(k,[])).ToArray();
-        check(choices.Length==7&&choices.All(t=>t.UseFocused)&&choices.Select(t=>t.Id).Distinct().Count()==7,"All seven capture choices have separate stable identities and retain the original focused choices");
-        check(FocusTarget.Focused(FocusTargetKind.BrowserTab).Key=="focused:1"&&FocusTarget.Focused(FocusTargetKind.Window).Key=="focused:0","Legacy singular capture keys stay unchanged across the upgrade");
+        check(choices.Length==8&&choices.All(t=>t.UseFocused)&&choices.Select(t=>t.Id).Distinct().Count()==8,"All eight capture choices have separate stable identities and retain the original focused choices");
+        check(FocusTarget.Focused(FocusTargetKind.BrowserTab).Key=="focused:1"&&FocusTarget.Focused(FocusTargetKind.Window).Key=="focused:0"
+            &&FocusTarget.Focused(FocusTargetKind.BrowserTabGroup).Key=="focused:2","Legacy singular capture keys stay unchanged across the upgrade");
+        check(choices.Where(t=>t.Kind==FocusTargetKind.Site).Single() is {CaptureScope:FocusCaptureScope.Focused,Name:"Use focused site"},
+            "Sites add only the singular focused capture choice without background variants");
         var backgrounds=choices.Where(t=>t.CaptureScope!=FocusCaptureScope.Focused).ToArray();
         check(backgrounds.Select(t=>t.Name).SequenceEqual(new[]{"Use open windows (including background)","Use focused tabs (including background)","Use focused tab groups (including background)","Use open tab groups (including background)"}),"Background options use the requested labels and order");
         var settings=new FocusModeSettings{MultipleTargets=true,Targets=[..choices]};
         var restored=JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(settings))!;
-        check(restored.SelectedTargets.Length==7&&restored.SelectedTargets.Select(t=>t.CaptureScope).SequenceEqual(choices.Select(t=>t.CaptureScope)),"Mixed original/background choices survive encrypted-profile JSON round trips");
+        check(restored.SelectedTargets.Length==8&&restored.SelectedTargets.Select(t=>t.CaptureScope).SequenceEqual(choices.Select(t=>t.CaptureScope)),"Mixed original/background/site choices survive encrypted-profile JSON round trips");
         check(!PreviewApplication.MatchesSavedFocusTarget(choices.First(t=>t.Kind==FocusTargetKind.Window),backgrounds[0]),"Different capture scopes in one category cannot preselect each other");
         var window=new FocusTarget(Guid.NewGuid(),FocusTargetKind.Window,"Browser","chrome",101,202,303);
         var first=window with{Kind=FocusTargetKind.BrowserTab,TabRuntimeId="one",Name="Selected",TabPosition=1};

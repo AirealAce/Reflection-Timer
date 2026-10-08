@@ -11,6 +11,8 @@ state.dat*
 diagnostics.dat*
 reflection-timer-diagnostics*.json
 private-setup*
+# Generated native-host registration contains the local installation path.
+browser-companion/native-host.json
 
 # Only the approved bundled clips are tracked; custom MP3s stay local.
 *.mp3

@@ -4,6 +4,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const $=id=>document.getElementById(id),dialog=$('focus-target-dialog'),toggles=[$('focus-enabled'),$('focus-settings-enabled')];
   const targetButtons=[$('choose-focus-target'),$('choose-focus-target-settings')],list=$('focus-target-list'),use=$('focus-target-use');
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
+  const siteLinks=$('focus-target-on-site-links'),website=$('focus-site-website'),siteAdd=$('focus-site-add');
+  const companion=$('focus-browser-companion');
+  let browserConnected;
   const glowControls=[$('focus-screen-glow'),$('focus-picker-screen-glow')];
   const glowStyles=[$('focus-glow-style'),$('focus-picker-glow-style')];
   let glowEnabled=true,glowStyle=0,glowDirty=false,glowRevision=0,glowPending=null;
@@ -18,17 +21,17 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   for(const toggle of toggles){toggle.setAttribute('aria-keyshortcuts','Control+Alt+;');toggle.title='Ctrl+Alt+;: toggle Focus mode.';}
   let settings={enabled:false,delaySeconds:5,targets:[]},enabled=false,dirty=false,revision=0,pending=false,saving=Promise.resolve();
   let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false,targetRevision=0;
-  const type=kind=>['Window','Tab','Tab Group'][kind]??'Window';
+  const type=kind=>['Window','Tab','Tab Group','Site'][kind]??'Window';
   const key=target=>target.key??`${target.kind}:${target.id}`;
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
-  const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.name;
-  const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.displayName??target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:` — ${target.app}`);
+  const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.kind===3?target.siteHost||target.name:target.name;
+  const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.displayName??target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:target.app?` — ${target.app}`:'');
   const syncToggles=()=>toggles.forEach(control=>{control.setAttribute('aria-pressed',String(enabled));control.classList.toggle('primary',enabled);});
   function render(value){
     if(!value)return;settings=value;toggles.forEach(control=>control.disabled=false);
     if(!glowDirty){glowEnabled=value.screenEdgeGlow!==false;glowStyle=value.screenEdgeGlowStyle??0;syncGlow();}
     if(!dirty){enabled=!!value.enabled;syncToggles();delay.value=value.delaySeconds??5;}
-    const targets=selectedTargets(value),many=targets.length>1,heading=many?[0,1,2].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
+    const targets=selectedTargets(value),many=targets.length>1,heading=many?[0,1,2,3].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
     const name=targets.length&&!many?shortName(targets[0]):'',label=targets.length?many?heading:targets[0].useFocused?name:`${heading}: ${name}`:'No focus target selected.';
     targetButtons.forEach(button=>{
       if(targets.length){
@@ -39,9 +42,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         button.setAttribute('aria-label',label);
       }else {setText(button,'Choose Window / Tab…');button.removeAttribute('aria-label');}
       button.classList.toggle('primary',targets.length>0);button.classList.toggle('has-target',targets.length>0);
-      button.title=targets.length?targets.map(fullName).join('\n')+'\nChoose focus targets.':'Choose a window, browser tab, or tab group.';
+      button.title=targets.length?targets.map(fullName).join('\n')+'\nChoose focus targets.':'Choose a window, browser tab, tab group, or site.';
     });
-    setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose a window, browser tab, or tab group.');
+    setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose a window, browser tab, tab group, or site.');
     setText($('focus-settings-target'),label+(value.idleEnabled?` · Idle for ${value.idleSeconds??20} seconds`:''));
   }
   async function flush(){await flushGlow();await flushMode();}
@@ -60,13 +63,19 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       const checked=picked.has(row.dataset.key);row.classList.toggle('picked',checked);row.setAttribute('aria-current',checked&&!multiple.checked?'true':'false');
       const checkbox=row.querySelector('input');if(checkbox){checkbox.checked=checked;checkbox.disabled=loading||selecting;}
     }
-    use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked);
+    use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked&&!(Number(kindControl.value)===3&&website.value.trim()));
+    siteAdd.disabled=loading||selecting||!website.value.trim();
     setText(use,multiple.checked?'Save selected targets':'Use selected target');
     setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window. Dynamic choices capture on start/resume. Background choices include other windows; focused tabs means the selected tab in each browser window. Switching modes keeps the capture.');
   }
   function status(){
     const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length;
-    setText($('focus-picker-status'),`${available} open targets. ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':''));
+    setText($('focus-picker-status'),`${available} ${Number(kindControl.value)===3?'sites':'open targets'}. ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
+      +(Number(kindControl.value)===3?' Native Site tracking lists the current page in each browser window. Saved sites remain available.':''));
+    setText($('focus-browser-status'),!companion.checked?'Native Site tracking is active. The companion is off.'
+      :settings.browserCompanionEnabled!==true?'Save to enable the companion. Native Site tracking remains active.'
+      :browserConnected===true?'Companion connected. Background sites and links to other sites are available.'
+      :'Waiting for the companion connection. Native Site tracking remains active.');
   }
   function focusRow(target){
     activeKey=key(target);
@@ -84,8 +93,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     syncSelection();status();
   }
   function draw(){
-    const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:['Grp #','Group Name','App'];
-    const widths=kind===0?['30%','']:['64px','','24%'];
+    const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:['Site','App'];
+    const widths=kind===0?['30%','']:kind===3?['','24%']:['64px','','24%'];
+    $('focus-site-controls').hidden=kind!==3;
     if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
@@ -93,14 +103,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     const body=list.querySelector('tbody');body.replaceChildren();
     for(const target of rows){
       const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
-      const description=fullName(target)+(target.current?' (current tab)':'')+(target.unavailable?' (closed or unavailable)':'');
+      const description=fullName(target)+(target.current?(kind===3?' (current site)':' (current tab)'):'')+(target.unavailable?' (closed or unavailable)':target.savedSite?' (saved site)':'');
       row.setAttribute('aria-label',description);
       if(multiple.checked){
         const td=document.createElement('td'),checkbox=document.createElement('input');td.className='focus-selection-cell';checkbox.type='checkbox';checkbox.tabIndex=-1;checkbox.setAttribute('aria-label',description);checkbox.disabled=loading||selecting;
         checkbox.addEventListener('change',()=>{choose(target);});checkbox.addEventListener('click',event=>{if(event.detail>1)event.preventDefault();});td.append(checkbox);row.append(td);
       }
-      const values=target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.displayName??target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
-      for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if(kind!==0&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
+      const values=kind===3?[(target.current?'(current site) ':'')+target.name,target.app||'']:target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.displayName??target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
+      for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if((kind===1||kind===2)&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
       row.addEventListener('focusin',()=>{
         activeKey=key(target);for(const other of body.children){other.tabIndex=!multiple.checked&&other===row?0:-1;const checkbox=other.querySelector('input');if(checkbox)checkbox.tabIndex=other===row?0:-1;}
         if(!multiple.checked&&!loading&&!selecting){picked.clear();picked.set(key(target),target);syncSelection();status();}
@@ -125,7 +135,8 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function open(button,enable=false){
     if(selecting||loading||dialog.open)return;
-    opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;$('focus-picker-animations').open=false;
+    opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;siteLinks.checked=settings.targetOnSiteLinks!==false;website.value='';website.removeAttribute('aria-invalid');idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;$('focus-picker-animations').open=false;
+    companion.checked=settings.browserCompanionEnabled===true;$('focus-picker-companion').open=false;
     picked=new Map(selectedTargets(settings).filter(t=>t.id).map(t=>[key(t),t]));rows=[];activeKey=null;resetList=true;
     kindControl.value=String(selectedTargets(settings)[0]?.kind??settings.targetKind??0);draw();dialog.showModal();kindControl.focus();run(refresh);
   }
@@ -143,8 +154,28 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     draw();
   });
   idle.addEventListener('change',syncSelection);
+  companion.addEventListener('change',status);
+  $('focus-browser-setup').addEventListener('click',()=>{if(!loading&&!selecting)run(()=>send('focusBrowserSetup',{quiet:true}));});
+  website.addEventListener('input',()=>{website.removeAttribute('aria-invalid');syncSelection();});
+  async function addWebsite(focus=true){
+    if(loading||selecting||Number(kindControl.value)!==3||!website.value.trim())return;
+    const controls=[...dialog.querySelectorAll('button,input,select')].map(control=>({control,disabled:control.disabled}));
+    selecting=true;syncSelection();controls.forEach(({control})=>control.disabled=true);list.inert=true;dialog.setAttribute('aria-busy','true');
+    let target,failure;
+    try{
+      const reply=await send('focusSite',{website:website.value.trim(),quiet:true});target=reply.target;
+      if(!target?.id||target.kind!==3)throw new Error('The website could not be added. Check its address and try again.');
+      if(!multiple.checked)picked.clear();picked.set(key(target),target);
+      const index=rows.findIndex(t=>key(t)===key(target));if(index>=0)rows[index]=target;else rows.push(target);
+      activeKey=key(target);website.value='';website.removeAttribute('aria-invalid');draw();
+    }catch(error){failure=error;website.setAttribute('aria-invalid','true');setText($('focus-picker-status'),error.message);throw error;}
+    finally{selecting=false;list.inert=false;dialog.removeAttribute('aria-busy');controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(failure)website.focus();else if(focus&&target)focusRow(target);}
+  }
+  siteAdd.addEventListener('click',()=>run(()=>addWebsite()));
+  website.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.isComposing){event.preventDefault();if(!event.repeat)run(()=>addWebsite());}});
   async function useSelection(){
     if(selecting||loading||!dialog.open||use.disabled)return;
+    if(Number(kindControl.value)===3&&website.value.trim())await addWebsite(false);
     if(!delay.checkValidity()){delay.reportValidity();return;}
     if(!idleSeconds.checkValidity()){idleSeconds.reportValidity();return;}
     if(!validateAudio())return;
@@ -156,7 +187,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       let savedRevision;
       do {
         savedRevision=targetRevision;
-        await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),enable:enableOnChoose,multipleTargets:multiple.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
+        await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),enable:enableOnChoose,multipleTargets:multiple.checked,targetOnSiteLinks:siteLinks.checked,browserCompanionEnabled:companion.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
       }while(savedRevision!==targetRevision);
       dialog.close();announce('Focus settings saved.');
     }catch(error){failure=error.message;throw error;}
@@ -188,6 +219,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   dialog.addEventListener('close',()=>{spaceRow=null;syncToggles();opener?.focus();});
   return {render,flush,pickerShortcutActive:()=>view==='main'&&dialog.open&&!composing,state(state){if(view==='main')render(state.focusMode);},message(message){
     if(view!=='main')return false;
+    if(message.type==='browserCompanionStatus'&&typeof message.connected==='boolean'){
+      browserConnected=message.connected;if(dialog.open)status();return true;
+    }
     if(message.type==='focusToggled'){
       enabled=message.enabled===true;settings={...settings,enabled};syncToggles();if(dirty)revision++;return true;
     }
@@ -220,8 +254,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     if(message.type==='focusStatus')setText($('focus-status'),message.status);
     if(message.type==='settings')render(message.settings.focusMode);
     if(message.type==='focusTargets'&&dialog.open&&Number(kindControl.value)===message.kind){
+      if(typeof message.browserConnected==='boolean')browserConnected=message.browserConnected;
       const keys=new Set();rows=message.targets.map(t=>({...t,kind:message.kind})).filter(t=>{const identity=key(t);if(keys.has(identity))return false;keys.add(identity);return true;});
-      rows.sort((a,b)=>Number(!!b.useFocused)-Number(!!a.useFocused)||(message.kind===1?Number(!!b.current)-Number(!!a.current):0));
+      rows.sort((a,b)=>Number(!!b.useFocused)-Number(!!a.useFocused)||([1,3].includes(message.kind)?Number(!!b.current)-Number(!!a.current):0));
       for(const target of rows){
         const identity=key(target);let chosen=picked.has(identity);
         for(const previous of target.replacesKeys??[]){
@@ -232,7 +267,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       }
       if(!multiple.checked&&!picked.size){const initial=rows.find(t=>t.selected)??rows[0];if(initial)picked.set(key(initial),initial);}
       if(!multiple.checked&&picked.size&&![...picked.values()].some(t=>t.kind===message.kind)&&rows.length){picked.clear();const initial=rows.find(t=>t.selected)??rows[0];picked.set(key(initial),initial);}
-      for(const target of picked.values())if(target.kind===message.kind&&!keys.has(key(target)))rows.push({...target,unavailable:true});
+      for(const target of picked.values())if(target.kind===message.kind&&!keys.has(key(target)))rows.push(target.kind===3&&!target.useFocused?{...target,savedSite:true,unavailable:false}:{...target,unavailable:true});
       draw();
     }
     return false;

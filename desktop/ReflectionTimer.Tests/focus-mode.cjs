@@ -2,7 +2,7 @@ const {chromium}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
 (async()=>{
-  const browser=await chromium.launch({channel:'msedge',headless:true});let passed=0;
+  const browser=await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER||'chrome',headless:true});let passed=0;
   const check=(ok,name)=>{assert.ok(ok,name);passed++;console.log('PASS '+name);};
   try{
     const page=await browser.newPage({viewport:{width:739,height:642}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -101,7 +101,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await open();
     check(!await page.locator('#focus-multiple-targets').isChecked()&&!await page.locator('#focus-idle-enabled').isChecked()&&await page.locator('#focus-idle-seconds').inputValue()==='20','Both new options default unchecked; Idle for defaults to 20 seconds');
     check(await page.evaluate(()=>{const idle=document.querySelector('.focus-idle-row').getBoundingClientRect(),multi=document.querySelector('.focus-multiple-row').getBoundingClientRect(),kind=document.querySelector('.focus-target-type-row').getBoundingClientRect();return idle.bottom<=multi.top&&multi.bottom<=kind.top;}),'Idle for is above Multiple Targets, which is above Target type');
-    check(await page.getByRole('combobox',{name:'Target type',exact:true}).count()===1&&await page.locator('#focus-target-kind option').allTextContents().then(x=>x.join('|')==='Window|Browser Tab|Browser Tab Groups'),'Target type retains its accessible label and requested casing');
+    check(await page.getByRole('combobox',{name:'Target type',exact:true}).count()===1&&await page.locator('#focus-target-kind option').allTextContents().then(x=>x.join('|')==='Window|Browser Tab|Browser Tab Groups|Site'),'Target type retains its accessible label and requested casing, adding Site');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='App|Window Name'),'Windows use App and Window Name headers');
     check(await table.getByRole('checkbox').count()===0,'Single-target lists have no checkboxes');
     check(await row(0,'a').locator('td').allTextContents().then(x=>x.join('|')==='EXCEL|Work window'),'Windows put app names before window titles');

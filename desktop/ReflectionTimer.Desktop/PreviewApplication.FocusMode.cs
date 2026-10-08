@@ -5,21 +5,28 @@ namespace ReflectionTimer.Accessible;
 
 internal sealed partial class PreviewApplication
 {
-    private readonly IFocusTargetSource focusTargets = new WindowsFocusTargets();
+    private readonly BrowserFocusIndex browserIndex = new();
+    private readonly IFocusTargetSource focusTargets;
     private FocusModeMonitor focusMonitor = null!;
     private FocusScreenGlow focusGlow = null!;
     private readonly System.Windows.Forms.Timer focusPulse = new() { Interval = 250 };
     private readonly Dictionary<Guid, FocusTarget> focusChoices = [];
     private Task<IReadOnlyList<FocusTarget>>? listingBrowserTargets;
     private int focusListRevision;
+    private bool? publishedBrowserConnected;
     private void InitializeFocusMode()
     {
         focusGlow = new(() => Services.Log.Record("focus.glowUnavailable"));
         focusMonitor = new(Session.Engine, focusTargets, Services.SetFocusAlert, value => focusGlow.SetActive(value && !closing, Session.Engine.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle));
         focusMonitor.StatusChanged += status => Broadcast(new { type = "focusStatus", status });
-        focusPulse.Tick += (_, _) => { focusMonitor.Poll(); focusGlow.SetActive(focusMonitor.ScreenEdgeGlow && !closing, Session.Engine.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle); }; focusPulse.Start();
+        focusPulse.Tick += (_, _) => {
+            focusMonitor.Poll();focusGlow.SetActive(focusMonitor.ScreenEdgeGlow&&!closing,Session.Engine.SettingsSnapshot.FocusMode.ScreenEdgeGlowStyle);
+            var connected=BrowserConnected;
+            if(publishedBrowserConnected!=connected){publishedBrowserConnected=connected;Broadcast(new{type="browserCompanionStatus",connected});}
+        };focusPulse.Start();
     }
     internal string FocusStatus => focusMonitor.Status;
+    internal bool BrowserConnected => focusTargets.BrowserConnected;
     private void ToggleFocusModeFromGlobalShortcut()
     {
         compactPresses.Reset();
@@ -56,7 +63,15 @@ internal sealed partial class PreviewApplication
         var windowLabels = FocusWindowLabels.Create(choices, WindowsFocusTargets.IsMinimized);
         return choices.Select(t => new { id = t.Id, key = FocusTargetKey(t), kind=(int)t.Kind,name = t.Name, app = t.App, windowName=t.WindowName,tabPosition=t.TabPosition,
             displayName = windowLabels.GetValueOrDefault(t.Key,t.Name),
-            t.UseFocused,captureScope=(int)t.CaptureScope, replacesKeys=focusMonitor.PreviousWindowKeys(t).Select(HashFocusKey).ToArray(), selected = saved.Any(s => MatchesSavedFocusTarget(t,s)), current = !t.UseFocused && focusTargets.IsCurrent(t) }).ToArray();
+            t.UseFocused,t.SiteHost,captureScope=(int)t.CaptureScope, replacesKeys=focusMonitor.PreviousWindowKeys(t).Select(HashFocusKey).ToArray(), selected = saved.Any(s => MatchesSavedFocusTarget(t,s)), current = !t.UseFocused && focusTargets.IsCurrent(t) }).ToArray();
+    }
+    internal FocusTarget AddFocusSite(string website)
+    {
+        var host=FocusSites.CanonicalHost(website);
+        var target=FocusChoices(FocusTargetKind.Site,[new(Guid.Empty,FocusTargetKind.Site,host,"",0,0,0){SiteHost=host}]).Single(t=>!t.UseFocused);
+        if(focusChoices.Count>=4096&&!focusChoices.ContainsKey(target.Id))throw new ArgumentException("Reopen the target chooser to refresh its saved choices.");
+        focusChoices[target.Id]=target;
+        return target;
     }
     internal static FocusTarget[] FocusChoices(FocusTargetKind kind, IReadOnlyList<FocusTarget> list) => Enum.GetValues<FocusCaptureScope>()
         .Where(scope=>FocusTarget.ValidScope(kind,scope)).Select(scope=>FocusTarget.Focused(kind,scope)).Concat(list)
@@ -64,7 +79,7 @@ internal sealed partial class PreviewApplication
     internal static string FocusTargetKey(FocusTarget target) => HashFocusKey(target.Key);
     private static string HashFocusKey(string key)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)));
     internal static bool MatchesSavedFocusTarget(FocusTarget listed, FocusTarget? saved) => saved is not null
-        && listed.Kind==saved.Kind && listed.UseFocused==saved.UseFocused && (listed.UseFocused ? listed.CaptureScope==saved.CaptureScope : (listed.WindowHandle==saved.WindowHandle
+        && listed.Kind==saved.Kind && listed.UseFocused==saved.UseFocused && (listed.UseFocused ? listed.CaptureScope==saved.CaptureScope : listed.Kind==FocusTargetKind.Site?listed.Key==saved.Key:(listed.WindowHandle==saved.WindowHandle
         && listed.ProcessId==saved.ProcessId && listed.ProcessStartedAt==saved.ProcessStartedAt
         && (listed.Kind==FocusTargetKind.Window || listed.TabRuntimeId==saved.TabRuntimeId)));
     internal void SelectFocusTarget(Guid id, bool enable)
@@ -73,12 +88,14 @@ internal sealed partial class PreviewApplication
         var current = Session.Engine.SettingsSnapshot.FocusMode;
         Session.Engine.SetFocusMode(enable || current.Enabled, current.DelaySeconds, focusMonitor.CurrentWindow(target));
     }
-    internal void SelectFocusTargets(IReadOnlyList<Guid> ids, bool enable, bool multiple, bool idle, int idleSeconds)
+    internal void SelectFocusTargets(IReadOnlyList<Guid> ids, bool enable, bool multiple, bool idle, int idleSeconds, bool? targetOnSiteLinks=null, bool? browserCompanionEnabled=null)
     {
         var selected = ids.Distinct().Select(id => focusChoices.TryGetValue(id, out var target) ? target
             : throw new ArgumentException("That target list expired. Refresh it and choose again.")).Select(focusMonitor.CurrentWindow).DistinctBy(t => t.Key).ToArray();
         var current = Session.Engine.SettingsSnapshot.FocusMode;
         Session.Engine.SetFocusMode(current with { Enabled = enable || current.Enabled, MultipleTargets = multiple, IdleEnabled = idle,
-            IdleSeconds = idleSeconds, Target = selected.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(selected) });
+            IdleSeconds = idleSeconds, TargetOnSiteLinks=targetOnSiteLinks??current.TargetOnSiteLinks,
+            BrowserCompanionEnabled=browserCompanionEnabled??current.BrowserCompanionEnabled,
+            Target = selected.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(selected) });
     }
 }

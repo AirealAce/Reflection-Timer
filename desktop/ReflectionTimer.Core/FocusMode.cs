@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ReflectionTimer.Core;
 
-public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup }
+public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup, Site = 3 }
 public enum FocusCaptureScope { Focused, FocusedIncludingBackground, OpenIncludingBackground }
 public enum FocusGlowStyle { CrimsonHalo, Classic }
 
@@ -17,6 +17,7 @@ public record FocusTarget(Guid Id, FocusTargetKind Kind, string Name, string App
     // Durable window hints stay in the encrypted profile, never in WebView data.
     public string ProcessPath { get; init; } = "";
     public string WindowClass { get; init; } = "";
+    public string SiteHost { get; init; } = "";
     // This choice stays in the profile; its captured native target is session-only.
     public bool UseFocused { get; init; }
     public FocusCaptureScope CaptureScope { get; init; }
@@ -24,15 +25,16 @@ public record FocusTarget(Guid Id, FocusTargetKind Kind, string Name, string App
     public static FocusTarget Focused(FocusTargetKind kind, FocusCaptureScope scope=FocusCaptureScope.Focused)
     {
         if(!ValidScope(kind,scope))throw new ArgumentException("Choose a supported dynamic target.");
-        var name=scope==FocusCaptureScope.Focused?"Use focused "+(kind==FocusTargetKind.Window?"window":kind==FocusTargetKind.BrowserTab?"tab":"tab group")
+        var name=scope==FocusCaptureScope.Focused?"Use focused "+(kind==FocusTargetKind.Window?"window":kind==FocusTargetKind.BrowserTab?"tab":kind==FocusTargetKind.Site?"site":"tab group")
             : scope==FocusCaptureScope.OpenIncludingBackground?"Use open "+(kind==FocusTargetKind.Window?"windows":"tab groups")+" (including background)"
             : "Use focused "+(kind==FocusTargetKind.BrowserTab?"tabs":"tab groups")+" (including background)";
         return new(Guid.Empty,kind,name,"",0,0,0){UseFocused=true,CaptureScope=scope};
     }
     public static bool ValidScope(FocusTargetKind kind,FocusCaptureScope scope)=>Enum.IsDefined(kind)&&Enum.IsDefined(scope)
-        && (scope==FocusCaptureScope.Focused||scope==FocusCaptureScope.FocusedIncludingBackground&&kind!=FocusTargetKind.Window
-            ||scope==FocusCaptureScope.OpenIncludingBackground&&kind!=FocusTargetKind.BrowserTab);
+        && (scope==FocusCaptureScope.Focused||kind!=FocusTargetKind.Site&&(scope==FocusCaptureScope.FocusedIncludingBackground&&kind!=FocusTargetKind.Window
+            ||scope==FocusCaptureScope.OpenIncludingBackground&&kind!=FocusTargetKind.BrowserTab));
     [JsonIgnore] public string Key => UseFocused ? CaptureScope==FocusCaptureScope.Focused?$"focused:{(int)Kind}":$"captured:{(int)Kind}:{(int)CaptureScope}"
+        : Kind==FocusTargetKind.Site ? "site:"+FocusSites.CanonicalHost(SiteHost)
         : $"{(int)Kind}:{ProcessId}:{ProcessStartedAt}:{WindowHandle}:{(Kind == FocusTargetKind.Window ? "" : TabRuntimeId)}";
 }
 
@@ -43,6 +45,8 @@ public record FocusModeSettings
     public FocusTarget? Target { get; init; }
     public ImmutableArray<FocusTarget> Targets { get; init; } = [];
     public bool MultipleTargets { get; init; }
+    public bool TargetOnSiteLinks { get; init; } = true;
+    public bool BrowserCompanionEnabled { get; init; }
     public bool IdleEnabled { get; init; }
     public int IdleSeconds { get; init; } = 20;
     public bool ScreenEdgeGlow { get; init; } = true;

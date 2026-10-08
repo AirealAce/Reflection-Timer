@@ -9,6 +9,8 @@ namespace ReflectionTimer.Accessible;
 
 internal interface IFocusTargetSource : IDisposable
 {
+    bool BrowserConnected => false;
+    void Configure(FocusModeSettings settings, TimerState timer) { }
     Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind);
     Task<FocusPresence> CheckAsync(FocusTarget target);
     FocusTarget? CaptureForeground() => null;
@@ -28,14 +30,18 @@ internal interface IFocusTargetSource : IDisposable
         }
         return unknown ? FocusPresence.Unknown : away ? FocusPresence.Away : FocusPresence.Unavailable;
     }
+    Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets, bool targetOnSiteLinks) => CheckAnyAsync(targets);
     bool IsCurrent(FocusTarget target) => false;
 }
 
 // Read only the visible window chrome and tab strip. Never inspect page bodies,
-// URLs, browser profiles, keystrokes or history. UIA belongs to one long-lived
+// browser profiles, keystrokes or history. The optional companion provides only
+// website hosts and browser navigation relationships. UIA belongs to one long-lived
 // MTA worker; an unresponsive provider cannot block the timer or its WebView.
-internal sealed class WindowsFocusTargets : IFocusTargetSource
+internal sealed partial class WindowsFocusTargets : IFocusTargetSource
 {
+    private readonly BrowserFocusIndex? browserSites;
+    public bool BrowserConnected => browserSites?.Connected == true;
     public long? IdleMilliseconds {
         get {
             var input = new LastInputInfo { Size = (uint)Marshal.SizeOf<LastInputInfo>() };
@@ -50,8 +56,9 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     private readonly Thread worker;
     private string? currentTabKey;
     private bool disposed;
-    internal WindowsFocusTargets()
+    internal WindowsFocusTargets(BrowserFocusIndex? browserSites = null)
     {
+        this.browserSites = browserSites;
         worker = new Thread(() => { foreach (var job in jobs.GetConsumingEnumerable()) job(); }) { IsBackground = true, Name = "Reflection Timer focus targets" };
         worker.SetApartmentState(ApartmentState.MTA); worker.Start();
     }
@@ -143,24 +150,28 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
     {
         var selectedKinds = kinds.Distinct().ToArray();
         var windows = selectedKinds.Contains(FocusTargetKind.Window) ? new[] { window } : [];
-        if (selectedKinds.All(k => k == FocusTargetKind.Window) || window.App is not ("chrome" or "msedge" or "firefox" or "brave" or "vivaldi" or "opera"))
-            return Task.FromResult<IReadOnlyList<FocusTarget>>(windows);
+        if(!IsBrowser(window)||selectedKinds.All(k=>k==FocusTargetKind.Window))return Task.FromResult<IReadOnlyList<FocusTarget>>(windows);
         return Enqueue<IReadOnlyList<FocusTarget>>(() => {
             // Never substitute another browser's selected tab when activation
             // happened outside a browser, or focus moved while UIA was queued.
             if (CheckWindow(window) != FocusPresence.Focused) return windows;
             try {
+                var site=selectedKinds.Contains(FocusTargetKind.Site)?CaptureSite(window):null;
+                if(selectedKinds.All(k=>k is FocusTargetKind.Window or FocusTargetKind.Site))
+                    return CheckWindow(window)==FocusPresence.Focused&&site is not null?windows.Append(site).ToArray():windows;
                 var position = 0;
                 var strip = BrowserStrip((nint)window.WindowHandle);
                 var choices = strip.Where(slot => !slot.Data.GroupHeader && BelongsToWindow(slot.Element, (nint)window.WindowHandle))
                     .Select(slot => new BrowserTabChoice(window with { Kind = FocusTargetKind.BrowserTab, Name = slot.Data.Name,
                         TabRuntimeId = slot.Data.Id, TabPosition = ++position }, slot.Data.Selected, slot.Element.Current.HasKeyboardFocus)).ToArray();
                 var captured = FocusedBrowserTargets.Capture(window, selectedKinds, choices, strip.Select(s => s.Data).ToArray());
-                return CheckWindow(window) == FocusPresence.Focused ? captured : windows;
+                BindBrowserWindow(window,strip.Select(s=>s.Data).ToArray());
+                return CheckWindow(window) == FocusPresence.Focused ? site is null ? captured : captured.Append(site).ToArray() : windows;
             } catch { return windows; }
         });
     }
-    public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Window
+    public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Site
+        ? Enqueue(ListSites) : kind == FocusTargetKind.Window
         ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.Name == "Desktop" && w.WindowClass == "Progman" ? 0 : 1).ThenBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
         var windows = OpenWindows();
         var choices = new List<FocusTarget>();
@@ -169,6 +180,7 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
             try {
                 var position=0;
                 var strip = BrowserStrip((nint)window.WindowHandle);
+                BindBrowserWindow(window,strip.Select(s=>s.Data).ToArray());
                 if (kind == FocusTargetKind.BrowserTabGroup) {
                     foreach (var group in BrowserTabGroups.Read(strip.Select(slot => slot.Data).ToArray()))
                         choices.Add(window with { Id = Guid.NewGuid(), Kind = kind, Name = group.Name, TabRuntimeId = group.Id, TabPosition = ++position });
@@ -192,7 +204,8 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         }
         return kind == FocusTargetKind.BrowserTab ? choices : choices.OrderBy(t => t.App).ThenBy(t => t.WindowName).ThenBy(t=>t.TabPosition).ToArray();
     });
-    public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.BrowserTab && BrowserTabListing.Identity(target) == Volatile.Read(ref currentTabKey);
+    public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.Site ? target.SiteHost==Volatile.Read(ref currentSite)||browserSites?.IsCurrentSite(target)==true
+        : target.Kind == FocusTargetKind.BrowserTab && BrowserTabListing.Identity(target) == Volatile.Read(ref currentTabKey);
     private static FocusPresence CheckWindow(FocusTarget target)
     {
         var handle = (nint)target.WindowHandle;
@@ -203,10 +216,12 @@ internal sealed class WindowsFocusTargets : IFocusTargetSource
         catch { return FocusPresence.Unavailable; }
         return IsTargetForeground(handle) ? FocusPresence.Focused : FocusPresence.Away;
     }
-    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.CaptureUnknown?Task.FromResult(CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown)
+    public Task<FocusPresence> CheckAsync(FocusTarget target) => target.Kind==FocusTargetKind.Site ? CheckAnyAsync([target],false)
+        : target.CaptureUnknown?Task.FromResult(CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown)
         : target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
         ? Task.FromResult(CheckWindow(target)) : Enqueue(() => CheckBrowser(target, []));
-    public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)
+    public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)=>CheckAnyAsync(targets,false);
+    private Task<FocusPresence> CheckNativeTargetsAsync(IReadOnlyList<FocusTarget> targets)
     {
         // Check ordinary windows first so an unrelated hung browser cannot
         // mask a selected window. Read each browser strip once per probe.

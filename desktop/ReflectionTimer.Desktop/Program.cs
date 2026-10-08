@@ -9,6 +9,11 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // Chrome/Edge launch this same executable for stdio native messaging.
+        // Reject unknown origins before opening a profile, mutex or app window.
+        if(args.Length>0&&args[0].StartsWith("chrome-extension://",StringComparison.OrdinalIgnoreCase)){
+            Environment.ExitCode=BrowserCompanionHost.RunNativeHostAsync(args[0]).GetAwaiter().GetResult();return;
+        }
         ApplicationConfiguration.Initialize();
         (string? Profile, bool Tray, bool CheckConnection) launch;
         try { launch = PreviewStartup.Parse(args); }

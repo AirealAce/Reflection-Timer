@@ -1,6 +1,10 @@
 # Reflection Timer
 
-The primary app is now the accessible Windows desktop version, **4.3.6**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+The primary app is now the accessible Windows desktop version, **4.3.7**. Its HTML interface runs inside a C# / WebView2 desktop host and uses the existing timer engine, encrypted storage, MP3 library, and Google Sheets receiver.
+
+**Site focus targets** work natively by default, without a browser extension. Choose **Site** in the focus chooser to use the focused website at start/resume, choose a current website from an open browser window, or enter a website address. Saved Site targets match that host and its subdomains, independently of window or tab restarts. Native listing reads the committed current page in each readable browser window; inactive tabs' sites are not all available. Paths, queries, fragments and page content are not retained.
+
+**Target On-Site Links**, checked by default beneath Multiple Targets, allows native same-website matching using each selected browser target's first readable website in the running session. Pausing/resuming captures it again. Native mode cannot prove that a page on another website was opened from a target. For reliable links to other websites and listing inactive tabs' sites, the collapsed **Browser companion (optional)** section offers an opt-in Chrome/Edge connection. It starts off and has [one-time setup instructions](browser-companion/README.md); configuration never installs a browser extension automatically. Existing Window, Tab and Tab Group selections remain available.
 
 Session-end prompts include a circled help button beside the title for keyboard shortcuts. Its panel can be read by a screen reader and closed with Escape without dismissing the reflection. An exclamation button appears to its left only while CSV or Sheets delivery has failed; it saves the current draft and opens the most recent unsent message in the same popup, with the cursor in its response box. Send retries that message's undelivered destinations while keeping its original date and session details. Save retains the edited draft; Skip leaves the original unsent entry in Outbox. Retrying an uncertain delivery or changing an attempted message requires review first.
 

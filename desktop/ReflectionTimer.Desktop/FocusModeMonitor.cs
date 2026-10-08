@@ -36,12 +36,14 @@ internal sealed class FocusModeMonitor : IDisposable
         this.engine = engine; this.source = source; this.alert = alert; this.glow = glow;
         savedWindows=new(engine,source);
         previous = engine.SettingsSnapshot;
+        source.Configure(previous.FocusMode,previous.Timer);
         engine.ActivityRecorded += Activity;
         engine.Changed += Changed;
     }
     private void Activity(Activity activity)
     {
         var state = engine.SettingsSnapshot;
+        source.Configure(state.FocusMode,state.Timer);
         if (state.Timer.IsRunning != previous.Timer.IsRunning || state.Timer.SessionId != previous.Timer.SessionId
             || state.Timer.Mode != previous.Timer.Mode || state.FocusMode.SelectionKey != previous.FocusMode.SelectionKey
             || state.FocusMode.Enabled != previous.FocusMode.Enabled) generation++;
@@ -102,7 +104,7 @@ internal sealed class FocusModeMonitor : IDisposable
         var pending = settings.SelectedTargets.Any(t => t.UseFocused && (captured?.Completed != true || !captured.Choices.Any(c=>c.Key==t.Key)));
         var available = settings.SelectedTargets.Where(t => !t.UseFocused).ToArray();
         if (available.Length == 0) return pending ? FocusPresence.Unknown : FocusPresence.Unavailable;
-        var presence = await source.CheckAnyAsync(available).ConfigureAwait(false);
+        var presence = await source.CheckAnyAsync(available,settings.TargetOnSiteLinks).ConfigureAwait(false);
         // A known missing group (for example an ungrouped active tab) cannot
         // prevent other successfully captured targets from reporting Away.
         return presence != FocusPresence.Focused && pending ? FocusPresence.Unknown : presence;
@@ -110,6 +112,7 @@ internal sealed class FocusModeMonitor : IDisposable
     private void Changed()
     {
         var state = engine.SettingsSnapshot;
+        source.Configure(state.FocusMode,state.Timer);
         // Stop synchronously on pause/reset/disable/selection change, even if
         // another application's accessibility provider is still answering.
         var settings = Effective(state);

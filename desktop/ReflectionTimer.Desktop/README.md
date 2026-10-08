@@ -1,4 +1,8 @@
-# Reflection Timer 4.3.6
+# Reflection Timer 4.3.7
+
+Focus targets also include **Site**: use the focused site on start/resume, choose a current website from a browser window, or enter its address. Native Windows accessibility is the default and needs no extension. It reads committed document metadata, never an address-bar edit or page text. Saved websites match their host and subdomains; native listing cannot include every inactive tab's site.
+
+**Target On-Site Links** starts checked under Multiple Targets. Native mode supports same-website pages, anchoring each selected browser target's first readable website for that running capture. The optional **Browser companion** can list inactive tabs' sites and follow actual links to other websites. It starts disabled. **Configure companion…** explicitly registers the local host and opens its bundled folder; Chrome/Edge still require the one-time Load unpacked step described in that folder's README. The app never installs or registers the companion automatically. This feature does not change Sheets, CSV or audio settings.
 
 Long explanations are collapsed by default. Use the circled question mark beside a section heading to open or close its guidance with a click, Enter, or Space. The Help tab collects instructions and keyboard shortcuts; Ctrl+Tab and Ctrl+Shift+Tab include Help. Settings → Help and guidance → Show all explanations keeps the explanations open by default and saves immediately. Labels, current state, delivery issues, and errors stay visible. Compact, Time-only, and reflection-popup layouts are unchanged.
 

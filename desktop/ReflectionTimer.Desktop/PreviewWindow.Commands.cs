@@ -22,7 +22,7 @@ internal sealed partial class PreviewWindow
     }
     private async Task<bool> HandleSettings(string action, JsonElement data, string requestId)
     {
-        if (!SettingsCommands.Contains(action) && action is not ("csvSave" or "csvBrowse" or "timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSelect" or "focusMode" or "focusAnimation")) return false;
+        if (!SettingsCommands.Contains(action) && action is not ("csvSave" or "csvBrowse" or "timeReached" or "voiceAnnouncements" or "previewVoice" or "focusTargets" or "focusSite" or "focusSelect" or "focusBrowserSetup" or "focusMode" or "focusAnimation")) return false;
         if (View != "main") throw new ArgumentException("Open Settings in the main window for this action.");
         var engine = app.Session.Engine; var services = app.Services; var state = engine.Snapshot;
         string message = "";
@@ -36,13 +36,18 @@ internal sealed partial class PreviewWindow
                     if(folder.ShowDialog(this)==DialogResult.OK)Post(new {type="csvFolder",directory=folder.SelectedPath});
                 }break;
             case "focusTargets":
-                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,2);
-                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")) });break;
+                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,3);
+                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")),browserConnected=app.BrowserConnected,nativeSites=true });break;
+            case "focusSite":
+                var site=app.AddFocusSite(ReadString(data,"website",2048));
+                Post(new{type="reply",requestId,target=PreviewSession.FocusTargetView(site)});return true;
+            case "focusBrowserSetup":
+                app.ConfigureBrowserCompanion();break;
             case "focusSelect":
                 if (data.TryGetProperty("ids",out var targetIds)) {
                     if(targetIds.ValueKind != JsonValueKind.Array || targetIds.GetArrayLength() > 256) throw new ArgumentException("Choose up to 256 listed targets.");
                     var ids = targetIds.EnumerateArray().Select(value => value.ValueKind == JsonValueKind.String && value.TryGetGuid(out var id) ? id : throw new ArgumentException("Choose listed targets.")).ToArray();
-                    app.SelectFocusTargets(ids,ReadFlag(data,"enable"),ReadFlag(data,"multipleTargets"),ReadFlag(data,"idleEnabled"),ReadInt(data,"idleSeconds",1,TimerEngine.MaxDuration));
+                    app.SelectFocusTargets(ids,ReadFlag(data,"enable"),ReadFlag(data,"multipleTargets"),ReadFlag(data,"idleEnabled"),ReadInt(data,"idleSeconds",1,TimerEngine.MaxDuration),data.TryGetProperty("targetOnSiteLinks",out _)?ReadFlag(data,"targetOnSiteLinks"):null,data.TryGetProperty("browserCompanionEnabled",out _)?ReadFlag(data,"browserCompanionEnabled"):null);
                 } else {
                     if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");
                     app.SelectFocusTarget(targetId,ReadFlag(data,"enable"));

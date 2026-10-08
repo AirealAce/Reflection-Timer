@@ -9,12 +9,12 @@ internal static class DynamicFocusTests
     {
         var kinds = Enum.GetValues<FocusTargetKind>();
         var dynamic = kinds.Select(k => PreviewApplication.FocusChoices(k, [])[0]).ToImmutableArray();
-        check(dynamic.Select(t => t.Id).Distinct().Count() == 3 && dynamic.All(t => t.UseFocused && t.Id != Guid.Empty),
-            "The three dynamic choices have separate stable identities even with no open targets");
+        check(dynamic.Select(t => t.Id).Distinct().Count() == 4 && dynamic.All(t => t.UseFocused && t.Id != Guid.Empty),
+            "The four dynamic choices have separate stable identities even with no open targets");
         foreach (var kind in kinds) {
-            var first = PreviewApplication.FocusChoices(kind, [window with { Kind = kind }]);
+            var first = PreviewApplication.FocusChoices(kind, [window with { Kind = kind, SiteHost = kind == FocusTargetKind.Site ? "study.example" : "" }]);
             var ordinary=first.First(t=>!t.UseFocused);
-            check(first.Length == (kind==FocusTargetKind.BrowserTabGroup?4:3) && first[0].UseFocused && ordinary.Key != first[0].Key
+            check(first.Length == (kind==FocusTargetKind.BrowserTabGroup?4:kind==FocusTargetKind.Site?2:3) && first[0].UseFocused && ordinary.Key != first[0].Key
                 && first[0].Id == PreviewApplication.FocusChoices(kind, [])[0].Id, kind + ": dynamic choice is first and stable across refreshes");
             check(PreviewApplication.MatchesSavedFocusTarget(first[0] with { Name = "Display renamed" }, first[0])
                 && !PreviewApplication.MatchesSavedFocusTarget(ordinary, first[0]), kind + ": a dynamic choice cannot match an ordinary target");
@@ -23,12 +23,12 @@ internal static class DynamicFocusTests
         var options = new FocusModeSettings { Enabled = true, MultipleTargets = true, Targets = dynamic, DelaySeconds = 0 };
         engine.SetFocusMode(options with { Targets = dynamic.Add(dynamic[0] with { Id = Guid.NewGuid() }).Add(window) });
         var saved = JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(engine.Snapshot.FocusMode))!;
-        check(saved.SelectedTargets.Length == 4 && saved.SelectedTargets.Count(t => t.UseFocused) == 3,
-            "All three dynamic choices persist together with an ordinary target and deduplicate by category");
+        check(saved.SelectedTargets.Length == 5 && saved.SelectedTargets.Count(t => t.UseFocused) == 4,
+            "All four dynamic choices persist together with an ordinary target and deduplicate by category");
         check(!JsonSerializer.Deserialize<FocusTarget>("{\"Id\":\"00000000-0000-0000-0000-000000000001\",\"Kind\":0,\"Name\":\"Legacy\",\"App\":\"synthetic\",\"WindowHandle\":123,\"ProcessId\":456,\"ProcessStartedAt\":789}")!.UseFocused,
             "Older profiles retain exact targets rather than becoming dynamic");
         var bridge = JsonSerializer.SerializeToElement(PreviewSession.FocusView(saved), PreviewSession.Json);
-        check(bridge.GetProperty("targets").EnumerateArray().Count(t => t.GetProperty("useFocused").GetBoolean()) == 3,
+        check(bridge.GetProperty("targets").EnumerateArray().Count(t => t.GetProperty("useFocused").GetBoolean()) == 4,
             "The WebView receives the dynamic flag for every saved category");
         BrowserCapture(check, window);
         foreach (var mode in Enum.GetValues<SessionMode>()) {
@@ -88,7 +88,7 @@ internal static class DynamicFocusTests
         BrowserTabSlot[] strip = [new("group", "strip", "group Work - 2 tabs, • Example - Expanded", true, null),
             new("one", "strip", "Same title - Part of group Work", false, true), new("two", "strip", "Same title - Part of group Work", false, false),
             new("outside", "strip", "Same title", false, false)];
-        var kinds = Enum.GetValues<FocusTargetKind>();
+        FocusTargetKind[] kinds = [FocusTargetKind.Window, FocusTargetKind.BrowserTab, FocusTargetKind.BrowserTabGroup];
         BrowserTabChoice[] tabs = [new(Tab("one", 1), true), new(Tab("two", 2), false), new(Tab("outside", 3), false)];
         var captured = FocusedBrowserTargets.Capture(window, kinds, tabs, strip);
         check(captured.Count == 3 && captured[1].TabRuntimeId == "one" && captured[2].TabRuntimeId == "group",
@@ -145,7 +145,8 @@ internal static class DynamicFocusTests
         {
             Captures++; LastKinds = kinds.ToArray();
             return Pending?.Task ?? Task.FromResult<IReadOnlyList<FocusTarget>>(kinds.Where(k => ResolveBrowsers || k == FocusTargetKind.Window)
-                .Select(k => window with { Kind = k, TabRuntimeId = k == FocusTargetKind.Window ? "" : "captured-" + k }).ToArray());
+                .Select(k => window with { Kind = k, TabRuntimeId = k == FocusTargetKind.Window ? "" : "captured-" + k,
+                    SiteHost = k == FocusTargetKind.Site ? "study.example" : "" }).ToArray());
         }
         public Task<FocusPresence> CheckAsync(FocusTarget target) { Checked.Add(target); return Task.FromResult(target.Kind == FocusedKind ? FocusPresence.Focused : Presence); }
         public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => Task.FromResult<IReadOnlyList<FocusTarget>>([]);

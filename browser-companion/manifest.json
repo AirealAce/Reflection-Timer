@@ -1,0 +1,10 @@
+{
+  "manifest_version": 3,
+  "name": "Reflection Timer Focus Companion",
+  "version": "1.0.0",
+  "description": "Shares live browser target metadata with the installed Reflection Timer. No page content or browsing history is collected.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3r5pAw3feCGZ0QOUUYTeTm++XrxNQxPj6ycyocKPGNavN3PudfOWJdBhfJvBRYiZVQD8hkwal9jufydmdDkvzlRIKy4v7xbPVot2glDicubf3svbKLeLB68d8zvXjswZpWdXCZvoHw0+q/Ds9GuJgL615MPYSc4K6LnCblAfXY9VJxvp6bwY00mUBaTaunlZND6jAY/CDb64n6tM5++9mOMrPJ1izfyp3P3ne0S49sLkE6HhtR1g71URE1CC8x5eQXVCpqBCPZi0SFz4H4fJcoYSdvN0nUtiWsePkm5lwgLaJEx3XNrT9aNtdq4hd5AdZNTOdgRUqM1ex0eP0gau+QIDAQAB",
+  "permissions": ["tabs", "tabGroups", "webNavigation", "nativeMessaging"],
+  "background": { "service_worker": "background.js" },
+  "minimum_chrome_version": "105"
+}

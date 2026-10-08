@@ -161,7 +161,8 @@ internal static class FocusModeTests
         try {
             using var services=new PreviewServices(session.Engine,directory,audio:new HoldingAudio(),speech:new SilentVoice());
             foreach(var kind in Enum.GetValues<FocusTargetKind>()) {
-                var selected=target with{Kind=kind,WindowName=kind==FocusTargetKind.Window?"":"Browser window",TabPosition=kind==FocusTargetKind.Window?0:2};
+                var selected=target with{Kind=kind,WindowName=kind==FocusTargetKind.Window?"":"Browser window",TabPosition=kind==FocusTargetKind.Window?0:2,
+                    SiteHost=kind==FocusTargetKind.Site?"study.example":""};
                 session.Engine.SetFocusMode(false,5,selected);
                 foreach(var (name,view) in new[]{("Timer state",session.View()),("Settings",services.Settings())}) {
                     var focus=JsonSerializer.SerializeToElement(view,PreviewSession.Json).GetProperty("focusMode");

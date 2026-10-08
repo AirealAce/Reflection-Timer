@@ -20,13 +20,14 @@ public sealed class PreviewSession
     private List<OutboxItem>? broadcastOutbox;
     private List<ScheduledSession>? broadcastSchedules;
     private readonly bool isolatedProfile;
+    internal bool IsolatedProfile => isolatedProfile;
     internal LowTimeOptions ScheduledLowDraft { get; set; }=new();
     internal void SelectScheduleDraft(Guid? id)=>ScheduledLowDraft=id is {} key
         ? Engine.Snapshot.Schedules.SingleOrDefault(s=>s.Id==key)?.LowTime ?? throw new ArgumentException("That schedule is no longer available.") : new();
     internal static object LowView(LowTimeOptions low,int threshold)=>new{low.Enabled,inherit=low.ThresholdSeconds is null,threshold=low.ThresholdSeconds??threshold,track=(int)low.Track,low.RandomTracks,custom=low.Mp3Path.Length>0,customName=Path.GetFileName(low.Mp3Path)};
-    internal static object FocusTargetView(FocusTarget t)=>new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused,captureScope=(int)t.CaptureScope};
+    internal static object FocusTargetView(FocusTarget t)=>new {id=t.Id,key=PreviewApplication.FocusTargetKey(t),kind=(int)t.Kind,name=t.Name,app=t.App,windowName=t.WindowName,tabPosition=t.TabPosition,t.UseFocused,t.SiteHost,captureScope=(int)t.CaptureScope};
     internal static object FocusView(FocusModeSettings settings)=>new {
-        settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds, settings.ScreenEdgeGlow,
+        settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds, settings.ScreenEdgeGlow,settings.TargetOnSiteLinks,settings.BrowserCompanionEnabled,
         screenEdgeGlowStyle=(int)settings.ScreenEdgeGlowStyle,
         targets=settings.SelectedTargets.Select(FocusTargetView),
         target=settings.Target?.Name,

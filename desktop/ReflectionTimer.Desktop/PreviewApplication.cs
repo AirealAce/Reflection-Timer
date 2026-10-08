@@ -38,6 +38,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         Services = new(session.Engine, directory, speech:speech); Services.Announcement += Announce;
         session.DeliveryFailure=Services.IsFailedDelivery;
         session.DeliveryRetryBusy=()=>Services.RetryAllBusy;
+        focusTargets=new WindowsFocusTargets(browserIndex);
         InitializeFocusMode();
         Services.SessionAnnouncement += AnnounceSession;
         Services.DeliveryIssueChanged += () => {Broadcast(new { type = "deliveryIssue", issue = Services.DeliveryIssue });Broadcast(new {type="state",state=Session.View()});};
@@ -57,7 +58,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         // leave the same ready/zero state, so a timer-state comparison alone
         // cannot distinguish it from an unrelated settings update.
         session.Engine.ActivityRecorded += activity => {if(activity.Event=="timer.reset")viewerResetCommitted=true;};
-        session.Engine.Changed += () => {var restored=RestoreIdleViewer();ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly=keepTimeOnly||restored });};
+        session.Engine.Changed += () => {UpdateBrowserCompanion();var restored=RestoreIdleViewer();ApplyTheme();foreach(var window in windows.ToArray())window.ConfigureAutoHide();Broadcast(new { type = "state", state = session.View(incremental:true), keepTimeOnly=keepTimeOnly||restored });};
         session.Announcement += Announce;
         session.DurationDraftChanged+=parts=>Broadcast(new{type="durationDraft",parts});
         pulse.Tick += (_, _) => {
@@ -82,7 +83,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(10, _=>ToggleFocusModeFromGlobalShortcut()),
             Shortcut(11, _=>ToggleTargetFromGlobalShortcut())
         ], (id,available)=>Services.Log.Record(available?"shortcut.registered":"shortcut.unavailable",value:id), shortcutRegistration);
-        ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
+        UpdateBrowserCompanion();ApplyTheme();pulse.Start(); if(AppViewMayShow)MainForm.Show(); ApplyDisplayPreferences();
     }
     private bool RestoreIdleViewer()
     {
@@ -335,5 +336,5 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again."); }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }
