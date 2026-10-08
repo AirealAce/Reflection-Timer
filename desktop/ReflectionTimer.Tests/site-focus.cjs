@@ -2,7 +2,7 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 (async()=>{
-  const browser=await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER||'chrome',headless:true});let count=0;
+  const browser=await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER==='chromium'?undefined:process.env.REFLECTION_TEST_BROWSER||'chrome',headless:true});let count=0;
   const check=(ok,name)=>{assert.ok(ok,name);count++;console.log('PASS '+name);};
   try{
     const page=await browser.newPage({viewport:{width:739,height:642}}),errors=[];
