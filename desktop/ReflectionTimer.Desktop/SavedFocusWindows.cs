@@ -15,8 +15,18 @@ internal sealed class SavedFocusWindows(TimerEngine engine, IFocusTargetSource s
     internal static bool IsSavedWindow(FocusTarget target)=>target.Kind==FocusTargetKind.Window&&!target.UseFocused;
     private static bool SameApplication(FocusTarget saved,FocusTarget current)=>
         string.Equals(saved.App,current.App,StringComparison.OrdinalIgnoreCase)
-        && (saved.ProcessPath.Length==0 || current.ProcessPath.Length>0&&string.Equals(saved.ProcessPath,current.ProcessPath,StringComparison.OrdinalIgnoreCase))
+        && (saved.ProcessPath.Length==0 || current.ProcessPath.Length>0&&string.Equals(ExecutableKey(saved.ProcessPath),ExecutableKey(current.ProcessPath),StringComparison.OrdinalIgnoreCase))
         && (saved.WindowClass.Length==0 || current.WindowClass.Length>0&&ClassKey(saved.WindowClass)==ClassKey(current.WindowClass));
+    // Store updates change the version in WindowsApps package folders. Keep
+    // the installation root, package/publisher, architecture, resource and
+    // executable within the package; ignore only that package version.
+    private static string ExecutableKey(string path)
+    {
+        var package=Regex.Match(path,
+            @"^([a-z]:\\(?:[^\\]+\\)*WindowsApps\\[a-z0-9.-]+_)\d+\.\d+\.\d+\.\d+(_(?:x86|x64|arm|arm64|neutral)_[a-z0-9.-]*_[a-z0-9]{13}\\.+)$",
+            RegexOptions.IgnoreCase|RegexOptions.CultureInvariant);
+        return package.Success?"windows-package:"+package.Groups[1].Value+package.Groups[2].Value:"file:"+path;
+    }
     // WinForms embeds a process/assembly-specific hash in the native class.
     private static string ClassKey(string value)=>value.StartsWith("WindowsForms",StringComparison.Ordinal)
         ? Regex.Replace(value,@"\.app\..*$","") : value;
