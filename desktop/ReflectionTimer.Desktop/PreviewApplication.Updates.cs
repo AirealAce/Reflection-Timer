@@ -10,6 +10,7 @@ internal sealed partial class PreviewApplication
     private DesktopUpdateRelease? availableUpdate;
     private string? preparedUpdatePayload;
     private bool updateBusy;
+    private bool updatesDisposed;
     internal DesktopUpdateState UpdateState { get; private set; } = new("idle", InstalledVersion.ToString(3), "Check for a newer version.");
 
     private void PublishUpdate(string status, string message, int? progress = null)
@@ -84,6 +85,10 @@ internal sealed partial class PreviewApplication
 
     private void DisposeUpdates()
     {
+        // ApplicationContext can be disposed by the message loop and again by
+        // its using scope after the last form closes.
+        if(updatesDisposed)return;
+        updatesDisposed = true;
         updateLifetime.Cancel();
         desktopUpdates.Dispose();
         updateLifetime.Dispose();

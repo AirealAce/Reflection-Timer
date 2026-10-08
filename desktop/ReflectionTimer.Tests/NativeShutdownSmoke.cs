@@ -46,6 +46,9 @@ static class NativeShutdownSmoke
                 Check(Closing(main, CloseReason.UserClosing).Cancel, "A canceled system shutdown does not change later tray-close behavior");
                 Check(JsonSerializer.Serialize(session.Engine.Snapshot, DataJson.Options) == expected,
                     "Shutdown queries preserve saved preferences, timer state and reflection data");
+                app.Dispose();
+                app.Dispose();
+                Check(true, "Repeated message-loop and using-scope disposal closes update services safely");
             }
             catch (Exception error) { failure = error; }
         });
