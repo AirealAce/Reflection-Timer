@@ -44,6 +44,9 @@ public record FocusModeSettings
     public int DelaySeconds { get; init; } = 5;
     public FocusTarget? Target { get; init; }
     public ImmutableArray<FocusTarget> Targets { get; init; } = [];
+    // The chooser category is independent of selected targets. Null preserves
+    // the target-based default for profiles saved before this preference existed.
+    public FocusTargetKind? PickerKind { get; init; }
     public bool MultipleTargets { get; init; }
     public bool TargetOnSiteLinks { get; init; } = true;
     public bool BrowserCompanionEnabled { get; init; }
@@ -81,9 +84,9 @@ public sealed class FocusModeGate
         else awaySince = null;
         var remaining = awaySince is {} since ? Math.Max(0, settings.DelaySeconds - (now - since) / 1000) : (long?)null;
         var idle = settings.IdleEnabled && idleMilliseconds >= settings.IdleSeconds * 1000L;
-        // The visual warning is immediate and independent of the audio grace
-        // period. Inactivity on a selected target is not leaving that target.
-        var glow = settings.ScreenEdgeGlow && hasTargets && presence == FocusPresence.Away;
+        // Target warnings are immediate and independent of the audio grace
+        // period. With no targets, the visual warning follows the idle trigger.
+        var glow = settings.ScreenEdgeGlow && (hasTargets ? presence == FocusPresence.Away : idle);
         if (idle) return new(true, $"Idle for {settings.IdleSeconds} seconds · alert active", glow);
         if (remaining is {} seconds) return new(seconds == 0, seconds == 0 ? "Away from selected targets · delay reached" : $"Away from selected targets · alert in {seconds} seconds", glow);
         return new(false, !hasTargets ? settings.IdleEnabled ? "Watching for inactivity" : "Choose a window or tab" : presence switch {

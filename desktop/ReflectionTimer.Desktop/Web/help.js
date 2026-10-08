@@ -41,7 +41,8 @@ export function mountHelp({view,selectTab}) {
     display:'Display and window positions',animations:'Animations',reset:'Reset confirmation',reflections:'Reflection prompts',audio:'Audio playback',
     'audio-low':'Low-on-time audio','audio-reached':'Time-reached audio',focus:'Focus mode',voice:'Voice announcements',
     destinations:'Save reflection data',connection:'Google Sheets connection',startup:'Startup and settings',
-    diagnostics:'Diagnostics',guidance:'Help and guidance','focus-picker':'Choose a focus target'};
+    diagnostics:'Diagnostics',guidance:'Help and guidance','focus-picker':'Choose a focus target',
+    'focus-site-links':'Target On-Site Links','focus-target-type':'Target type','focus-site-website':'Website'};
   const groups=new Map(),helpIds=new Set();let preference;
   const contents=document.getElementById('help-contents'),topics=document.getElementById('help-topics');
   for(const node of document.querySelectorAll('[data-help]')){
@@ -61,13 +62,13 @@ export function mountHelp({view,selectTab}) {
     }
   }
   function open(group,expanded){
-    group.open=expanded;group.nodes.forEach(node=>node.hidden=!expanded);
+    group.open=expanded;group.nodes.forEach(node=>node.hidden=!expanded||node.dataset.helpAvailable==='false');
     group.button?.setAttribute('aria-expanded',String(expanded));syncDescriptions();
   }
   function copyGuidance(node){
     const copy=node.cloneNode(true);
     for(const element of [copy,...copy.querySelectorAll('*')]){
-      for(const attribute of ['id','hidden','data-help','data-help-heading','data-settings-filtered','aria-describedby','aria-labelledby'])element.removeAttribute(attribute);
+      for(const attribute of ['id','hidden','data-help','data-help-heading','data-help-available','data-settings-filtered','aria-describedby','aria-labelledby'])element.removeAttribute(attribute);
       element.classList.remove('sr-only');
     }
     return copy;
@@ -90,7 +91,12 @@ export function mountHelp({view,selectTab}) {
     button.id=`help-toggle-${group.key}`;button.type='button';button.className='help-button';button.setAttribute('aria-label',`Help for ${group.title}`);
     button.title=`Help for ${group.title}`;button.setAttribute('aria-controls',group.nodes.map(node=>node.id).join(' '));
     icon.textContent='?';icon.setAttribute('aria-hidden','true');button.append(icon);
-    if(heading.tagName==='P'){
+    if(heading.tagName==='LABEL'){
+      // A help button beside a field must not become part of its native label:
+      // clicking help should never toggle a checkbox or move focus to an input.
+      heading.id||=`help-label-${group.key}`;
+      const row=document.createElement('div');row.className='help-heading help-field-heading';heading.before(row);row.append(heading,button);
+    }else if(heading.tagName==='P'){
       heading.classList.add('help-label');heading.append(button);
     }else if(heading.tagName==='LEGEND'){
       const label=document.createElement('span');label.id=`help-label-${group.key}`;label.append(...heading.childNodes);
@@ -104,6 +110,11 @@ export function mountHelp({view,selectTab}) {
     group.button=button;button.addEventListener('click',()=>open(group,!group.open));
     addTopic(group.key,group.title,group.nodes);open(group,false);
   }
+  // Selection-dependent guidance keeps its disclosure preference when the
+  // relevant targets change; unavailable text stays hidden even with Show all.
+  document.addEventListener('helpavailabilitychange',event=>{
+    const group=groups.get(event.target.dataset?.help);if(group)open(group,group.open);
+  });
   const connectionGuide=document.getElementById('setup-guide-content');
   addTopic('receiver','Set up Google Sheets',[...connectionGuide.querySelectorAll(':scope>ol,:scope>p')]);
   const promptKeys=document.createElement('p');promptKeys.textContent=document.getElementById('reflection-form').getAttribute('aria-description');

@@ -84,7 +84,7 @@ internal sealed partial class PreviewApplication
                 if(result.Added)focusChoices[chosen.Id]=chosen;
                 Broadcast(new{type="focusTargetToggled",target=PreviewSession.FocusTargetView(chosen),@checked=result.Added,
                     keys=changedKeys,result.Settings.MultipleTargets,result.Settings.Enabled});
-                Services.AnnounceFeedback(FocusTargetToggle.Label(chosen)+(result.Added?" checked as a Focus target.":" unchecked as a Focus target."),supplementary:true);
+                Services.AnnounceFeedback(FocusTargetToggle.Label(chosen)+(result.Added?" checked as a Focus target.":" unchecked as a Focus target."));
             }catch(Exception error){Services.AnnounceFeedback(error is ArgumentException?error.Message:"The Focus target could not be saved. Your existing targets and session are retained.");}
             finally{targetShortcutBusy=false;}
         });

@@ -92,7 +92,7 @@ internal sealed partial class PreviewApplication
         FocusSitePolicy.ValidateSelection(current,next,BrowserConnected);
         Session.Engine.SetFocusMode(next);
     }
-    internal void SelectFocusTargets(IReadOnlyList<Guid> ids, bool enable, bool multiple, bool idle, int idleSeconds, bool? targetOnSiteLinks=null, bool? browserCompanionEnabled=null)
+    internal void SelectFocusTargets(IReadOnlyList<Guid> ids, bool enable, bool multiple, bool idle, int idleSeconds, bool? targetOnSiteLinks=null, bool? browserCompanionEnabled=null, FocusTargetKind? pickerKind=null)
     {
         var selected = ids.Distinct().Select(id => focusChoices.TryGetValue(id, out var target) ? target
             : throw new ArgumentException("That target list expired. Refresh it and choose again.")).Select(focusMonitor.CurrentWindow).DistinctBy(t => t.Key).ToArray();
@@ -100,6 +100,7 @@ internal sealed partial class PreviewApplication
         var next = current with { Enabled = enable || current.Enabled, MultipleTargets = multiple, IdleEnabled = idle,
             IdleSeconds = idleSeconds, TargetOnSiteLinks=targetOnSiteLinks??current.TargetOnSiteLinks,
             BrowserCompanionEnabled=browserCompanionEnabled??current.BrowserCompanionEnabled,
+            PickerKind=pickerKind??current.PickerKind,
             Target = selected.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(selected) };
         FocusSitePolicy.ValidateSelection(current,next,BrowserConnected);
         Session.Engine.SetFocusMode(next);

@@ -12,6 +12,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       const handlers=[];window.messages=[];window.choices=new Map();window.currentTabId='1-b';
       window.dispatchBridge=m=>handlers.forEach(h=>h({data:m}));
       window.settings={volume:50,tracks:[{id:0,name:'Default'},{id:6,name:'Battle (Trainer)'},{id:9,name:'None'}],sounds:[0,1,2,3,4,5].map(kind=>({kind,track:kind===5?6:0,behavior:kind===5?2:0,volume:100,fadeOutAfterSeconds:10,defaultName:'Battle (Trainer)'})),focusMode:{enabled:false,delaySeconds:5,targets:[],multipleTargets:false,idleEnabled:false,idleSeconds:20}};
+      const savedFocus=sessionStorage.getItem('synthetic-focus');if(savedFocus)window.settings.focusMode=JSON.parse(savedFocus);
       window.chrome={webview:{addEventListener:(_,h)=>handlers.push(h),postMessage:m=>{
         window.messages.push(m);queueMicrotask(()=>{
           if(m.action==='focusTargets'){
@@ -32,7 +33,8 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             const complete=()=>{
               if(window.selectionError){window.dispatchBridge({type:'reply',requestId:m.requestId,error:window.selectionError});return;}
               const targets=m.data.ids.map(id=>window.choices.get(id));if(targets.some(t=>!t))throw new Error('Unknown target sent');
-              window.settings.focusMode={...window.settings.focusMode,targets,enabled:m.data.enable||window.settings.focusMode.enabled,multipleTargets:m.data.multipleTargets,idleEnabled:m.data.idleEnabled,idleSeconds:m.data.idleSeconds};
+              window.settings.focusMode={...window.settings.focusMode,targets,pickerKind:m.data.pickerKind,enabled:m.data.enable||window.settings.focusMode.enabled,multipleTargets:m.data.multipleTargets,idleEnabled:m.data.idleEnabled,idleSeconds:m.data.idleSeconds};
+              sessionStorage.setItem('synthetic-focus',JSON.stringify(window.settings.focusMode));
               window.successCount=(window.successCount??0)+1;window.dispatchBridge({type:'settings',settings:window.settings});window.dispatchBridge({type:'reply',requestId:m.requestId});
             };if(window.holdSelection)window.releaseSelection=complete;else complete();return;
           }
@@ -169,7 +171,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.locator('#tab-timer').click();await open();count=await saves();await page.evaluate(()=>window.dispatchBridge({type:'settingsSaveShortcut'}));await dialog.waitFor({state:'hidden'});
     check(await saves()===count+1,'The native WebView save shortcut also saves the picker when opened from Timer');
     await open();await page.locator('#focus-multiple-targets').check();
-    check(await table.getByRole('checkbox').count()===5&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled checkboxes and an explicit Save button');
+    check(await table.getByRole('checkbox').count()===6&&await page.locator('#focus-target-use').textContent()==='Save selected targets','Multiple Targets adds native, labelled row and header checkboxes and an explicit Save button');
     await kind(0);await row(0,'a').getByRole('checkbox').check();await kind(1);await row(1,'a').getByRole('checkbox').check();await kind(2);
     check(await row(2,'a').getByRole('checkbox').isChecked(),'Changing categories retains the group selection');
     await kind(0);check(await row(0,'a').getByRole('checkbox').isChecked(),'The window checkbox remains checked after visiting other categories');
@@ -190,7 +192,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await row(2,'a').getByRole('checkbox').uncheck();await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});check(await page.evaluate(()=>window.settings.focusMode.targets.length===1&&window.settings.focusMode.targets[0].kind===0),'A closed target can be unchecked while retaining selections in other categories');
     await page.evaluate(()=>window.emptyTargets=false);await open();await page.locator('#focus-multiple-targets').uncheck();await close();check(await page.evaluate(()=>window.settings.focusMode.multipleTargets),'Cancelling option changes preserves the saved mode');
     await open();await page.locator('#focus-multiple-targets').uncheck();await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});check(await page.evaluate(()=>!window.settings.focusMode.multipleTargets)&&await page.locator('#choose-focus-target .focus-target-label').textContent()==='EXCEL','Returning to a single target restores the two-line app-name button');
-    await open();await page.locator('#focus-multiple-targets').check();await row(0,'a').getByRole('checkbox').uncheck();await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});
+    await open();await kind(0);await page.locator('#focus-multiple-targets').check();await row(0,'a').getByRole('checkbox').uncheck();await page.locator('#focus-target-use').click();await dialog.waitFor({state:'hidden'});
     check(await page.evaluate(()=>window.settings.focusMode.targets.length===0&&window.settings.focusMode.idleEnabled)&&await page.locator('#choose-focus-target').textContent()==='Choose Window / Tab…','Idle-only focus can be saved with no window selection');
     await page.locator('#focus-enabled').click();await page.waitForFunction(()=>window.settings.focusMode.enabled);check(!await dialog.isVisible(),'Idle-only Focus enables without demanding a target');
     await page.locator('#focus-enabled').click();await open();await page.locator('#focus-idle-enabled').uncheck();await close();check(await page.evaluate(()=>window.settings.focusMode.idleEnabled),'Cancel also restores saved idle options');
@@ -310,7 +312,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       const old=suffix=>({id:`0-old${suffix}`,key:`0-old${suffix}`,kind:0,name:'Work window',app:'EXCEL',windowName:'Work window'});
       window.oldWindows=[old(1),old(2)];
       window.windowReplacements=[{id:'0-restored',key:'0-restored',kind:0,name:'Work window',app:'EXCEL',windowName:'Work window',replacesKeys:window.oldWindows.map(t=>t.key),selected:true}];
-      window.settings.focusMode={...window.settings.focusMode,targets:window.oldWindows,multipleTargets:true};window.dispatchBridge({type:'settings',settings:window.settings});
+      window.settings.focusMode={...window.settings.focusMode,targets:window.oldWindows,multipleTargets:true,pickerKind:0};window.dispatchBridge({type:'settings',settings:window.settings});
     });
     await open();
     check(await table.locator('tbody tr.unavailable').count()===0&&await table.locator('tbody tr').count()===3&&await table.getByRole('checkbox').evaluateAll(boxes=>boxes.filter(b=>b.checked).length===1),'Reconnected duplicate bookmarks become one checked live window with no gray stale rows');
@@ -367,7 +369,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.evaluate(()=>!window.settings.focusMode.targets.some(t=>t.key==='0-new')&&window.settings.focusMode.targets.some(t=>t.key==='1-a')),'Toggling a different category retains the current category draft without saving a removed target');
     await page.evaluate(({windowA})=>{
       const old=suffix=>({...windowA,id:'0-obsolete'+suffix,key:'0-obsolete'+suffix});
-      window.settings.focusMode.targets=[old(1),old(2)];window.dispatchBridge({type:'settings',settings:window.settings});
+      window.settings.focusMode.targets=[old(1),old(2)];window.settings.focusMode.pickerKind=0;window.dispatchBridge({type:'settings',settings:window.settings});
     },{windowA});await open();
     check(await table.locator('tbody tr.unavailable').count()===2,'The fixture represents two obsolete saved aliases separately');
     await row(0,'b').getByRole('checkbox').check();await toggleTarget(windowA,false,['0-a','0-obsolete1','0-obsolete2']);
@@ -421,6 +423,8 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.evaluate(()=>{window.holdAnimationSave=false;window.releaseAnimationSave();});await page.waitForFunction(()=>window.settings.focusMode.screenEdgeGlowStyle===0);
     check(await page.locator('#focus-picker-glow-style').inputValue()==='0','Rapid style changes retain and synchronize the latest choice after a delayed save');
     await open('#choose-focus-target-settings');await page.locator('#focus-multiple-targets').check();await kind(1);await row(1,'background').getByRole('checkbox').check();
+    check(await page.locator('#focus-picker-tab-scope').isHidden(),'Relevant background-tab guidance stays collapsed until its Target type help is opened');
+    await page.locator('#help-toggle-focus-target-type').click();
     check(await page.locator('#focus-picker-tab-scope').isVisible()&&await page.locator('#focus-picker-tab-scope').textContent().then(t=>t.includes('only the selected tab')),'Background tab selection explains its exact one-tab capture');
     check(!await page.locator('#focus-picker-target-overlap').isVisible(),'A tab-only selection does not show unrelated overlap guidance');
     await kind(2);await row(2,'focused').getByRole('checkbox').check();
@@ -438,6 +442,9 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
       &&await row(0,'b').locator('td').last().textContent()==='ChatGPT — Window 2 (minimized)','Separate same-title windows have distinct visible names and minimized feedback');
     check(await row(0,'b').getAttribute('aria-label').then(name=>name.includes('Window 2 (minimized)')),'Screen readers receive the same window distinction as the visible table');
     await close();
+    await require('./focus-picker-preference.cjs')(page,check);
+    await require('./focus-target-select-all.cjs')(page,check);
+    await require('./focus-target-search.cjs')(page,check);
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}

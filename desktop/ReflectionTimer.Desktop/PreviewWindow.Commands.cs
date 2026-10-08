@@ -13,6 +13,13 @@ internal sealed partial class PreviewWindow
     private static int ReadInt(JsonElement data, string key, int min, int max) => data.TryGetProperty(key,out var value) && value.TryGetInt32(out var result) && result >= min && result <= max
         ? result : throw new ArgumentException($"Enter {key} between {min} and {max}.");
     private static bool ReadFlag(JsonElement data,string key) => data.TryGetProperty(key,out var value) && value.ValueKind == JsonValueKind.True;
+    internal static FocusTargetKind? ReadFocusPickerKind(JsonElement data)
+    {
+        if(!data.TryGetProperty("pickerKind",out var value))return null;
+        if(value.ValueKind!=JsonValueKind.Number||!value.TryGetInt32(out var number)||!Enum.IsDefined((FocusTargetKind)number))
+            throw new ArgumentException("Choose a supported Focus target type.");
+        return (FocusTargetKind)number;
+    }
     private ConnectionSettings ReadConnection(JsonElement data)
     {
         var token = ReadString(data,"token",512).Trim();
@@ -47,7 +54,7 @@ internal sealed partial class PreviewWindow
                 if (data.TryGetProperty("ids",out var targetIds)) {
                     if(targetIds.ValueKind != JsonValueKind.Array || targetIds.GetArrayLength() > 256) throw new ArgumentException("Choose up to 256 listed targets.");
                     var ids = targetIds.EnumerateArray().Select(value => value.ValueKind == JsonValueKind.String && value.TryGetGuid(out var id) ? id : throw new ArgumentException("Choose listed targets.")).ToArray();
-                    app.SelectFocusTargets(ids,ReadFlag(data,"enable"),ReadFlag(data,"multipleTargets"),ReadFlag(data,"idleEnabled"),ReadInt(data,"idleSeconds",1,TimerEngine.MaxDuration),data.TryGetProperty("targetOnSiteLinks",out _)?ReadFlag(data,"targetOnSiteLinks"):null,data.TryGetProperty("browserCompanionEnabled",out _)?ReadFlag(data,"browserCompanionEnabled"):null);
+                    app.SelectFocusTargets(ids,ReadFlag(data,"enable"),ReadFlag(data,"multipleTargets"),ReadFlag(data,"idleEnabled"),ReadInt(data,"idleSeconds",1,TimerEngine.MaxDuration),data.TryGetProperty("targetOnSiteLinks",out _)?ReadFlag(data,"targetOnSiteLinks"):null,data.TryGetProperty("browserCompanionEnabled",out _)?ReadFlag(data,"browserCompanionEnabled"):null,ReadFocusPickerKind(data));
                 } else {
                     if(!Guid.TryParse(ReadString(data,"id",36),out var targetId))throw new ArgumentException("Choose a listed target.");
                     app.SelectFocusTarget(targetId,ReadFlag(data,"enable"));

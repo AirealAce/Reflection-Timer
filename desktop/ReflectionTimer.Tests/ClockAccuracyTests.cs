@@ -151,8 +151,8 @@ static class ClockAccuracyTests
             test.Clock.Advance(600000);
             var restarted = new Fixture(test.Store, new Clock { Wall = test.Clock.Wall, Ticks = 987654321 });
             using (restarted) {
-                check(restarted.Spent == 642125 && restarted.Engine.ClockRecoveryNotice!.Contains("cannot be verified"),
-                    "Restart includes documented downtime without reusing a process timestamp, and reports its estimate: " + mode);
+                check(restarted.Spent == 642125 && restarted.Engine.ClockRecoveryNotice is null,
+                    "Restart includes downtime without reusing a process timestamp or showing a routine recovery notice: " + mode);
                 restarted.Engine.Pause(); restarted.Clock.Advance(300000);
                 using var pausedRestart = new Fixture(test.Store, new Clock { Wall = restarted.Clock.Wall });
                 check(pausedRestart.Spent == 642125 && pausedRestart.Engine.ClockRecoveryNotice is null,

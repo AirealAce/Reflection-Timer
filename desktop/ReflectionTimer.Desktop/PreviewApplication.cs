@@ -125,7 +125,12 @@ internal sealed partial class PreviewApplication : ApplicationContext
         var requestedAt=Session.Engine.ElapsedNow-(long)Math.Max(0,queueDelay.TotalMilliseconds);
         if(closing)return;
         try { action(requestedAt); }
-        catch(Exception e) { if(id!=4)Open("main"); Services.AnnounceFeedback(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained."); }
+        catch(Exception e) {
+            // Playback and mode shortcuts work from another app. Report a failed
+            // action through the usual accessible feedback without opening ours.
+            if(id is not (4 or 5 or 6 or 7))Open("main");
+            Services.AnnounceFeedback(e is ArgumentException?e.Message:"That action is unavailable. Your timer is retained.");
+        }
         finally { Services.Log.Record(new Activity(Session.Engine.CalendarTimestamp(requestedAt),"shortcut.used",null,id)); }
     };
     private void OpenPendingOrCheckIn(long requestedAt)
@@ -148,7 +153,9 @@ internal sealed partial class PreviewApplication : ApplicationContext
     {
         compactPresses.Reset();
         var result=KeepingTimeOnly(()=>Session.ToggleTimerFromShortcut(requestedAt));Announce(result);
-        if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
+        // A pause arriving at the countdown deadline is a natural completion,
+        // not a request to focus the reflection editor over the originating app.
+        if(result.OpenReflection is {} id)_ = OpenReflectionAsync(id,false,sessionCompleted:result.SessionCompleted,automaticCompletion:true);
     }
     internal CommandResult KeepingTimeOnly(Func<CommandResult> action)
     {
@@ -167,7 +174,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             && (w.View=="main" || w.View=="compact"&&!w.IsTimeOnly));
         var result=KeepingTimeOnly(()=>Session.ToggleModeFromShortcut(requestedAt));Announce(result);
         if(viewer is not null)Open(viewer.View,timerPage:true);
-        if(result.OpenReflection is {} id)Open("reflection",id,sessionCompleted:result.SessionCompleted);
+        if(result.OpenReflection is {} id)_ = OpenReflectionAsync(id,false,sessionCompleted:result.SessionCompleted,automaticCompletion:true);
     }
     internal void SetStartup(bool enabled)
     {

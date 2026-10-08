@@ -36,7 +36,7 @@ public sealed partial class TimerEngine
             var reversed = running.Any(t => t.ClockSavedAt > at.Wall || (t.ClockSavedAt is null && t.RunningSince > at.Wall));
             ClockRecoveryNotice = reversed
                 ? "The PC clock is earlier than a saved running-session checkpoint. Saved work was retained, but time while the app was closed could not be verified. Review the recovered time before submitting."
-                : "A running session was recovered using the saved PC-clock time, including time while the app was closed. Clock changes during that time cannot be verified; review the recovered time before submitting.";
+                : null;
         }
         state.Timer = Restore(state.Timer, at);
         if (state.ParkedTimer is { } parked) state.ParkedTimer = Restore(parked, at);

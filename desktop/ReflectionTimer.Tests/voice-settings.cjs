@@ -3,7 +3,7 @@ const {chromium}=require('playwright');
 const fs=require('node:fs/promises'),path=require('node:path'),assert=require('node:assert/strict');
 const root=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
 (async()=>{
-  const browser=await chromium.launch({channel:'msedge',headless:true});let passed=0;
+  const browser=await chromium.launch({channel:process.env.REFLECTION_TEST_BROWSER==='chromium'?undefined:process.env.REFLECTION_TEST_BROWSER||'msedge',headless:true});let passed=0;
   const check=(value,message)=>{assert.ok(value,message);passed++;console.log('PASS '+message);};
   try{
     const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
@@ -49,7 +49,7 @@ const root=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await page.evaluate(()=>{window.failVoice=true;});
     await page.locator('#voice-announcements').uncheck();
     await page.waitForFunction(()=>document.querySelector('#error').textContent.includes('Synthetic save failure'));
-    check(true,'Failed autosave is visibly reported');
+    check(await page.locator('#error').isVisible(),'Failed autosave is visibly reported');
     await page.evaluate(()=>{window.failVoice=false;window.dispatchBridge({type:'flushSettings'});});
     await page.waitForFunction(()=>window.voiceMessages.some(m=>m.action==='flushed'));
     check(await page.evaluate(()=>window.voiceMessages.filter(m=>m.action==='voiceAnnouncements').at(-1).data.enabled===false),'Quit/save flush retries the unsaved preference');
@@ -64,6 +64,15 @@ const root=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     check(await page.locator('#session-status').getAttribute('aria-live')==='off'&&await page.locator('#status').textContent()==='',
       'Session status does not duplicate the native notification in a browser live region');
     check(await page.evaluate(()=>window.voiceMessages.filter(m=>m.action==='voiceAnnouncements').length)===commands,'Displaying session feedback cannot overwrite the saved voice preference');
+    await page.locator('#tab-timer').click();
+    check(await page.locator('.messages').evaluate(element=>element.getBoundingClientRect().height===0),'Passive session feedback leaves no visible message strip or blank footer on Timer');
+    const cdp=await page.context().newCDPSession(page),tree=await cdp.send('Accessibility.getFullAXTree');
+    check(tree.nodes.some(node=>!node.ignored&&node.name?.value==='Timer paused with 2 minutes remaining.'),'Visually omitted session feedback stays readable in the accessibility tree');await cdp.detach();
+    await page.evaluate(()=>window.dispatchBridge({type:'announcement',message:'The PC clock is earlier than a saved running-session checkpoint.'}));
+    await page.waitForFunction(()=>document.querySelector('#status').textContent.includes('PC clock is earlier'));
+    check(await page.locator('#status').isVisible()&&await page.locator('.messages').evaluate(element=>element.getBoundingClientRect().height>0),'A detected clock problem still has a visible status message');
+    await page.locator('#tab-settings').click();
+    check(await page.locator('.messages').evaluate(element=>element.getBoundingClientRect().height>=64)&&await page.locator('#save-settings').isVisible(),'Settings keeps its Save settings footer reservation');
     check(errors.length===0,'Voice settings produced no browser script errors');
     await page.goto('https://reflection-timer.invalid/compact.html');
     await page.waitForFunction(()=>window.voiceMessages.some(m=>m.action==='ready'));

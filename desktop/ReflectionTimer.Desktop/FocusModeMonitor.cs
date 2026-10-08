@@ -18,8 +18,9 @@ internal sealed class FocusModeMonitor : IDisposable
     private long readingStarted;
     private AppState previous;
     private long generation;
-    private readonly Dictionary<Guid, Capture> captures = [];
-    private Capture? queuedCapture, activeCapture;
+    private readonly Dictionary<Guid, Dictionary<string, Capture>> captures = [];
+    private readonly List<Capture> queuedCaptures = [];
+    private Capture? activeCapture;
     private Task<IReadOnlyList<FocusTarget>>? capturing;
     private sealed record Capture(Guid Session, FocusTarget? Window, IReadOnlyList<FocusTarget> Windows,FocusTarget[] Choices)
     {
@@ -57,18 +58,45 @@ internal sealed class FocusModeMonitor : IDisposable
                 try { foreground = source.CaptureForeground(); } catch { foreground = null; }
                 IReadOnlyList<FocusTarget> open;
                 try{open=choices.Any(t=>t.CaptureScope!=FocusCaptureScope.Focused)?source.CaptureOpenWindows():[];}catch{open=[];}
-                var capture = new Capture(session, foreground, open,choices);
-                captures[session] = capture; queuedCapture = capture;
-                PumpCapture();
+                captures[session] = [];
+                QueueCapture(new(session, foreground, open,choices));
+            }
+            else captures.Remove(session);
+        }
+        else if (state.Timer.IsRunning && state.Timer.SessionId is {} runningSession
+            && state.FocusMode.SelectionKey != previous.FocusMode.SelectionKey) {
+            // Background choices can be resolved from the windows open at save.
+            // Keep already selected choices pinned to their own earlier snapshot;
+            // foreground-only choices still resolve at the next start/resume.
+            var added = state.FocusMode.SelectedTargets.Where(t => t.UseFocused && t.CaptureScope != FocusCaptureScope.Focused
+                && !previous.FocusMode.SelectedTargets.Any(p => p.Key == t.Key)).ToArray();
+            if (added.Length > 0) {
+                IReadOnlyList<FocusTarget> open;
+                try { open = source.CaptureOpenWindows(); } catch { open = []; }
+                QueueCapture(new(runningSession, null, open, added));
             }
         }
         foreach (var id in captures.Keys.Where(id => id != state.Timer.SessionId && id != state.ParkedTimer?.SessionId).ToArray()) captures.Remove(id);
+        if (state.Timer.SessionId is {} current && captures.TryGetValue(current, out var selections))
+            foreach (var key in selections.Keys.Where(key => !state.FocusMode.SelectedTargets.Any(t => t.UseFocused && t.Key == key)).ToArray()) selections.Remove(key);
+        queuedCaptures.RemoveAll(c => !Current(c));
         previous = state;
+    }
+    private Capture? Captured(Guid? session, string key) => session is {} id && captures.TryGetValue(id, out var selections)
+        ? selections.GetValueOrDefault(key) : null;
+    private bool Current(Capture capture) => capture.Choices.Any(t => ReferenceEquals(Captured(capture.Session, t.Key), capture));
+    private void QueueCapture(Capture capture)
+    {
+        if (!captures.TryGetValue(capture.Session, out var selections)) captures[capture.Session] = selections = [];
+        foreach (var choice in capture.Choices) selections[choice.Key] = capture;
+        queuedCaptures.RemoveAll(c => !Current(c));
+        queuedCaptures.Add(capture);
+        PumpCapture();
     }
     private void CompleteCapture()
     {
         if (capturing is { IsCompleted: true }) {
-            if (activeCapture is {} captured && ReferenceEquals(captures.GetValueOrDefault(captured.Session), captured)) {
+            if (activeCapture is {} captured && Current(captured)) {
                 captured.Targets = capturing.IsCompletedSuccessfully ? capturing.Result.Where(t => !t.UseFocused).ToArray() : [];
                 captured.Completed = true;
             }
@@ -78,13 +106,14 @@ internal sealed class FocusModeMonitor : IDisposable
     private void PumpCapture()
     {
         CompleteCapture();
-        // A newer start/resume replaces the waiting snapshot; never accumulate
-        // requests behind a browser whose accessibility provider has stalled.
-        if (capturing is null && queuedCapture is {} next) {
-            queuedCapture = null;
-            if (!ReferenceEquals(captures.GetValueOrDefault(next.Session), next)) return;
+        // Each selected choice owns at most one waiting snapshot. A newer
+        // start/resume or remove/re-add discards its obsolete pending batch.
+        queuedCaptures.RemoveAll(c => !Current(c));
+        if (capturing is null && queuedCaptures.Count > 0) {
+            var next = queuedCaptures[0]; queuedCaptures.RemoveAt(0);
             activeCapture = next;
-            var choices=next.Choices.Where(t=>t.Kind!=FocusTargetKind.Site||SiteTargetsAvailable()).ToArray();
+            var choices=next.Choices.Where(t=>ReferenceEquals(Captured(next.Session,t.Key),next)
+                && (t.Kind!=FocusTargetKind.Site||SiteTargetsAvailable())).ToArray();
             try { capturing = choices.Length==0?Task.FromResult<IReadOnlyList<FocusTarget>>([]):source.CaptureSelectionsAsync(next.Window,next.Windows,choices); }
             catch { capturing = Task.FromResult<IReadOnlyList<FocusTarget>>([]); }
             CompleteCapture();
@@ -92,9 +121,8 @@ internal sealed class FocusModeMonitor : IDisposable
     }
     private FocusModeSettings Effective(AppState state)
     {
-        var captured = state.Timer.SessionId is {} id ? captures.GetValueOrDefault(id)?.Targets : null;
         var targets = state.FocusMode.SelectedTargets.SelectMany(t => t.UseFocused
-            ? captured?.Where(c=>c.Kind==t.Kind&&c.CaptureScope==t.CaptureScope).ToArray() is {Length:>0} matches?matches:[t] : new[]{t})
+            ? Captured(state.Timer.SessionId,t.Key)?.Targets.Where(c=>c.Kind==t.Kind&&c.CaptureScope==t.CaptureScope).ToArray() is {Length:>0} matches?matches:[t] : new[]{t})
             .DistinctBy(t => t.Key).ToImmutableArray();
         return state.FocusMode with { Target = targets.FirstOrDefault(), Targets = targets };
     }
@@ -102,10 +130,9 @@ internal sealed class FocusModeMonitor : IDisposable
     private string ProbeKey(FocusModeSettings settings) => $"{generation}:{settings.SelectionKey}:{(settings.SelectedTargets.Any(t=>t.Kind==FocusTargetKind.Site)?SiteTargetsAvailable():false)}";
     private async Task<FocusPresence> CheckEffectiveAsync(FocusModeSettings settings, Guid? session)
     {
-        var captured = session is {} id ? captures.GetValueOrDefault(id) : null;
         var sitesAvailable=SiteTargetsAvailable();
         var pending = settings.SelectedTargets.Any(t => t.Kind==FocusTargetKind.Site&&!sitesAvailable
-            ||t.UseFocused && (captured?.Completed != true || !captured.Choices.Any(c=>c.Key==t.Key)));
+            ||t.UseFocused && Captured(session,t.Key)?.Completed != true);
         var available = settings.SelectedTargets.Where(t => !t.UseFocused&&(t.Kind!=FocusTargetKind.Site||sitesAvailable)).ToArray();
         if (available.Length == 0) return pending ? FocusPresence.Unknown : FocusPresence.Unavailable;
         var presence = await source.CheckAnyAsync(available,settings.TargetOnSiteLinks).ConfigureAwait(false);
@@ -120,7 +147,12 @@ internal sealed class FocusModeMonitor : IDisposable
         // Stop synchronously on pause/reset/disable/selection change, even if
         // another application's accessibility provider is still answering.
         var settings = Effective(state);
-        if (!state.Timer.IsRunning || !settings.Enabled || ProbeKey(settings) != readingTargets) Apply(gate.Evaluate(settings, state.Timer, FocusPresence.Unknown, engine.ElapsedNow));
+        if (!state.Timer.IsRunning || !settings.Enabled || ProbeKey(settings) != readingTargets) {
+            // Idle-only monitoring has no target probe to retain. Preserve its
+            // current idle age when a checkpoint or settings save reevaluates it.
+            var idle = state.Timer.IsRunning && settings.Enabled && settings.SelectedTargets.IsEmpty && settings.IdleEnabled ? source.IdleMilliseconds : null;
+            Apply(gate.Evaluate(settings, state.Timer, FocusPresence.Unknown, engine.ElapsedNow, idle));
+        }
         else if (!settings.ScreenEdgeGlow && glowing) { glowing = false; glow?.Invoke(false); }
     }
     internal void Poll()

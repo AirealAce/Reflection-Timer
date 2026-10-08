@@ -26,6 +26,8 @@ if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
 if(args.Contains("--native-retry-delivery")){NativeRetryDeliverySmoke.Run();return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
+if(args.Contains("--native-global-playback-focus")){NativeGlobalPlaybackFocusSmoke.Run();return;}
+if(args.Contains("--native-global-playback-focus-interactive")){NativeGlobalPlaybackFocusSmoke.RunInteractive();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 if(args.Contains("--native-view-restore")){NativeViewRestoreSmoke.Run();return;}

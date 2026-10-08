@@ -29,6 +29,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     void IReflectionPromptWindow.ResumeEditing(){handoffInProgress=false;Post(new{type="resumeReflection"});}
     void IReflectionPromptWindow.CloseAfterSave()=>CloseAfterSave();
     private bool focusOnReady, selectTimerOnReady, chooseFocusOnReady;
+    private bool desiredTopMost;
     private Guid? outboxEntryOnReady;
     private (ReflectionTimer.Core.AppColorTheme Theme,bool Contrast)? appliedTheme;
     private TaskCompletionSource? flush;
@@ -101,12 +102,31 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         base.SetVisibleCore(value);
         if(passiveTinyShow)app.ReleaseFocus(this);
     }
-    protected override CreateParams CreateParams {get{var value=base.CreateParams;if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;return value;}}
+    protected override CreateParams CreateParams
+    {
+        get {
+            var value=base.CreateParams;
+            if(View is "compact" or "reflection")value.ExStyle=(value.ExStyle|0x80)&~0x40000;
+            value.ExStyle=desiredTopMost?value.ExStyle|0x8:value.ExStyle&~0x8;
+            return value;
+        }
+    }
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        ApplyNativeTopMost();
+    }
+    private void ApplyNativeTopMost()=>SetWindowPos(Handle,desiredTopMost?new nint(-1):new nint(-2),0,0,0,0,0x0013); // no activate/move/resize
     internal void ApplyTopMost(AppState? preferences = null)
     {
         var state=preferences??app.Session.Engine.SettingsSnapshot;
         var top=View=="reflection"?state.PromptAlwaysOnTop:View=="compact"&&(IsTimeOnly?state.TimeOnlyAlwaysOnTop:state.CompactAlwaysOnTop);
-        if(TopMost!=top)TopMost=top;
+        if(desiredTopMost==top)return;
+        // Keep Form.TopMost false: its setter activates the native window, and
+        // Form.SetVisibleCore can focus a topmost form even with ShowWithoutActivation.
+        // Manage the native style directly so passive timer views remain passive.
+        desiredTopMost=top;
+        if(IsHandleCreated)ApplyNativeTopMost();
     }
     internal void FocusControls(bool timerPage=false){if(View=="compact"){SetCompactMode(false,true);return;}if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}Post(new{type=View=="reflection"?"focusReflection":"focusTimer",selectTimer=timerPage});}
     internal void ChooseFocusTarget()
@@ -245,8 +265,9 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 ready = true; Post(new { type = "init", view = View, promptId = PromptId, state = app.Session.View(), appViewVisible = app.AppViewVisible, timeOnly = View=="compact" ? (bool?)IsTimeOnly : null, compactRevision });
                 if(View=="main")Post(new { type="focusStatus", status=app.FocusStatus });
                 if(View=="main" && app.RecoveryNotice is { } notice) { Post(new { type="announcement", message=notice }); app.RecoveryNotice=null; }
-                if(focusOnReady){focusOnReady=false;FocusControls(selectTimerOnReady);}
-                if(View=="main"&&Visible&&app.AppViewMayShow&&!app.StartInTray&&!recoveringInterface)ReflectionTimer.Desktop.WindowActivation.Focus(this);
+                // Open activates synchronously. A late interface load must not
+                // reclaim keyboard focus after the user switches to another app.
+                if(focusOnReady){focusOnReady=false;if(ReflectionTimer.Desktop.WindowActivation.IsForeground(this))FocusControls(selectTimerOnReady);}
                 Reply(requestId); return;
             }
             if(action=="interfaceReady") {
@@ -385,6 +406,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     internal void ClosePermanently() { allowClose = true; Close(); }
     protected override void Dispose(bool disposing) { if (disposing) { autoHideTimer?.Dispose(); autoHideTimer=null; autoHideDeadline.Cancel(); browser.Dispose(); } base.Dispose(disposing); }
     [DllImport("user32.dll")]private static extern bool ReleaseCapture();
+    [DllImport("user32.dll")][return:MarshalAs(UnmanagedType.Bool)]private static extern bool SetWindowPos(nint window,nint after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll",EntryPoint="SendMessageW")]private static extern nint SendMessage(nint window,int message,nint wParam,nint lParam);
     [DllImport("dwmapi.dll")]private static extern int DwmSetWindowAttribute(nint window,int attribute,ref int value,int size);
 }

@@ -31,6 +31,10 @@ internal static class DynamicFocusTests
         check(bridge.GetProperty("targets").EnumerateArray().Count(t => t.GetProperty("useFocused").GetBoolean()) == 4,
             "The WebView receives the dynamic flag for every saved category");
         BrowserCapture(check, window);
+        MidrunOrdinary(check,window);
+        MidrunBackground(check,window);
+        MidrunMixed(check,window);
+        await MidrunStalled(check,window);
         foreach (var mode in Enum.GetValues<SessionMode>()) {
             engine = new(new MemoryStore()); engine.SwitchMode(mode); engine.SetFocusMode(options with { MultipleTargets = false, Targets = [dynamic[0]] });
             var source = new Source { Foreground = window }; var alerts = new List<bool>();
@@ -81,6 +85,134 @@ internal static class DynamicFocusTests
                 "An app restart never silently recaptures an already-running session from the startup window");
             engine.Pause(); engine.Resume(); monitor.Poll(); check(restoredSource.Snapshots == 1, "The next explicit resume resolves a restored dynamic choice");
         }
+    }
+    private static void MidrunOrdinary(Action<bool,string> check,FocusTarget window)
+    {
+        foreach(var mode in Enum.GetValues<SessionMode>())foreach(var kind in Enum.GetValues<FocusTargetKind>()){
+            var now=DateTimeOffset.Now;var engine=new TimerEngine(new MemoryStore(),()=>now);engine.SwitchMode(mode);
+            engine.SetFocusMode(new(){Enabled=true,IdleEnabled=true,IdleSeconds=30,DelaySeconds=2,BrowserCompanionEnabled=true});
+            var source=new Source{Foreground=window,IdleMilliseconds=0};var alerts=new List<bool>();
+            using var monitor=new FocusModeMonitor(engine,source,alerts.Add);
+            engine.Start(900,false,50);monitor.Poll();
+            var selected=window with{Kind=kind,TabRuntimeId="midrun-"+kind,SiteHost=kind==FocusTargetKind.Site?"study.example":""};
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Target=selected,Targets=[selected]});monitor.Poll();
+            check(engine.SettingsSnapshot.FocusMode.Enabled&&source.Checked.Last()==selected&&monitor.Status=="A selected target is focused",
+                mode+": selecting an ordinary "+kind+" during idle-only running Focus starts monitoring it immediately");
+            source.Presence=FocusPresence.Away;monitor.Poll();
+            check(monitor.ScreenEdgeGlow&&!alerts.Contains(true),mode+": newly selected "+kind+" shows away glow immediately while respecting the audio delay");
+            now=now.AddSeconds(1);engine.Advance();engine.Checkpoint();monitor.Poll();
+            check(!alerts.Contains(true),mode+": a checkpoint preserves the new ordinary "+kind+" target's remaining away delay");
+            now=now.AddSeconds(1);engine.Advance();engine.Checkpoint();monitor.Poll();
+            check(alerts.Last()&&source.Captures==0,mode+": leaving a newly selected ordinary "+kind+" triggers audio without a pause or recapture");
+        }
+    }
+    private static void MidrunBackground(Action<bool,string> check,FocusTarget window)
+    {
+        var choices=Enum.GetValues<FocusTargetKind>().SelectMany(k=>PreviewApplication.FocusChoices(k,[]))
+            .Where(t=>t.CaptureScope!=FocusCaptureScope.Focused).ToArray();
+        foreach(var mode in Enum.GetValues<SessionMode>())foreach(var choice in choices){
+            var now=DateTimeOffset.Now;var engine=new TimerEngine(new MemoryStore(),()=>now);engine.SwitchMode(mode);
+            engine.SetFocusMode(new(){Enabled=true,IdleEnabled=true,IdleSeconds=30,DelaySeconds=2});
+            var pinned=window with{Kind=choice.Kind,CaptureScope=choice.CaptureScope,TabRuntimeId="saved-midrun"};
+            var source=new BackgroundSource{Open=[window,window with{WindowHandle=124}],Result=[pinned],FocusedKey=pinned.Key};
+            var alerts=new List<bool>();using var monitor=new FocusModeMonitor(engine,source,alerts.Add);
+            if(mode==SessionMode.Stopwatch)engine.StartStopwatch();else engine.Start(900,false,50);
+            monitor.Poll();
+            check(source.Captures==0&&source.Snapshots==0,mode+": idle-only activation does not capture background "+choice.Name);
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[choice]});
+            source.Open=[];monitor.Poll();
+            check(engine.SettingsSnapshot.FocusMode.Enabled&&source.Captures==1&&source.Snapshot.Count==2
+                &&source.Checked.LastOrDefault()==pinned&&monitor.Status=="A selected target is focused",
+                mode+": saving "+choice.Name+" during an idle-only session captures its current windows and starts monitoring immediately");
+            source.FocusedKey=null;monitor.Poll();
+            check(monitor.ScreenEdgeGlow&&!alerts.Contains(true),mode+": leaving a newly captured "+choice.Name+" starts the normal away delay and glow");
+            now=now.AddSeconds(1);engine.Advance();engine.Checkpoint();monitor.Poll();
+            now=now.AddSeconds(1);engine.Advance();engine.Checkpoint();monitor.Poll();
+            check(alerts.LastOrDefault()&&source.Captures==1,mode+": ticks and checkpoints retain the new "+choice.Name+" target until away audio is due");
+            engine.SetAppVolume(40);engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{IdleSeconds=45});monitor.Poll();
+            engine.SwitchMode(mode==SessionMode.Timer?SessionMode.Stopwatch:SessionMode.Timer);engine.SwitchMode(mode);monitor.Poll();
+            check(source.Captures==1&&source.Snapshots==1,mode+": incidental saves and mode changes do not replace a midrun background capture");
+            engine.Pause();check(!alerts.LastOrDefault(),mode+": pause stops the newly captured background alert synchronously");
+        }
+    }
+    private static void MidrunMixed(Action<bool,string> check,FocusTarget window)
+    {
+        foreach(var mode in Enum.GetValues<SessionMode>()){
+            var store=new MemoryStore();var engine=new TimerEngine(store);engine.SwitchMode(mode);
+            var originalChoice=FocusTarget.Focused(FocusTargetKind.BrowserTab);
+            var background=FocusTarget.Focused(FocusTargetKind.BrowserTab,FocusCaptureScope.FocusedIncludingBackground);
+            var groupChoice=FocusTarget.Focused(FocusTargetKind.BrowserTabGroup,FocusCaptureScope.FocusedIncludingBackground);
+            var openGroups=FocusTarget.Focused(FocusTargetKind.BrowserTabGroup,FocusCaptureScope.OpenIncludingBackground);
+            var original=window with{Kind=FocusTargetKind.BrowserTab,TabRuntimeId="original"};
+            var added=original with{TabRuntimeId="added",CaptureScope=background.CaptureScope};
+            var group=original with{Kind=FocusTargetKind.BrowserTabGroup,TabRuntimeId="group",CaptureScope=groupChoice.CaptureScope};
+            var ordinary=window with{WindowHandle=999};
+            engine.SetFocusMode(new(){Enabled=true,MultipleTargets=true,Targets=[originalChoice,ordinary],DelaySeconds=0});
+            var source=new BackgroundSource{Foreground=window,Open=[window],Result=[original],FocusedKey=original.Key};
+            var alerts=new List<bool>();using var monitor=new FocusModeMonitor(engine,source,alerts.Add);
+            if(mode==SessionMode.Stopwatch)engine.StartStopwatch();else engine.Start(900,false,50);
+            monitor.Poll();
+            source.Result=[added];store.Fail=true;
+            try{engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,background]});throw new Exception("Failed background save accepted");}catch(IOException){}
+            check(source.Captures==1&&engine.SettingsSnapshot.FocusMode.SelectedTargets.Length==2,
+                mode+": a failed background selection save cannot capture or change the running target set");
+            store.Fail=false;engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,background]});
+            source.Checked.Clear();source.FocusedKey=added.Key;monitor.Poll();
+            check(source.Captures==2&&source.Checked.Contains(original)&&source.Checked.Contains(ordinary)&&source.Checked.Contains(added)
+                &&monitor.Status=="A selected target is focused",
+                mode+": a new background scope merges with the previously captured same-category tab and an ordinary window");
+            source.Result=[group];engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,background,groupChoice]});monitor.Poll();
+            source.FocusedKey=original.Key;monitor.Poll();
+            check(source.Checked.Last()==original&&source.Captures==3,mode+": adding another background category preserves the original foreground capture");
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,groupChoice]});
+            var recaptured=added with{TabRuntimeId="readded"};source.Result=[recaptured];
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,groupChoice,background]});
+            source.Checked.Clear();source.FocusedKey=recaptured.Key;monitor.Poll();
+            check(source.Captures==4&&source.Checked.Contains(recaptured)&&source.Checked.Contains(group)&&!source.Checked.Contains(added),
+                mode+": removing and re-adding a background choice takes a new snapshot without replacing other captures");
+            var openGroup=group with{TabRuntimeId="open-group",CaptureScope=openGroups.CaptureScope};source.Result=[openGroup];
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,background,openGroups]});
+            source.Checked.Clear();source.FocusedKey=openGroup.Key;monitor.Poll();
+            check(source.Captures==5&&source.Checked.Contains(openGroup)&&source.Checked.Contains(original)&&source.Checked.Contains(recaptured)
+                &&!source.Checked.Contains(group),mode+": changing a background group's capture scope captures only the changed choice");
+            var foregroundWindow=FocusTarget.Focused(FocusTargetKind.Window);
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[originalChoice,ordinary,background,openGroups,foregroundWindow]});monitor.Poll();
+            engine.SetAppVolume(40);engine.Checkpoint();monitor.Poll();
+            check(source.Captures==5&&source.ForegroundSnapshots==1,
+                mode+": adding a foreground-only choice and incidental saves cannot bind it to the chooser window");
+        }
+    }
+    private static async Task MidrunStalled(Action<bool,string> check,FocusTarget window)
+    {
+        var engine=new TimerEngine(new MemoryStore());engine.SetFocusMode(new(){Enabled=true,IdleEnabled=true,MultipleTargets=true,DelaySeconds=0});
+        var tabs=FocusTarget.Focused(FocusTargetKind.BrowserTab,FocusCaptureScope.FocusedIncludingBackground);
+        var groups=FocusTarget.Focused(FocusTargetKind.BrowserTabGroup,FocusCaptureScope.OpenIncludingBackground);
+        var windows=FocusTarget.Focused(FocusTargetKind.Window,FocusCaptureScope.OpenIncludingBackground);
+        var oldTab=window with{Kind=tabs.Kind,TabRuntimeId="obsolete",CaptureScope=tabs.CaptureScope};
+        var group=window with{Kind=groups.Kind,TabRuntimeId="kept-group",CaptureScope=groups.CaptureScope};
+        var capturedWindow=window with{CaptureScope=windows.CaptureScope};
+        var latestTab=oldTab with{WindowHandle=124,TabRuntimeId="latest"};
+        var stalled=new TaskCompletionSource<IReadOnlyList<FocusTarget>>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var source=new BackgroundSource{Open=[window],Pending=stalled};var alerts=new List<bool>();
+        using var monitor=new FocusModeMonitor(engine,source,alerts.Add);
+        engine.Start(900,false,50);engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[tabs,groups]});monitor.Poll();
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[tabs,groups,windows]});
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[groups,windows]});
+        source.Open=[window with{WindowHandle=124}];
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[groups,windows,tabs]});monitor.Poll();
+        check(source.Captures==1&&!alerts.Contains(true),"Several background saves behind a stalled capture keep one provider request and avoid false away alerts");
+        source.Pending=null;source.Result=[latestTab,capturedWindow];source.FocusedKey=latestTab.Key;
+        stalled.SetResult([oldTab,group]);await stalled.Task;
+        monitor.Poll();monitor.Poll();
+        check(source.Captures==3&&source.Checked.Contains(group)&&source.Checked.Contains(capturedWindow)&&source.Checked.Contains(latestTab)
+            &&!source.Checked.Contains(oldTab)&&source.Snapshot.Single().WindowHandle==124&&monitor.Status=="A selected target is focused",
+            "Queued distinct additions both resolve, while a removed pending choice cannot resurrect from a batch still owning another choice");
+        source.FocusedKey=null;monitor.Poll();check(alerts.LastOrDefault(),"Leaving every recovered midrun capture triggers its own away alert");
+        var failed=FocusTarget.Focused(FocusTargetKind.BrowserTabGroup,FocusCaptureScope.FocusedIncludingBackground);
+        source.Pending=new(TaskCreationOptions.RunContinuationsAsynchronously);source.FocusedKey=latestTab.Key;
+        engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Targets=[groups,windows,tabs,failed]});
+        source.Pending.SetException(new InvalidOperationException("Synthetic provider failure"));monitor.Poll();
+        check(source.Checked.Last()==latestTab&&!alerts.LastOrDefault(),"A failed newly added background capture cannot replace already resolved targets");
     }
     private static void BrowserCapture(Action<bool, string> check, FocusTarget window)
     {
@@ -152,5 +284,25 @@ internal static class DynamicFocusTests
         public Task<FocusPresence> CheckAsync(FocusTarget target) { Checked.Add(target); return Task.FromResult(target.Kind == FocusedKind ? FocusPresence.Focused : Presence); }
         public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => Task.FromResult<IReadOnlyList<FocusTarget>>([]);
         public void Dispose() { }
+    }
+    private sealed class BackgroundSource:IFocusTargetSource
+    {
+        internal IReadOnlyList<FocusTarget> Open=[],Result=[],Snapshot=[];
+        internal FocusTarget? Foreground;
+        internal int Snapshots,Captures,ForegroundSnapshots;
+        internal string? FocusedKey;
+        internal List<FocusTarget> Checked=[];
+        internal TaskCompletionSource<IReadOnlyList<FocusTarget>>? Pending;
+        public long? IdleMilliseconds=>0;
+        public FocusTarget? CaptureForeground(){ForegroundSnapshots++;return Foreground;}
+        public IReadOnlyList<FocusTarget> CaptureOpenWindows(){Snapshots++;return Open.ToArray();}
+        public Task<IReadOnlyList<FocusTarget>> CaptureSelectionsAsync(FocusTarget? foreground,IReadOnlyList<FocusTarget> windows,IReadOnlyList<FocusTarget> choices)
+        {
+            Captures++;Snapshot=windows;
+            return Pending?.Task??Task.FromResult<IReadOnlyList<FocusTarget>>(Result.Where(t=>choices.Any(c=>c.Kind==t.Kind&&c.CaptureScope==t.CaptureScope)).ToArray());
+        }
+        public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind)=>Task.FromResult<IReadOnlyList<FocusTarget>>([]);
+        public Task<FocusPresence> CheckAsync(FocusTarget target){Checked.Add(target);return Task.FromResult(target.Key==FocusedKey?FocusPresence.Focused:FocusPresence.Away);}
+        public void Dispose(){}
     }
 }

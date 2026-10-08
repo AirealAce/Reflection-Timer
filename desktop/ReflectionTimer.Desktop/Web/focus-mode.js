@@ -6,6 +6,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
   const siteLinks=$('focus-target-on-site-links'),website=$('focus-site-website'),siteAdd=$('focus-site-add');
   const companion=$('focus-browser-companion'),siteOption=kindControl.querySelector('option[value="3"]'),savedSites=$('focus-site-saved');
+  const targetSearch=$('focus-target-search-input'),clearSearch=$('focus-target-search-clear');
   let browserConnected;
   const glowControls=[$('focus-screen-glow'),$('focus-picker-screen-glow')];
   const glowStyles=[$('focus-glow-style'),$('focus-picker-glow-style')];
@@ -26,6 +27,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const canChoose=target=>target.kind!==3||siteReady()||picked.has(key(target));
   const type=kind=>['Window','Tab','Tab Group','Site'][kind]??'Window';
   const key=target=>target.key??`${target.kind}:${target.id}`;
+  const searchTerms=()=>targetSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
+  function visibleTargets(){
+    const terms=searchTerms();if(!terms.length)return rows;
+    return rows.filter(target=>{
+      const text=[target.name,target.app,target.windowName,target.displayName,target.siteHost,!target.useFocused&&target.tabPosition>0?target.tabPosition:''].join(' ').toLowerCase();
+      return terms.every(term=>text.includes(term));
+    });
+  }
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
   const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.kind===3?target.siteHost||target.name:target.name;
   const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.displayName??target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:target.app?` — ${target.app}`:'');
@@ -61,21 +70,34 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function syncSelection(){
     const selected=[...picked.values()],backgroundTabs=selected.some(t=>t.kind===1&&t.useFocused&&t.captureScope===1);
-    $('focus-picker-tab-scope').hidden=!backgroundTabs;
-    $('focus-picker-target-overlap').hidden=!backgroundTabs||!selected.some(t=>t.kind===2||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase())));
+    const helpAvailability=(id,available)=>{
+      const node=$(id),value=String(available);if(node.dataset.helpAvailable===value)return;
+      node.dataset.helpAvailable=value;node.dispatchEvent(new Event('helpavailabilitychange',{bubbles:true}));
+    };
+    helpAvailability('focus-picker-tab-scope',backgroundTabs);
+    helpAvailability('focus-picker-target-overlap',backgroundTabs&&selected.some(t=>t.kind===2||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase()))));
     for(const row of list.querySelectorAll('tbody tr')){
       const checked=picked.has(row.dataset.key);row.classList.toggle('picked',checked);row.setAttribute('aria-current',checked&&!multiple.checked?'true':'false');
       const blocked=Number(row.dataset.kind)===3&&!siteReady()&&!checked;
       row.setAttribute('aria-disabled',String(blocked));
       const checkbox=row.querySelector('input');if(checkbox){checkbox.checked=checked;checkbox.disabled=loading||selecting;checkbox.setAttribute('aria-disabled',String(blocked));}
     }
+    const selectAll=$('focus-target-select-all');
+    if(selectAll){
+      const eligible=visibleTargets().filter(canChoose),selected=eligible.filter(target=>picked.has(key(target))).length;
+      selectAll.checked=eligible.length>0&&selected===eligible.length;
+      selectAll.indeterminate=selected>0&&selected<eligible.length;
+      selectAll.disabled=loading||selecting||!eligible.length;
+      const label=selectAll.checked?'Clear all listed targets':'Select all listed targets';selectAll.setAttribute('aria-label',label);selectAll.title=label;
+    }
     use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked&&!(Number(kindControl.value)===3&&siteReady()&&website.value.trim()));
     website.disabled=loading||selecting;website.readOnly=!siteReady();
     siteAdd.disabled=loading||selecting||!siteReady()||!website.value.trim();
     savedSites.hidden=siteReady()||Number(kindControl.value)===3||![...picked.values()].some(target=>target.kind===3);
     savedSites.disabled=loading||selecting;
+    targetSearch.disabled=selecting;clearSearch.disabled=selecting||!targetSearch.value;
     setText(use,multiple.checked?'Save selected targets':'Use selected target');
-    setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window. Dynamic choices capture on start/resume. Background choices include other windows; focused tabs means the selected tab in each browser window. Switching modes keeps the capture.');
+    setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window.');
   }
   function syncSiteAvailability(refreshOnReconnect=true){
     const ready=siteReady(),becameReady=ready&&!previousSiteReady;previousSiteReady=ready;
@@ -98,8 +120,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     });
   }
   function status(){
-    const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length;
-    setText($('focus-picker-status'),`${available} ${Number(kindControl.value)===3?'sites':'open targets'}. ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
+    const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length,matching=visibleTargets().length;
+    const inventory=searchTerms().length?(matching?`${matching} matching ${matching===1?'target':'targets'} of ${rows.length} listed.`:`No matching targets. ${rows.length} listed.`):`${available} ${Number(kindControl.value)===3?'sites':'open targets'}.`;
+    setText($('focus-picker-status'),`${inventory} ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
       +(Number(kindControl.value)===3?(siteReady()
         ?' Open websites from connected browsers are listed. Saved sites remain available.'
         :' Site needs an enabled, connected browser companion. Saved choices are kept; select a saved site again to remove it.') :''));
@@ -109,6 +132,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       :'Waiting for the companion connection. Site selection is unavailable.');
   }
   function focusRow(target){
+    if(!target||!visibleTargets().some(visible=>key(visible)===key(target)))return;
     activeKey=key(target);
     for(const row of list.querySelectorAll('tbody tr')){
       const focused=row.dataset.key===activeKey;row.tabIndex=!multiple.checked&&focused?0:-1;
@@ -124,6 +148,21 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     else {picked.clear();picked.set(identity,target);}
     syncSelection();status();
   }
+  function toggleListedTargets(){
+    if(loading||selecting||!multiple.checked)return;
+    const eligible=visibleTargets().filter(canChoose),all=eligible.length>0&&eligible.every(target=>picked.has(key(target)));
+    for(const target of eligible){if(all)picked.delete(key(target));else picked.set(key(target),target);}
+    syncSelection();status();
+  }
+  function filterTargets(updateStatus=true){
+    const visible=visibleTargets(),visibleKeys=new Set(visible.map(key));
+    const initial=visible.find(target=>key(target)===activeKey)??visible.find(target=>picked.has(key(target)))??visible[0];activeKey=initial?key(initial):null;
+    for(const row of list.querySelectorAll('tbody tr')){
+      row.hidden=!visibleKeys.has(row.dataset.key);const active=!row.hidden&&row.dataset.key===activeKey;
+      row.tabIndex=!multiple.checked&&active?0:-1;const checkbox=row.querySelector('input');if(checkbox)checkbox.tabIndex=active?0:-1;
+    }
+    syncSelection();if(updateStatus)status();
+  }
   function draw(){
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:['Site','App'];
     const widths=kind===0?['30%','']:kind===3?['','24%']:['64px','','24%'];
@@ -132,7 +171,15 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
-    const head=document.createElement('tr');for(const text of headers){const th=document.createElement('th');th.scope='col';th.textContent=text;if(text.endsWith(' #'))th.className='focus-number-cell';if(!text){th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');}head.append(th);}list.querySelector('thead').replaceChildren(head);
+    const head=document.createElement('tr');for(const text of headers){
+      const th=document.createElement('th');th.scope='col';th.textContent=text;if(text.endsWith(' #'))th.className='focus-number-cell';
+      if(!text){
+        th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');
+        const checkbox=document.createElement('input');checkbox.id='focus-target-select-all';checkbox.type='checkbox';
+        checkbox.addEventListener('change',toggleListedTargets);checkbox.addEventListener('click',event=>{if(event.detail>1)event.preventDefault();});th.append(checkbox);
+      }
+      head.append(th);
+    }list.querySelector('thead').replaceChildren(head);
     const body=list.querySelector('tbody');body.replaceChildren();
     for(const target of rows){
       const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.dataset.kind=target.kind;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
@@ -152,20 +199,20 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       row.addEventListener('dblclick',event=>{if(event.ctrlKey||event.altKey||event.metaKey||loading||selecting||!canChoose(target))return;event.preventDefault();if(!multiple.checked&&(target.kind!==3||siteReady()))run(useSelection);});
       body.append(row);
     }
-    const initial=rows.find(t=>key(t)===activeKey)??rows.find(t=>picked.has(key(t)))??rows[0];
-    activeKey=initial?key(initial):null;
-    const row=[...body.children].find(row=>row.dataset.key===activeKey);if(row){const checkbox=row.querySelector('input');if(checkbox)checkbox.tabIndex=0;else row.tabIndex=0;}
-    syncSelection();status();
+    filterTargets();
   }
   async function refresh(preserveDraft=false){
-    if(loading||selecting)return;const active=document.activeElement,focused=list.contains(active)?active.closest('tr')?.dataset.key:null;preserveInventoryDraft=preserveDraft;loading=true;kindControl.disabled=true;$('focus-target-refresh').disabled=true;use.disabled=true;list.inert=true;list.setAttribute('aria-busy','true');
+    if(loading||selecting)return;const active=document.activeElement,focused=list.contains(active)?active.closest('tr')?.dataset.key:null,focusedHeader=active.id==='focus-target-select-all';preserveInventoryDraft=preserveDraft;loading=true;kindControl.disabled=true;$('focus-target-refresh').disabled=true;use.disabled=true;list.inert=true;list.setAttribute('aria-busy','true');
+    syncSelection();
     setText($('focus-picker-status'),'Loading open targets…');
     try {await send('focusTargets',{kind:Number(kindControl.value),reset:resetList,quiet:true});resetList=false;}
     catch(error){setText($('focus-picker-status'),error.message);throw error;}
     finally{loading=false;preserveInventoryDraft=false;kindControl.disabled=false;$('focus-target-refresh').disabled=false;list.inert=false;list.setAttribute('aria-busy','false');syncSelection();
-      if(preserveDraft&&focused&&dialog.open){
+      if(preserveDraft&&focusedHeader&&dialog.open){
+        const header=$('focus-target-select-all');(header&&!header.disabled?header:kindControl).focus();
+      }else if(preserveDraft&&focused&&dialog.open){
         const row=[...list.querySelectorAll('tbody tr')].find(row=>row.dataset.key===focused),control=row?.querySelector('input');
-        restoringRowFocus=true;try{(control&&!control.disabled?control:row)?.focus();}finally{restoringRowFocus=false;}
+        restoringRowFocus=true;try{(row&&!row.hidden?(control&&!control.disabled?control:row):targetSearch).focus();}finally{restoringRowFocus=false;}
       }else if(dialog.open&&dialog.contains(active)&&!active.disabled&&(document.activeElement===document.body||document.activeElement===dialog))active.focus();
       drainReconnectRefresh();
     }
@@ -174,8 +221,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     if(selecting||loading||dialog.open)return;
     opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;siteLinks.checked=settings.targetOnSiteLinks!==false;website.value='';website.removeAttribute('aria-invalid');idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;$('focus-picker-animations').open=false;
     companion.checked=settings.browserCompanionEnabled===true;$('focus-picker-companion').open=false;
+    targetSearch.value='';
     picked=new Map(selectedTargets(settings).filter(t=>t.id).map(t=>[key(t),t]));rows=[];activeKey=null;resetList=true;
-    kindControl.value=String(selectedTargets(settings)[0]?.kind??settings.targetKind??0);syncSiteAvailability(false);draw();dialog.showModal();kindControl.focus();run(refresh);
+    kindControl.value=String(settings.pickerKind??selectedTargets(settings)[0]?.kind??settings.targetKind??0);syncSiteAvailability(false);draw();dialog.showModal();kindControl.focus();run(()=>refresh(picked.size>0));
   }
   for(const toggle of toggles)toggle.addEventListener('click',()=>{
     if(!enabled&&!selectedTargets(settings).length&&!settings.idleEnabled){open(toggle,true);return;}
@@ -185,7 +233,10 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   delay.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.isComposing){event.preventDefault();run(flush);}});
   for(const button of targetButtons)button.addEventListener('click',()=>open(button));
   for(const button of [...targetButtons,...toggles])button.addEventListener('keydown',event=>{if(event.repeat&&(event.key==='Enter'||event.key===' '))event.preventDefault();});
-  kindControl.addEventListener('change',()=>{activeKey=null;run(refresh);});$('focus-target-refresh').addEventListener('click',()=>run(refresh));
+  kindControl.addEventListener('change',()=>{activeKey=null;run(refresh);});$('focus-target-refresh').addEventListener('click',()=>run(()=>refresh(true)));
+  targetSearch.addEventListener('input',()=>filterTargets(!loading));
+  targetSearch.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.metaKey)event.preventDefault();});
+  clearSearch.addEventListener('click',()=>{targetSearch.value='';filterTargets(!loading);targetSearch.focus();});
   multiple.addEventListener('change',()=>{
     if(!multiple.checked&&picked.size>1){const keep=picked.get(activeKey)??picked.values().next().value;picked=new Map([[key(keep),keep]]);announce('Multiple Targets off. Only one selected target is kept.');}
     draw();
@@ -228,7 +279,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       let savedRevision;
       do {
         savedRevision=targetRevision;
-        await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),enable:enableOnChoose,multipleTargets:multiple.checked,targetOnSiteLinks:siteLinks.checked,browserCompanionEnabled:companion.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
+        await send('focusSelect',{ids:[...picked.values()].map(t=>t.id),pickerKind:Number(kindControl.value),enable:enableOnChoose,multipleTargets:multiple.checked,targetOnSiteLinks:siteLinks.checked,browserCompanionEnabled:companion.checked,idleEnabled:idle.checked,idleSeconds:Number(idleSeconds.value),quiet:true});
       }while(savedRevision!==targetRevision);
       dialog.close();announce('Focus settings saved.');
     }catch(error){failure=error.message;throw error;}
@@ -239,15 +290,15 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   list.addEventListener('keydown',event=>{
     if(!plainKey(event)||loading||selecting)return;
     const row=event.target.closest('tr[data-key]');if(!row)return;
-    const index=rows.findIndex(t=>key(t)===row.dataset.key);
+    const visible=visibleTargets(),index=visible.findIndex(t=>key(t)===row.dataset.key);if(index<0)return;
     if(['ArrowDown','ArrowUp','Home','End'].includes(event.key)){
-      event.preventDefault();event.stopPropagation();const next=event.key==='Home'?0:event.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,index+(event.key==='ArrowDown'?1:-1)));focusRow(rows[next]);return;
+      event.preventDefault();event.stopPropagation();const next=event.key==='Home'?0:event.key==='End'?visible.length-1:Math.max(0,Math.min(visible.length-1,index+(event.key==='ArrowDown'?1:-1)));focusRow(visible[next]);return;
     }
     if(event.key!=='Enter'&&event.key!==' ')return;event.preventDefault();event.stopPropagation();if(event.repeat)return;
-    if(event.key==='Enter'){if(multiple.checked||rows[index].kind===3&&!siteReady())choose(rows[index]);else run(useSelection);}else spaceRow=rows[index];
+    if(event.key==='Enter'){if(multiple.checked||visible[index].kind===3&&!siteReady())choose(visible[index]);else run(useSelection);}else spaceRow=visible[index];
   });
   list.addEventListener('keyup',event=>{
-    if(event.key!==' ')return;event.preventDefault();event.stopPropagation();const target=spaceRow;spaceRow=null;
+    if(event.key!==' '||!event.target.closest('tr[data-key]'))return;event.preventDefault();event.stopPropagation();const target=spaceRow;spaceRow=null;
     if(target&&plainKey(event)&&!loading&&!selecting){if(multiple.checked||target.kind===3&&!siteReady())choose(target);else run(useSelection);}
   });
   list.addEventListener('focusout',()=>spaceRow=null);
@@ -273,7 +324,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       const target=message.target,affected=new Set(message.keys??[key(target)]);
       targetRevision++;
       enabled=message.enabled===true;settings={...settings,enabled};syncToggles();if(dirty)revision++;
-      const focused=list.contains(document.activeElement)?document.activeElement.closest('tr')?.dataset.key:null;
+      const focused=list.contains(document.activeElement)?document.activeElement.closest('tr')?.dataset.key:null,focusedHeader=document.activeElement.id==='focus-target-select-all';
       const oldMultiple=multiple.checked;let redraw=false;
       for(const identity of affected)picked.delete(identity);
       if(message.checked){picked.set(key(target),target);if(message.multipleTargets||picked.size>1)multiple.checked=true;}
@@ -286,7 +337,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         draw();
         if(focused&&document.hasFocus()){
           const row=[...list.querySelectorAll('tbody tr')].find(row=>row.dataset.key===focused);
-          (row?.querySelector('input')??row??kindControl).focus();
+          (row&&!row.hidden?(row.querySelector('input')??row):targetSearch).focus();
+        }else if(focusedHeader&&document.hasFocus()){
+          const header=$('focus-target-select-all');(header&&!header.disabled?header:kindControl).focus();
         }
       }else {syncSelection();status();}
       return true;
@@ -307,7 +360,8 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         }
         if(chosen)picked.set(identity,target);
       }
-      if(!preserveInventoryDraft&&(message.kind!==3||siteReady())){
+      // A searched category must not replace a hidden selection with its default row.
+      if(!preserveInventoryDraft&&!searchTerms().length&&(message.kind!==3||siteReady())){
         if(!multiple.checked&&!picked.size){const initial=rows.find(t=>t.selected)??rows[0];if(initial)picked.set(key(initial),initial);}
         if(!multiple.checked&&picked.size&&![...picked.values()].some(t=>t.kind===message.kind)&&rows.length){picked.clear();const initial=rows.find(t=>t.selected)??rows[0];picked.set(key(initial),initial);}
       }

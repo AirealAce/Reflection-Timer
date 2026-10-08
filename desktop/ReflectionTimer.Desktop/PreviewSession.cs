@@ -29,6 +29,7 @@ public sealed class PreviewSession
     internal static object FocusView(FocusModeSettings settings)=>new {
         settings.Enabled, settings.DelaySeconds, settings.MultipleTargets, settings.IdleEnabled, settings.IdleSeconds, settings.ScreenEdgeGlow,settings.TargetOnSiteLinks,settings.BrowserCompanionEnabled,
         screenEdgeGlowStyle=(int)settings.ScreenEdgeGlowStyle,
+        pickerKind=settings.PickerKind is {} pickerKind ? (int?)pickerKind : null,
         targets=settings.SelectedTargets.Select(FocusTargetView),
         target=settings.Target?.Name,
         targetKind=settings.Target is {} target ? (int?)target.Kind : null,

@@ -36,7 +36,7 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
           }
           if(action==='focusSelect'){
             if(window.holdSelection){window.releaseSelection=error=>window.dispatchBridge({type:'reply',requestId,error});return;}
-            window.settings.focusMode={...window.settings.focusMode,targets:data.ids.map(id=>window.choices.get(id)),multipleTargets:data.multipleTargets,targetOnSiteLinks:data.targetOnSiteLinks,browserCompanionEnabled:data.browserCompanionEnabled,idleEnabled:data.idleEnabled,idleSeconds:data.idleSeconds};
+            window.settings.focusMode={...window.settings.focusMode,targets:data.ids.map(id=>window.choices.get(id)),pickerKind:data.pickerKind,multipleTargets:data.multipleTargets,targetOnSiteLinks:data.targetOnSiteLinks,browserCompanionEnabled:data.browserCompanionEnabled,idleEnabled:data.idleEnabled,idleSeconds:data.idleSeconds};
             window.successes++;window.dispatchBridge({type:'settings',settings:window.settings});
           }
           window.dispatchBridge({type:'reply',requestId,...extra});
@@ -142,6 +142,19 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await page.waitForFunction(()=>window.messages.some(message=>message.action==='focusBrowserSetup'));
     check(await page.evaluate(()=>window.messages.filter(message=>message.action==='focusBrowserSetup').length===1),'Companion configuration remains keyboard accessible and explicitly activated');
     if(process.env.REFLECTION_SITE_SCREENSHOTS){await fs.mkdir(process.env.REFLECTION_SITE_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.REFLECTION_SITE_SCREENSHOTS,'site-companion.png')});}
+    await page.keyboard.press('Escape');
+    await page.evaluate(()=>{
+      window.settings.focusMode={...window.settings.focusMode,pickerKind:3,multipleTargets:true,browserCompanionEnabled:false,targets:[
+        {id:'window-open',key:'window:open',kind:0,name:'Open window',app:'Synthetic app'},
+        {id:'site-saved',key:'site:saved.example',kind:3,name:'saved.example',siteHost:'saved.example',app:'chrome'}]};
+      window.dispatchBridge({type:'settings',settings:window.settings});
+    });
+    await connection(false);await open();
+    check(await page.locator('#focus-target-kind').inputValue()==='3'&&await option.isDisabled(),'A saved Site category reopens independently of the first Window target while the companion is disconnected');
+    await page.locator('tr[data-id="site-saved"] input').uncheck();await page.locator('#focus-target-kind').press('Control+s');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.pickerKind===3&&window.settings.focusMode.targets.length===1&&window.settings.focusMode.targets[0].kind===0),'Removing an offline saved Site retains the last saved category and the unrelated Window target');
+    await open();
+    check(await page.locator('#focus-target-kind').inputValue()==='3'&&await page.locator('#focus-site-add').isDisabled(),'The remembered Site category never enables additions without the browser companion');
     await page.keyboard.press('Escape');
     check(errors.length===0,'Site picker produces no uncaught page errors: '+errors.join('; '));
     console.log(count+' Site picker checks passed.');

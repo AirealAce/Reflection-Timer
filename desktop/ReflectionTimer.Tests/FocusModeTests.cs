@@ -26,6 +26,7 @@ internal static class FocusModeTests
         Groups(check);
         TabListing(check,target);
         DisplayBridge(check,target);
+        PickerKind(check,target);
         var legacy=JsonSerializer.Deserialize<AppState>("{}")!;
         check(!legacy.FocusMode.Enabled&&legacy.FocusMode.DelaySeconds==5,"Existing profiles gain disabled focus mode with a five-second delay");
         check(AudioSettings.From(legacy).FocusLost is {Track:LibrarySound.TrainerBattle,Behavior:SoundBehavior.Polite},"Focus audio defaults to the existing Trainer Battle MP3 without interrupting other sounds");
@@ -60,7 +61,63 @@ internal static class FocusModeTests
         await Monitor(check,target);
         await DynamicFocusTests.Run(check,target);
         await MultipleAndIdle(check,target);
+        await IdleOnly(check);
         await Audio(check,target);
+    }
+    private static void PickerKind(Action<bool,string> check,FocusTarget target)
+    {
+        var legacy=JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(new {Target=target}))!;
+        check(legacy.PickerKind is null&&legacy.SelectedTargets.Single()==target,
+            "Legacy profiles preserve their target and leave the chooser category available for migration fallback");
+        check(JsonSerializer.SerializeToElement(PreviewSession.FocusView(legacy),PreviewSession.Json).GetProperty("pickerKind").ValueKind==JsonValueKind.Null,
+            "The legacy chooser bridge preserves an unset category instead of inventing a saved preference");
+        check(PreviewWindow.ReadFocusPickerKind(JsonSerializer.SerializeToElement(new{})) is null,
+            "Older chooser commands can omit the saved category field");
+        foreach(var kind in Enum.GetValues<FocusTargetKind>())
+            check(PreviewWindow.ReadFocusPickerKind(JsonSerializer.SerializeToElement(new{pickerKind=(int)kind}))==kind,
+                "The chooser command accepts the defined "+kind+" category");
+        foreach(var json in new[]{"-1","4","999","null","true","1.5","\"1\"","[]","{}"}) {
+            using var data=JsonDocument.Parse("{\"pickerKind\":"+json+"}");
+            var rejected=false;try{PreviewWindow.ReadFocusPickerKind(data.RootElement);}catch(ArgumentException){rejected=true;}
+            check(rejected,"The chooser command rejects invalid category value "+json);
+        }
+        var store=new MemoryStore();var session=new PreviewSession(store);var engine=session.Engine;
+        var changed=0;engine.Changed+=()=>changed++;
+        var options=new FocusModeSettings{MultipleTargets=true,Targets=[target],IdleEnabled=true,IdleSeconds=27};
+        engine.SetFocusMode(options);
+        foreach(var kind in Enum.GetValues<FocusTargetKind>()) {
+            var beforeChanged=changed;
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{PickerKind=kind});
+            var restored=new TimerEngine(store).Snapshot.FocusMode;
+            check(restored.PickerKind==kind&&restored.SelectedTargets.Single()==target&&restored.IdleEnabled&&restored.IdleSeconds==27,
+                "Saving only the chooser category persists "+kind+" independently of the selected Window and idle options");
+            var bridge=JsonSerializer.SerializeToElement(session.View(),PreviewSession.Json).GetProperty("focusMode");
+            check(bridge.GetProperty("pickerKind").GetInt32()==(int)kind&&bridge.GetProperty("targetKind").GetInt32()==(int)FocusTargetKind.Window,
+                "The state bridge carries the "+kind+" chooser category independently of target kind");
+            check(changed==beforeChanged+1,"A changed "+kind+" chooser category publishes a committed settings update");
+            engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{PickerKind=kind});
+            check(changed==beforeChanged+1,"Saving the same "+kind+" chooser category and options remains a no-op");
+        }
+        var before=engine.Snapshot.FocusMode;
+        foreach(var kind in new[]{(FocusTargetKind)(-1),(FocusTargetKind)4,(FocusTargetKind)999}) {
+            var rejected=false;try{engine.SetFocusMode(before with{PickerKind=kind});}catch(ArgumentException){rejected=true;}
+            check(rejected&&engine.Snapshot.FocusMode==before&&new TimerEngine(store).Snapshot.FocusMode.PickerKind==before.PickerKind,
+                "Invalid chooser category "+(int)kind+" cannot replace the saved preference or selection");
+        }
+        store.Fail=true;
+        try{engine.SetFocusMode(before with{PickerKind=FocusTargetKind.BrowserTabGroup});throw new Exception("Failed chooser save accepted");}catch(IOException){}
+        check(engine.Snapshot.FocusMode==before&&new TimerEngine(store).Snapshot.FocusMode.PickerKind==before.PickerKind,
+            "A failed chooser category save leaves live and durable preferences unchanged");
+        store.Fail=false;
+        engine.SetFocusMode(before with{DelaySeconds=9,Enabled=true});
+        check(engine.SettingsSnapshot.FocusMode.PickerKind==FocusTargetKind.Site,
+            "Editing Focus delay or toggling Focus preserves the saved chooser category");
+        var withoutTargets=engine.SettingsSnapshot.FocusMode with{Target=null,Targets=[],BrowserCompanionEnabled=false};
+        FocusSitePolicy.ValidateSelection(engine.SettingsSnapshot.FocusMode,withoutTargets,false);
+        engine.SetFocusMode(withoutTargets);
+        check(new TimerEngine(store).Snapshot.FocusMode is{PickerKind:FocusTargetKind.Site,BrowserCompanionEnabled:false}
+            &&engine.SettingsSnapshot.FocusMode.SelectedTargets.IsEmpty,
+            "An idle-only chooser can remember Site without a companion or a saved Site target");
     }
     private static async Task MultipleAndIdle(Action<bool,string> check,FocusTarget target)
     {
@@ -134,6 +191,73 @@ internal static class FocusModeTests
             otherSource.Pending.TrySetResult(FocusPresence.Away);await Task.Yield();otherMonitor.Poll();
         }
         check(otherTransitions.LastOrDefault(),"Normal asynchronous focus reads do not restart the away delay when Idle for is enabled");
+    }
+    private static async Task IdleOnly(Action<bool,string> check)
+    {
+        foreach(var mode in Enum.GetValues<SessionMode>()){
+            var now=DateTimeOffset.Now;var store=new MemoryStore{State=new(){LoggingEnabled=false}};var engine=new TimerEngine(store,()=>now);
+            engine.SwitchMode(mode);engine.SetFocusMode(new(){Enabled=true,IdleEnabled=true,IdleSeconds=30,DelaySeconds=120});engine.Start(900,false,50);
+            check(engine.SettingsSnapshot.FocusMode.SelectedTargets.IsEmpty&&new TimerEngine(store,()=>now).Snapshot.FocusMode is{Enabled:true,IdleEnabled:true,IdleSeconds:30},
+                mode+": a running idle-only configuration saves and reloads with no selected target");
+            var directory=Path.Combine(Path.GetTempPath(),"ReflectionTimer-IdleOnly-"+Guid.NewGuid().ToString("N"));
+            var backend=new HoldingAudio();var source=new FakeSource{IdleMilliseconds=29999};var transitions=new List<bool>();var visuals=new List<bool>();
+            try{
+                using var services=new PreviewServices(engine,directory,audio:backend,speech:new SilentVoice());
+                using var monitor=new FocusModeMonitor(engine,source,value=>{transitions.Add(value);services.SetFocusAlert(value);},visuals.Add);
+                monitor.Poll();
+                check(transitions.Count==0&&visuals.Count==0&&!backend.HasPending&&monitor.Status=="Watching for inactivity",
+                    mode+": idle-only monitoring remains silent before the full 30 seconds");
+                source.IdleMilliseconds=30000;monitor.Poll();var first=await backend.Next();
+                check(transitions.SequenceEqual(new[]{true})&&Path.GetFileName(first.Path)=="pokemon-battle-trainer.mp3"&&first.Level.Volume==50
+                    &&AudioSettings.From(engine.SettingsSnapshot).FocusLost.Behavior==SoundBehavior.Polite
+                    &&monitor.Status=="Idle for 30 seconds · alert active"&&monitor.ScreenEdgeGlow&&visuals.SequenceEqual(new[]{true}),
+                    mode+": 30 seconds of inactivity starts Polite Focus audio and glow with no targets, independently of away delay");
+                for(var seconds=1;seconds<=3;seconds++){
+                    now=now.AddSeconds(1);source.IdleMilliseconds=30000+seconds*1000;engine.Advance();monitor.Poll();
+                }
+                check(transitions.SequenceEqual(new[]{true})&&visuals.SequenceEqual(new[]{true})&&!first.Token.IsCancellationRequested&&source.Reads==0,
+                    mode+": repeated real timer ticks preserve one idle-only alert without querying windows or tabs");
+                engine.Checkpoint();
+                check(transitions.SequenceEqual(new[]{true})&&visuals.SequenceEqual(new[]{true})&&!first.Token.IsCancellationRequested,
+                    mode+": saving a running timer checkpoint cannot interrupt idle-only Focus audio or glow");
+                foreach(var theme in Enum.GetValues<AppColorTheme>()){
+                    engine.SetTheme(theme);
+                    check(transitions.SequenceEqual(new[]{true})&&visuals.SequenceEqual(new[]{true})&&!first.Token.IsCancellationRequested&&monitor.ScreenEdgeGlow,
+                        mode+": changing to "+theme+" preserves active idle-only audio and glow");
+                }
+                foreach(var style in Enum.GetValues<FocusGlowStyle>()){
+                    engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{ScreenEdgeGlowStyle=style});monitor.Poll();
+                    check(monitor.ScreenEdgeGlow&&visuals.SequenceEqual(new[]{true})&&!first.Token.IsCancellationRequested
+                        &&new TimerEngine(store,()=>now).Snapshot.FocusMode.ScreenEdgeGlowStyle==style,
+                        mode+": "+style+" remains saved and active for idle-only glow without restarting audio");
+                }
+                engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{ScreenEdgeGlow=false});
+                check(!monitor.ScreenEdgeGlow&&!visuals.Last()&&!first.Token.IsCancellationRequested&&transitions.SequenceEqual(new[]{true}),
+                    mode+": disabling animation removes idle-only glow synchronously while keeping audio active");
+                engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{ScreenEdgeGlow=true});
+                check(monitor.ScreenEdgeGlow&&visuals.Last()&&!first.Token.IsCancellationRequested,
+                    mode+": re-enabling animation restores idle-only glow at the existing idle threshold");
+                engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{IdleSeconds=45});
+                check(transitions.Last()==false&&!visuals.Last()&&!monitor.ScreenEdgeGlow&&first.Token.IsCancellationRequested&&monitor.Status=="Watching for inactivity",
+                    mode+": increasing the idle threshold reevaluates current inactivity and stops the alert");
+                source.IdleMilliseconds=45000;monitor.Poll();var second=await backend.Next();
+                check(transitions.Last()&&visuals.Last()&&monitor.ScreenEdgeGlow&&monitor.Status=="Idle for 45 seconds · alert active",
+                    mode+": the updated idle threshold triggers without selecting a target");
+                source.IdleMilliseconds=0;monitor.Poll();
+                check(!transitions.Last()&&!visuals.Last()&&!monitor.ScreenEdgeGlow&&second.Token.IsCancellationRequested,
+                    mode+": fresh input stops idle-only Focus audio and glow");
+                source.IdleMilliseconds=45000;monitor.Poll();var paused=await backend.Next();engine.Pause();
+                check(!transitions.Last()&&!visuals.Last()&&!monitor.ScreenEdgeGlow&&paused.Token.IsCancellationRequested,
+                    mode+": pausing stops idle-only audio and glow synchronously");
+                engine.Resume();monitor.Poll();var disabled=await backend.Next();
+                engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=false});
+                check(!transitions.Last()&&!visuals.Last()&&!monitor.ScreenEdgeGlow&&disabled.Token.IsCancellationRequested&&monitor.Status=="Off",
+                    mode+": disabling Focus stops idle-only audio and glow synchronously");
+                engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Enabled=true});monitor.Poll();var reset=await backend.Next();engine.Reset();
+                check(!transitions.Last()&&!visuals.Last()&&!monitor.ScreenEdgeGlow&&reset.Token.IsCancellationRequested&&source.Reads==0,
+                    mode+": resetting stops idle-only audio and glow without any native target probes");
+            }finally{if(Directory.Exists(directory))Directory.Delete(directory,true);}
+        }
     }
     private static void TabListing(Action<bool,string> check,FocusTarget target)
     {
