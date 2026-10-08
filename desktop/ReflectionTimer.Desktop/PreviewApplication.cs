@@ -326,9 +326,9 @@ internal sealed partial class PreviewApplication : ApplicationContext
         Broadcast(new{type="sessionStatus",message}); // Readable, but not a second live event.
         if(!delivered)Announce(message);
     }
-    internal async Task CloseMainAsync()
+    internal async Task<bool> CloseMainAsync(Action? beforeExit = null)
     {
-        if (closing) return;
+        if (closing) return false;
         closing = true;
         focusGlow.SetActive(false);
         try {
@@ -336,13 +336,15 @@ internal sealed partial class PreviewApplication : ApplicationContext
             await promptCoordinator.ExclusivelyAsync(async()=>{
                 foreach (var window in windows.ToArray()) await window.FlushDraftAsync();
                 Session.Engine.Checkpoint();
+                beforeExit?.Invoke();
                 Services.Log.Record("app.exiting");pulse.Stop();
                 foreach (var window in windows.Where(w => w != MainForm).ToArray()) window.ClosePermanently();
                 ((PreviewWindow)MainForm!).ClosePermanently();
             });
+            return true;
         }
-        catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again."); }
+        catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again.");return false; }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { DisposeUpdates();targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }

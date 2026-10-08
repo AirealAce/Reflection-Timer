@@ -9,9 +9,25 @@ internal static class Program
     [STAThread]
     private static void Main(string[] args)
     {
+        // The verified staged copy swaps files outside the running app folder.
+        // This helper never opens a profile or registers normal app hotkeys.
+        if(args.Length > 0 && args[0] == "--apply-update") {
+            ApplicationConfiguration.Initialize();
+            if(args.Length != 4 || args[2] != "--wait-for" || !int.TryParse(args[3], out var parent) || parent <= 0) {
+                Environment.ExitCode = 2;return;
+            }
+            try { Environment.ExitCode = DesktopUpdateInstaller.Apply(args[1], parent); }
+            catch {
+                Environment.ExitCode = 1;
+                MessageBox.Show("The update could not finish. Your saved settings and reflections have been kept. Close other copies of Reflection Timer, reopen the usual shortcut, and try again. The previous app folder is retained as a backup.",
+                    "Reflection Timer — update could not finish", MessageBoxButtons.OK, MessageBoxIcon.Error);
+            }
+            return;
+        }
         // Chrome/Edge launch this same executable for stdio native messaging.
         // Reject unknown origins before opening a profile, mutex or app window.
         if(args.Length>0&&args[0].StartsWith("chrome-extension://",StringComparison.OrdinalIgnoreCase)){
+            if(DesktopUpdateInstaller.IsHostStopping(AppContext.BaseDirectory))return;
             Environment.ExitCode=BrowserCompanionHost.RunNativeHostAsync(args[0]).GetAwaiter().GetResult();return;
         }
         ApplicationConfiguration.Initialize();

@@ -7,6 +7,7 @@ import {mountTimeReached} from './time-reached.js';
 import {mountFocusMode} from './focus-mode.js';
 import {mountHelp} from './help.js';
 import {mountSettingsSearch} from './settings-search.js';
+import {mountUpdates} from './updates.js';
 
 export function settingsUI({send, run, bind, view, announce, selectTab}) {
   const $ = id => document.getElementById(id);
@@ -40,6 +41,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
   const lowTime=mountLowTime({send,run});
   const timeReached=mountTimeReached({send,run});
   const help=mountHelp({view,selectTab});
+  const renderUpdates=mountUpdates(view,send);
   mountSettingsSearch({view});
   const dirty = new Set();
   const dirtyFields=new Map();
@@ -217,6 +219,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
     },
     message(message) {
       if(view!=='main') return;
+      if(message.type==='updates'){renderUpdates(message.update);return;}
       if(focus.message(message))return;
       if(message.type==='settings') {
         $('voice-announcements').disabled=false;$('preview-voice').disabled=false;

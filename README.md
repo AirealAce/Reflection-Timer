@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.14
+# Reflection Timer 4.3.15
 
 An accessible Windows timer and stopwatch with reflection prompts, focus reminders, and local CSV or optional Google Sheets logging.
 
@@ -26,7 +26,9 @@ The [optional Chrome/Edge companion](browser-companion/README.md) is needed for 
 
 ## Updating
 
-Choose **Quit desktop app** from the app's tray menu before replacing its files; closing App view only hides it. Extract the complete new application ZIP and open its **ReflectionTimer.exe**. Your saved settings, drafts and Outbox are kept separately from the application folder. Keep your private settings and backups out of GitHub; a friend should configure their own optional Sheets connection.
+Open **Settings → Updates → Check for updates**. If a newer published version is available, pause any running session and choose **Update now**. The app verifies the download, saves open drafts and settings, replaces its files, and restarts. Your session, Outbox, audio and browser companion configuration are kept. Checking and installing are manual; no account, subscription or .NET SDK is needed.
+
+For a manual update, choose **Quit desktop app** from the tray menu before replacing its files; closing App view only hides it. Extract the complete new application ZIP and open its **ReflectionTimer.exe**. Saved settings, drafts and Outbox are kept separately from the application folder. Keep private settings and backups out of GitHub; a friend should configure their own optional Sheets connection.
 
 If you use the optional browser companion and move the application folder, repeat its [setup steps](browser-companion/README.md) for the new location.
 

@@ -201,3 +201,8 @@ body[data-stopwatch=true] #timer .low-time-options{display:none}
 .csv-folder-row{gap:10px;align-items:center}
 .csv-folder-row input{flex:1 1 300px;width:auto;max-width:550px;min-width:0;margin:0}
 .csv-folder-row button{margin:0}
+#updates-heading{padding:8px 10px;background:var(--raised)}
+#updates-status{overflow-wrap:anywhere}
+#updates-progress-group{display:flex;align-items:center;gap:10px;max-width:350px}
+#updates-progress{flex:1;min-width:0;width:100%;height:14px;accent-color:var(--accent)}
+#updates-progress-caption{flex:none;font-variant-numeric:tabular-nums}

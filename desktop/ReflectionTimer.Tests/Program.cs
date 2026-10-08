@@ -4,6 +4,12 @@ using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
 
 if(args.Contains("--focus-mode")){var checks=0;await FocusModeTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} focus mode checks passed.");return;}
+if(args.Contains("--desktop-update-installer")){var checks=0;DesktopUpdateInstallerTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} desktop update installer checks passed.");return;}
+if(args.Contains("--desktop-updates")){var checks=0;await DesktopUpdateClientTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} desktop update client checks passed.");return;}
+if(args.Contains("--verify-update-package")){var index=Array.IndexOf(args,"--verify-update-package");await DesktopUpdateClient.VerifyPackageAsync(args[index+1],Version.Parse(args[index+2]));Console.WriteLine("Verified real update payload.");return;}
+if(args.Contains("--prepare-update-smoke")){DesktopUpdateInstallerProcessSmoke.Prepare(args[Array.IndexOf(args,"--prepare-update-smoke")+1]);return;}
+if(args.Contains("--verify-update-smoke")){DesktopUpdateInstallerProcessSmoke.Verify(args[Array.IndexOf(args,"--verify-update-smoke")+1]);return;}
+if(args.Contains("--download-published-update")){var index=Array.IndexOf(args,"--download-published-update");using var updates=new DesktopUpdateClient();var release=await updates.CheckAsync(Version.Parse(args[index+1]))??throw new Exception("No newer release found.");var payload=await updates.DownloadAsync(release,args[index+2]);Console.WriteLine(JsonSerializer.Serialize(new{version=release.Version.ToString(),payload}));return;}
 if(args.Contains("--native-site")){NativeSiteSmoke.Run();return;}
 if(args.Contains("--site-availability")){var checks=0;await SiteAvailabilityTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} Site availability checks passed.");return;}
 if(args.Contains("--browser-companion-transport")){var checks=0;await BrowserCompanionHostTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} companion transport checks passed.");return;}
@@ -72,6 +78,8 @@ void Check(bool condition, string name) { if (!condition) throw new Exception(na
 JsonElement Data(object value) => JsonSerializer.SerializeToElement(value, PreviewSession.Json);
 var now = DateTimeOffset.Now;
 DefaultsThemeShortcutTests.Run(Check);
+DesktopUpdateInstallerTests.Run(Check);
+await DesktopUpdateClientTests.Run(Check);
 DeliveryFailureTests.Run(Check);
 await RetryAllServicesTests.Run(Check);
 await RandomAudioTests.Run(Check);

@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.3.14</p>
+    <p class="eyebrow">Reflection Timer 4.3.15</p>
     <div class="page-title-row"><h1 id="page-title" tabindex="-1">Reflection Timer</h1><div id="reflection-title-actions" hidden><button id="reflection-failed" class="help-button delivery-warning" type="button" aria-label="Edit most recent unsent message" title="Edit most recent unsent message" hidden><span aria-hidden="true">!</span></button><button id="reflection-help-toggle" class="help-button" type="button" aria-label="Keyboard shortcuts for the session-end window" title="Keyboard shortcuts for the session-end window" popovertarget="reflection-shortcuts" aria-expanded="false" aria-controls="reflection-shortcuts"><span aria-hidden="true">?</span></button></div></div>
     <section id="reflection-shortcuts" popover="auto" role="region" aria-labelledby="reflection-shortcuts-title" tabindex="0">
       <h2 id="reflection-shortcuts-title">Session-end shortcuts</h2>
@@ -83,6 +83,14 @@
       <div class="table-scroll" role="region" aria-label="Outbox table" tabindex="0"><table><caption>Saved reflections and delivery</caption><thead><tr><th scope="col">Saved locally</th><th scope="col">Destination</th><th scope="col">Status</th><th scope="col">Attempts</th></tr></thead><tbody id="outbox-rows"></tbody></table></div>
       <p id="outbox-empty" hidden>No local entries.</p><div id="outbox-detail" role="region" aria-label="Selected reflection" tabindex="0" class="preserve-lines"></div>
       <div class="actions"><button id="send-pending" class="primary" type="button">Send pending now</button><button id="retry-selected" type="button">Retry selected…</button><button id="retry-all" type="button">Retry all</button><button id="mark-selected" type="button">Already in Sheet</button><button id="open-sheet" type="button">Open Google Sheet</button></div><details id="local-preview-actions" hidden><summary>Local preview entry</summary><p>This entry stays local. Simulating delivery makes no request.</p><button id="simulate-selected" type="button">Simulate success</button></details>
+    </section>
+    <section id="updates" class="main-only" aria-labelledby="updates-heading">
+      <h2 id="updates-heading" data-help-heading="updates">Updates</h2>
+      <p id="updates-version">Current version: loading…</p>
+      <p id="updates-help" data-help="updates">Check for a newer version on GitHub. Pause a running timer or stopwatch before updating. Update now downloads the verified update and restarts the app, keeping your settings, reflections, and audio. Checking does not save other Settings edits.</p>
+      <p id="updates-status" role="status" aria-live="polite" aria-atomic="true">Check for updates when you are ready.</p>
+      <div id="updates-progress-group" hidden><progress id="updates-progress" max="100" aria-label="Update download progress"></progress><span id="updates-progress-caption" aria-hidden="true"></span></div>
+      <div id="updates-actions" class="actions"><button id="check-for-updates" type="button" aria-controls="updates-status updates-progress-group">Check for updates</button><button id="install-update" class="primary" type="button" aria-controls="updates-status updates-progress-group" hidden>Update now</button></div>
     </section>
     <section id="appearance" class="main-only" aria-labelledby="appearance-heading">
       <h2 id="appearance-heading" data-help-heading="theme">Display and behavior</h2>
@@ -224,7 +232,7 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.14</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.15</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">

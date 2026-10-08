@@ -1,4 +1,4 @@
-# Reflection Timer desktop 4.3.14
+# Reflection Timer desktop 4.3.15
 
 ## Download the app
 
@@ -50,6 +50,8 @@ This command **requires the .NET 10 SDK**: it runs desktop tests, publishes a se
 ```
 
 This developer command runs validation and publishes **win-x64 with `--self-contained true`**, including .NET and the required web/audio assets. It verifies the public payload, creates **ReflectionTimer-&lt;version&gt;-win-x64.zip**, and writes a SHA-256 checksum beside it. Packaging happens locally and never uploads a release. Distribute this application ZIP rather than a source archive or a normal framework-dependent build folder.
+
+Settings → Updates reads the latest stable release from this repository. To offer a new version, publish a GitHub release tagged **v&lt;version&gt;** at the tested master commit and attach the complete application ZIP and its `.sha256.txt` file. The ZIP must retain its generated `package-manifest.json`. Upload both assets before publishing the release so users never see a partial update. Ordinary source pushes do not publish downloads or trigger automatic installation. The app checks on request, verifies the ZIP and manifest, and stages its own self-contained helper without requiring PowerShell or the .NET SDK on the user's machine.
 
 ## Data and test profiles
 

@@ -226,7 +226,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         catch { if(ReferenceEquals(initializingBrowser,browser))ShowFailure("The local web interface could not start. Close and reopen the app. Your saved data is retained."); }
     }
     internal static bool Allowed(string address) => Uri.TryCreate(address, UriKind.Absolute, out var uri) && uri.Scheme == "https" && uri.Host == "reflection-timer.invalid"
-        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/settings-search.js" or "/audio.js" or "/random-audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/focus-mode.js" or "/help.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
+        && uri.IsDefaultPort && uri.UserInfo.Length == 0 && uri.AbsolutePath is "/index.html" or "/app.js" or "/app.css" or "/ui.js" or "/settings.js" or "/settings-search.js" or "/updates.js" or "/audio.js" or "/random-audio.js" or "/setup.js" or "/low-time.js" or "/time-reached.js" or "/focus-mode.js" or "/help.js" or "/compact.html" or "/compact.js" or "/compact.css" or "/layout.js" or "/themes.css" or "/themes.js";
     internal void ProcessFailure(CoreWebView2ProcessFailedKind kind,CoreWebView2ProcessFailedReason reason,int exitCode)
     {
         if(IsDisposed||allowClose)return;
@@ -264,6 +264,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (action == "ready") {
                 ready = true; Post(new { type = "init", view = View, promptId = PromptId, state = app.Session.View(), appViewVisible = app.AppViewVisible, timeOnly = View=="compact" ? (bool?)IsTimeOnly : null, compactRevision });
                 if(View=="main")Post(new { type="focusStatus", status=app.FocusStatus });
+                if(View=="main")Post(new { type="updates", update=app.UpdateState });
                 if(View=="main" && app.RecoveryNotice is { } notice) { Post(new { type="announcement", message=notice }); app.RecoveryNotice=null; }
                 // Open activates synchronously. A late interface load must not
                 // reclaim keyboard focus after the user switches to another app.
@@ -299,6 +300,13 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             if (action == "compact") { app.Open("compact"); Reply(requestId); return; }
             if(action=="toggleCompact") { app.ToggleCompactVisibility(data.TryGetProperty("expandOnShow",out var expandOnShow)&&expandOnShow.ValueKind==JsonValueKind.True);Reply(requestId);return; }
             if(action=="quit") { if(View!="main")throw new ArgumentException("Quit from the App view.");Reply(requestId);await app.CloseMainAsync();return; }
+            if(action is "checkForUpdates" or "installUpdate") {
+                if(View!="main")throw new ArgumentException("Manage updates from Settings in App view.");
+                Reply(requestId);
+                if(action=="checkForUpdates")_ = app.CheckForUpdatesAsync();
+                else _ = app.InstallUpdateAsync();
+                return;
+            }
             if(action=="durationDraft") {
                 if(View=="reflection")throw new ArgumentException("Edit duration in the App or Compact view.");
                 var parts=data.GetProperty("parts").EnumerateArray().Select(x=>x.GetString()??"").ToArray();

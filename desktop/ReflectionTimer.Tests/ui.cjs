@@ -14,7 +14,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     let page = await context.newPage();
     await page.context().route('**/*', async route=>{
       const name=new URL(route.request().url()).pathname.slice(1);
-      if (!['index.html','app.js','app.css','ui.js','settings.js','settings-search.js','setup.js','audio.js','random-audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','help.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
+      if (!['index.html','app.js','app.css','ui.js','settings.js','settings-search.js','updates.js','setup.js','audio.js','random-audio.js','low-time.js','time-reached.js','focus-mode.js','layout.js','help.js','themes.js','themes.css','compact.html','compact.js','compact.css'].includes(name)) return route.abort();
       await route.fulfill({body:await fs.readFile(path.join(web,name)),contentType:name.endsWith('.js')?'text/javascript':name.endsWith('.css')?'text/css':'text/html'});
     });
     await page.context().addInitScript(() => {
@@ -550,6 +550,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./retry-delivery.cjs')(context,initial,check,settings);
     await require('./reflection-separators.cjs')(context,initial,settings,check);
     await require('./settings-shortcuts.cjs')(context,initial,settings,check);
+    await require('./updates.cjs')(context,initial,settings,check);
     await require('./settings-success.cjs')(context,initial,settings,check);
     await require('./performance.cjs')(context,initial,settings,check);
     await require('./settings-startup.cjs')(context,initial,settings,check);

@@ -2,6 +2,12 @@
 
 For downloading and opening the app, start with the [main setup guide](../README.md). This page contains detailed behavior, defaults, screen-reader guidance, receiver compatibility and profile migration notes.
 
+## Updates
+
+The first section in **Settings** shows the installed version and **Check for updates**. A newer stable GitHub release enables **Update now**. Checking and installing are manual; source commits, drafts and prereleases are not offered as updates. The app downloads only its official Windows x64 release, verifies the published SHA-256 and every file in its package manifest, and refuses older versions or incomplete packages. Progress and results are available to screen readers without moving focus.
+
+Pause the running timer or stopwatch before installing. Open settings and reflection drafts are saved through the ordinary shutdown path before the verified helper replaces app files and restarts. Paused sessions, preferences, Outbox, custom MP3s and the configured optional browser companion are retained. The previous app folder stays beside the installation as a backup; failed file replacement restores it. An unwritable or linked app folder, another running copy, an offline connection or an invalid download leaves the saved profile intact. Updates need no .NET SDK, GitHub account or paid update service. Google Sheets receiver deployments remain a separate manual step.
+
 ## Focus sites and linked targets
 
 **Site focus targets** require the optional Chrome/Edge browser companion to be configured, enabled, and connected with a current complete browser snapshot. Site stays disabled until that connection is ready. Then choose the focused website at start/resume, select from all open websites reported by the companion, or enter a website address. Ctrl+Alt+] also offers **Site (4)** when its website is readable through the companion. Saved Site targets match that host and its subdomains, independently of window or tab restarts. During a disconnection, saved Sites stay saved and can be removed, but unavailable Site targets do not trigger focus alerts. Paths, queries, fragments and page content are not retained.

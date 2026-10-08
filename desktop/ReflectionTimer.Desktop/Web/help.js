@@ -36,7 +36,7 @@ export function mountReflectionHelp(view) {
 
 export function mountHelp({view,selectTab}) {
   if(view!=='main')return {render(){}};
-  const titles={timer:'Timer and views','timer-low':'Timer low-on-time audio','timer-reached':'Stopwatch alert',
+  const titles={updates:'App updates',timer:'Timer and views','timer-low':'Timer low-on-time audio','timer-reached':'Stopwatch alert',
     scheduler:'Scheduler','schedule-low':'Scheduled low-on-time audio',outbox:'Outbox and delivery',theme:'App theme',
     display:'Display and window positions',animations:'Animations',reset:'Reset confirmation',reflections:'Reflection prompts',audio:'Audio playback',
     'audio-low':'Low-on-time audio','audio-reached':'Time-reached audio',focus:'Focus mode',voice:'Voice announcements',
