@@ -235,7 +235,7 @@ export function settingsUI({send, run, bind, view, announce, selectTab}) {
         descriptions[2]+=' Entering time-only returns focus to the previous usable window.';
         descriptions.push('Ctrl+Alt+Shift+, · cycle in reverse: compact controls → hidden → time-only → controls. Time-only does not take focus.');
         descriptions.push('Ctrl+Alt+; · toggle Focus mode from any app for Timer or Stopwatch. Keeps the saved targets and idle settings. Opens the chooser first if no target or idle trigger is configured.');
-        descriptions.push('Ctrl+Alt+] · toggle the focused window’s saved target checkbox, including in an open chooser. In a browser, choose 1 Window, 2 Tab, or 3 Tab Group when the current tab belongs to a group. Choices report checked/unchecked; Up/Down and Enter or its number toggles the choice.');
+        descriptions.push('Ctrl+Alt+] · toggle the focused window’s saved target checkbox, including in an open chooser. In a browser, choose 1 Window, 2 Tab, 3 Tab Group when grouped, or 4 Site when its website is readable. Choices report checked/unchecked; Up/Down and Enter or its number toggles the choice.');
         const unavailable=descriptions.map((text,i)=>message.shortcuts[i]?.available===false?text.split(' · ')[0]:null).filter(Boolean);
         setText($('shortcut-availability'),unavailable.length?'Shortcuts unavailable: '+unavailable.join(', ')+'. Quit the other app using them. Retrying automatically.':'');$('shortcut-availability').hidden=!unavailable.length;
         $('shortcut-notices').replaceChildren(...descriptions.map((text,i)=>{

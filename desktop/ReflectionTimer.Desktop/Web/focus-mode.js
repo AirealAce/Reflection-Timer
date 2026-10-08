@@ -71,7 +71,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   function status(){
     const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length;
     setText($('focus-picker-status'),`${available} ${Number(kindControl.value)===3?'sites':'open targets'}. ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
-      +(Number(kindControl.value)===3?' Native Site tracking lists the current page in each browser window. Saved sites remain available.':''));
+      +(Number(kindControl.value)===3?(browserConnected===true
+        ?' Open websites from connected browsers are listed. Saved sites remain available.'
+        :' Native mode lists sites your browser exposes. For every background tab, connect the optional browser companion, or enter a website. Saved sites remain available.') :''));
     setText($('focus-browser-status'),!companion.checked?'Native Site tracking is active. The companion is off.'
       :settings.browserCompanionEnabled!==true?'Save to enable the companion. Native Site tracking remains active.'
       :browserConnected===true?'Companion connected. Background sites and links to other sites are available.'
@@ -96,6 +98,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:['Site','App'];
     const widths=kind===0?['30%','']:kind===3?['','24%']:['64px','','24%'];
     $('focus-site-controls').hidden=kind!==3;
+    setText(list.querySelector('caption'),kind===3?'Open sites':'Open targets');
     if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);

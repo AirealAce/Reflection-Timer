@@ -5,6 +5,13 @@ namespace ReflectionTimer.Accessible;
 
 internal static class FocusTargetToggle
 {
+    internal static FocusTarget[] BrowserChoices(IReadOnlyList<FocusTarget> captured)
+        => new[]{FocusTargetKind.Window,FocusTargetKind.BrowserTab,FocusTargetKind.BrowserTabGroup,FocusTargetKind.Site}
+            .Select(kind=>captured.FirstOrDefault(t=>t.Kind==kind)).OfType<FocusTarget>()
+            // Native sites have no runtime list ID. Use the same host-based
+            // ID as the picker so multiple shortcut sites remain selectable.
+            .Select(target=>target.Kind==FocusTargetKind.Site
+                ?PreviewApplication.FocusChoices(FocusTargetKind.Site,[target]).Single(t=>!t.UseFocused):target).ToArray();
     internal static FocusTarget[] Matching(FocusModeSettings current,FocusTarget target,IReadOnlyList<FocusTarget>? open=null)
         => current.SelectedTargets.Where(saved=>SavedFocusWindows.MatchesForToggle(current,saved,target,open??[])).ToArray();
     internal static (FocusModeSettings Settings,bool Added) Toggle(FocusModeSettings current,FocusTarget target,IReadOnlyList<FocusTarget>? open=null)
@@ -18,6 +25,7 @@ internal static class FocusTargetToggle
     internal static string Label(FocusTarget target)=>target.Kind switch{
         FocusTargetKind.BrowserTab=>"Tab: "+target.Name,
         FocusTargetKind.BrowserTabGroup=>"Tab Group: "+target.Name,
+        FocusTargetKind.Site=>"Site: "+FocusSites.CanonicalHost(target.SiteHost),
         _=>"Window: "+target.App+" — "+target.Name
     };
 }
@@ -49,8 +57,7 @@ internal sealed partial class PreviewApplication
                 if(WindowsFocusTargets.IsBrowser(window)){
                     var capture=focusTargets.CaptureAsync(window,Enum.GetValues<FocusTargetKind>());targetShortcutBrowserRead=capture;
                     var captured=await capture.WaitAsync(TimeSpan.FromSeconds(6));
-                    var choices=new[]{FocusTargetKind.Window,FocusTargetKind.BrowserTab,FocusTargetKind.BrowserTabGroup}
-                        .Select(kind=>captured.FirstOrDefault(t=>t.Kind==kind)).OfType<FocusTarget>().ToArray();
+                    var choices=FocusTargetToggle.BrowserChoices(captured);
                     if(choices.Length==0)throw new ArgumentException("The browser target could not be identified. No targets changed.");
                     if(await focusTargets.CheckAsync(window).WaitAsync(TimeSpan.FromSeconds(6))!=FocusPresence.Focused)
                         throw new ArgumentException("The initiating browser is no longer focused. Press Ctrl+Alt+] again in the browser you want.");

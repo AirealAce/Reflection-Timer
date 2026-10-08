@@ -56,6 +56,18 @@ internal static class NativeSiteSmoke
                             "Native Site reading ignores address edits, document text inputs and misleading window or document titles");
                         Check(GetForegroundWindow()==foreground,"The isolated native Site fixture appears without taking foreground focus");
 
+                        using var additional=new WebView2{Dock=DockStyle.Bottom,Height=100};
+                        window.Controls.Add(additional);additional.BringToFront();
+                        await additional.EnsureCoreWebView2Async(environment);
+                        additional.CoreWebView2.SetVirtualHostNameToFolderMapping("second-open-site.test",content,CoreWebView2HostResourceAccessKind.Allow);
+                        await Navigate(additional,"https://second-open-site.test/frame.html?private=fixture");
+                        var sites=await Task.Run(()=>NativeBrowserSites.ReadListing(nativeHandle));
+                        Check(sites.Hosts.Contains("native-site.test")&&sites.Hosts.Contains("second-open-site.test"),
+                            "The native site inventory includes both separately exposed committed root documents in one window");
+                        Check(!sites.Hosts.Contains("embedded-frame.test")&&!sites.Hosts.Contains("typed-address.test")&&!sites.Hosts.Contains("misleading-title.test"),
+                            "The native site inventory excludes nested iframe sites, editable addresses and URL-shaped titles");
+                        additional.Visible=false;
+
                         await Navigate(browser,"about:blank");
                         await browser.CoreWebView2.ExecuteScriptAsync("document.title='https://false-title.test/';document.body.innerHTML='<textarea aria-label=\"Draft\">https://false-input.test/</textarea>'");
                         var blank=await Read(window.Handle);

@@ -46,7 +46,36 @@ internal static class NativeSiteTests
             "https://example.com\\@other.example/","https://exam ple.com/"})
             check(!NativeBrowserSites.TryCommittedHost(address,out var host)&&host=="",
                 "Native Site metadata rejects noncommitted, nonweb or unsafe document addresses: "+(address.Length==0?"(empty)":address));
+        Listings(check);
         Anchors(check);
+    }
+
+    private static void Listings(Action<bool,string> check)
+    {
+        BrowserDocumentAddress Document(string address,double area=10_000,bool offscreen=false)=>new(address,offscreen,area);
+        var listing=NativeBrowserSites.Listing([
+            Document("https://active.example/private?token=not-saved#section",20_000),
+            Document("https://background.example/private",0,true),
+            Document("https://www.ACTIVE.example/another",0,true),
+            Document("https://second-background.example/",0,true),
+            Document("about:blank",0,true)]);
+        check(listing.Hosts.SequenceEqual(["active.example","background.example","second-background.example"]),
+            "The native chooser includes every exposed committed website, including offscreen documents, and deduplicates normalized hosts");
+        check(listing.Current=="active.example",
+            "An offscreen document in the site listing does not become the current website");
+        check(listing.Hosts.All(host=>!host.Contains('/')&&!host.Contains('?')&&!host.Contains('#')),
+            "The native site inventory retains no document path, query or fragment");
+        var ambiguous=NativeBrowserSites.Listing([Document("https://first.example/"),Document("https://second.example/",9_500)]);
+        check(ambiguous.Current is null&&ambiguous.Hosts.SequenceEqual(["first.example","second.example"]),
+            "Two distinct accessible root documents are both selectable even when their similar bounds leave the current website unknown");
+        var backgroundOnly=NativeBrowserSites.Listing([Document("https://background.example/",0,true)]);
+        check(backgroundOnly.Current is null&&backgroundOnly.Hosts.SequenceEqual(["background.example"]),
+            "An exposed background-only website remains selectable without being declared focused");
+        check(NativeBrowserSites.Listing([Document("file:///C:/fixture.html"),Document("chrome://settings"),
+            Document("https://name:password@example.com/private")]).Hosts.Count==0,
+            "The site inventory rejects nonweb and credential-bearing addresses just as current-site capture does");
+        check(NativeBrowserSites.Listing([]).Hosts.Count==0&&NativeBrowserSites.Listing([]).Current is null,
+            "An empty provider inventory produces no cached or guessed website");
     }
 
     private static void Anchors(Action<bool,string> check)

@@ -1,6 +1,6 @@
-# Reflection Timer 4.3.7
+# Reflection Timer 4.3.8
 
-Focus targets also include **Site**: use the focused site on start/resume, choose a current website from a browser window, or enter its address. Native Windows accessibility is the default and needs no extension. It reads committed document metadata, never an address-bar edit or page text. Saved websites match their host and subdomains; native listing cannot include every inactive tab's site.
+Focus targets also include **Site**: use the focused site on start/resume, choose an open website exposed by the browser, or enter its address. Ctrl+Alt+] offers **Site (4)** alongside the available Window, Tab and Tab Group choices. Native Windows accessibility is the default and needs no extension. It reads committed document metadata from all exposed top-level documents, including background documents, without using an address-bar edit, embedded frames or page text. Saved websites match their host and subdomains. Chrome does not expose every inactive tab's site this way; the picker explains when the optional companion is needed for a complete list.
 
 **Target On-Site Links** starts checked under Multiple Targets. Native mode supports same-website pages, anchoring each selected browser target's first readable website for that running capture. The optional **Browser companion** can list inactive tabs' sites and follow actual links to other websites. It starts disabled. **Configure companion…** explicitly registers the local host and opens its bundled folder; Chrome/Edge still require the one-time Load unpacked step described in that folder's README. The app never installs or registers the companion automatically. This feature does not change Sheets, CSV or audio settings.
 

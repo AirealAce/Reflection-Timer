@@ -27,7 +27,9 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
           if(action==='focusTargets'){
             if(data.reset){window.choices.clear();for(const target of window.settings.focusMode.targets)window.choices.set(target.id,target);}
             const targets=data.kind===3?[{id:'site-current',key:'focused-site',kind:3,useFocused:true,name:'Use focused site',app:'',captureScope:0},
-              {id:'site-open',key:'site:open.example',kind:3,name:'open.example',siteHost:'open.example',app:'chrome',current:true}]
+              {id:'site-open',key:'site:open.example',kind:3,name:'open.example',siteHost:'open.example',app:'chrome',current:true},
+              {id:'site-background',key:'site:background.example',kind:3,name:'background.example',siteHost:'background.example',app:'chrome'},
+              {id:'site-other-browser',key:'site:other.example',kind:3,name:'other.example',siteHost:'other.example',app:'msedge'}]
               :[{id:'window-open',key:'window:open',kind:0,name:'Open window',app:'Synthetic app'}];
             for(const target of targets)window.choices.set(target.id,target);
             window.dispatchBridge({type:'focusTargets',kind:data.kind,targets,browserConnected:window.browserConnected,nativeSites:true});
@@ -49,13 +51,14 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await page.evaluate(()=>window.dispatchBridge({type:'settings',settings:window.settings}));
     const dialog=page.locator('#focus-target-dialog'),website=page.locator('#focus-site-website'),links=page.locator('#focus-target-on-site-links');
     const open=async()=>{await page.locator('#choose-focus-target').click();await page.waitForFunction(()=>document.querySelector('#focus-target-list').getAttribute('aria-busy')==='false');};
-    const site=async()=>{await page.locator('#focus-target-kind').selectOption('3');await page.waitForFunction(()=>document.querySelector('#focus-target-list th')?.textContent==='Site');};
+    const site=async()=>{await page.locator('#focus-target-kind').selectOption('3');await page.waitForFunction(()=>[...document.querySelectorAll('#focus-target-list th')].some(header=>header.textContent==='Site'));};
     await open();check(await page.locator('#focus-site-controls').isHidden(),'Manual website controls stay out of existing target categories');
     check(await links.isChecked(),'Target On-Site Links is checked for legacy/default settings');
     await site();
     check(await page.locator('#focus-target-list tbody tr').first().textContent().then(text=>text.includes('Use focused site')),'Dynamic current-site choice is the first Site row');
     check(await page.locator('#focus-target-list thead th').allTextContents().then(values=>JSON.stringify(values)===JSON.stringify(['Site','App'])),'Site has meaningful table headers without a fabricated tab number');
-    check(await page.locator('#focus-picker-status').textContent().then(text=>text.includes('current page in each browser window')&&!text.includes('previously seen')&&!text.includes('waiting')),'Site guidance explains the native current-page list without requiring a companion connection');
+    check(await page.locator('#focus-picker-status').textContent().then(text=>text.includes('sites your browser exposes')&&text.includes('every background tab')&&text.includes('optional browser companion')),'Native Site guidance identifies partial browser metadata and the optional way to list every background tab');
+    check(await page.locator('#focus-target-list caption').textContent()==='Open sites'&&await page.locator('#focus-target-list tbody tr').count()===4,'Site table lists every provided open website across tabs and browsers alongside the dynamic choice');
     await screenshot('site-chooser');
     await screenshot('site-chooser-list',page.locator('#focus-target-list'));
     await website.fill('saved.example');await website.press('Control+Enter');await dialog.waitFor({state:'hidden'});
@@ -94,11 +97,12 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     check(await page.evaluate(()=>window.settings.focusMode.browserCompanionEnabled===true&&!window.messages.some(message=>message.action==='focusBrowserSetup')),'Shortcut save commits companion preference without registering or configuring it');
     await open();await page.locator('#focus-picker-companion summary').click();
     check(await companion.isChecked()&&await page.locator('#focus-browser-status').textContent().then(text=>text.includes('Waiting for the companion')&&text.includes('Native Site tracking remains active')),'An enabled disconnected companion retains native Site tracking');
-    await companion.focus();
+    await site();await companion.focus();
     const targetRequests=await page.evaluate(()=>window.messages.filter(message=>message.action==='focusTargets').length);
     await page.evaluate(()=>{window.browserConnected=true;window.dispatchBridge({type:'browserCompanionStatus',connected:true});});
     await page.waitForFunction(()=>document.querySelector('#focus-browser-status').textContent.includes('Companion connected'));
     check(await page.locator('#focus-browser-status').textContent().then(text=>text.includes('Background sites')&&text.includes('links to other sites')),'Connected companion feedback describes its additional browser capabilities');
+    check(await page.locator('#focus-picker-status').textContent().then(text=>text.includes('Open websites from connected browsers')&&!text.includes('For every background tab')),'Connected Site list does not keep showing the native incomplete-list explanation');
     check(await companion.evaluate(input=>document.activeElement===input&&input.checked)
       &&await page.evaluate(()=>window.messages.filter(message=>message.action==='focusTargets').length)===targetRequests
       &&await page.locator('#focus-browser-status').getAttribute('role')==='status','Companion connection updates live without refreshing the list, moving focus or changing the picker draft');
@@ -108,6 +112,12 @@ const fs=require('node:fs/promises'),path=require('node:path'),assert=require('n
     await page.getByRole('button',{name:'Configure companion…',exact:true}).focus();await page.keyboard.press('Space');
     await page.waitForFunction(()=>window.messages.some(message=>message.action==='focusBrowserSetup'));
     check(await page.evaluate(()=>window.messages.filter(message=>message.action==='focusBrowserSetup').length===1&&window.settings.focusMode.browserCompanionEnabled===false),'Configure companion is keyboard accessible and only runs on its explicit button activation');
+    await site();
+    await page.locator('tr[data-id="site-background"] input').check();await page.keyboard.press('Control+s');await dialog.waitFor({state:'hidden'});
+    check(await page.evaluate(()=>window.settings.focusMode.targets.some(target=>target.siteHost==='background.example')&&window.settings.focusMode.targets.some(target=>target.kind===0)),'A background Site can be checked and saved alongside targets from another category');
+    await open();await site();
+    check(await page.locator('tr[data-id="site-background"] input').isChecked(),'Reopening Site retains the saved background website checkbox');
+    await page.keyboard.press('Escape');
     check(errors.length===0,'Site picker produces no uncaught page errors: '+errors.join('; '));
     console.log(count+' Site picker checks passed.');
   }finally{await browser.close();}

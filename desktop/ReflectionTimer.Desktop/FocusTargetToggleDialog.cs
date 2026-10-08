@@ -13,7 +13,7 @@ internal sealed class FocusTargetToggleDialog : Form
     internal FocusTarget? SelectedTarget=>Choices.SelectedIndex>=0?targets[Choices.SelectedIndex]:null;
     internal FocusTargetToggleDialog(IReadOnlyList<FocusTarget> targets,AppColorTheme theme,Func<FocusTarget,bool> isChecked,Action<string> speak)
     {
-        if(targets.Count==0||targets.Count>3)throw new ArgumentException("Choose an available browser target.");
+        if(targets.Count==0||targets.Count>4)throw new ArgumentException("Choose an available browser target.");
         this.targets=targets;this.speak=speak;
         Text="Toggle a Focus target";AccessibleName=Text;AccessibleRole=AccessibleRole.Dialog;
         AccessibleDescription="Use Up and Down to select a target, then Enter. Number keys select the corresponding numbered choice. Escape cancels.";
@@ -43,12 +43,16 @@ internal sealed class FocusTargetToggleDialog : Form
             using var bold=new Font(Choices.Font,FontStyle.Bold);
             var stateWidth=TextRenderer.MeasureText(e.Graphics,"Unchecked",Choices.Font).Width;
             var titleWidth=e.Bounds.Width-inset*3-stateWidth;
-            var kind=targets[e.Index].Kind switch{FocusTargetKind.Window=>"Window",FocusTargetKind.BrowserTab=>"Tab",_=>"Tab Group"};
+            var kind=targets[e.Index].Kind switch{FocusTargetKind.Window=>"Window",FocusTargetKind.BrowserTab=>"Tab",FocusTargetKind.BrowserTabGroup=>"Tab Group",_=>"Site"};
             const TextFormatFlags flags=TextFormatFlags.NoPrefix|TextFormatFlags.SingleLine|TextFormatFlags.EndEllipsis|TextFormatFlags.VerticalCenter;
             TextRenderer.DrawText(e.Graphics,$"{Number(targets[e.Index])}. {kind}",bold,new Rectangle(e.Bounds.Left+inset,top,titleWidth,height),selected?palette.SelectionText:palette.Text,flags);
             TextRenderer.DrawText(e.Graphics,state,Choices.Font,new Rectangle(e.Bounds.Right-inset-stateWidth,top,stateWidth,height),
                 selected?palette.SelectionText:checkedTargets[e.Index]?palette.Accent:palette.Muted,flags|TextFormatFlags.Right);
-            var detail=targets[e.Index].Kind==FocusTargetKind.Window?targets[e.Index].App+" — "+targets[e.Index].Name:targets[e.Index].Name;
+            var detail=targets[e.Index].Kind switch{
+                FocusTargetKind.Window=>targets[e.Index].App+" — "+targets[e.Index].Name,
+                FocusTargetKind.Site=>FocusSites.CanonicalHost(targets[e.Index].SiteHost),
+                _=>targets[e.Index].Name
+            };
             TextRenderer.DrawText(e.Graphics,detail,Choices.Font,new Rectangle(e.Bounds.Left+inset,top+height+Choices.LogicalToDeviceUnits(4),e.Bounds.Width-inset*2,height),selected?palette.SelectionText:palette.Muted,flags);
             if((e.State&DrawItemState.Focus)!=0&&Choices.Focused){
                 using var pen=new Pen(palette.Accent,Math.Max(2,Choices.LogicalToDeviceUnits(2))){Alignment=System.Drawing.Drawing2D.PenAlignment.Inset};
@@ -79,13 +83,13 @@ internal sealed class FocusTargetToggleDialog : Form
     {
         if((key&Keys.Modifiers)!=Keys.None)return false;
         if(key is Keys.Up or Keys.Down){Choices.SelectedIndex=Math.Clamp(Choices.SelectedIndex+(key==Keys.Up?-1:1),0,targets.Count-1);Choices.Focus();return true;}
-        var number=key>=Keys.D1&&key<=Keys.D3?(int)key-(int)Keys.D1+1:key>=Keys.NumPad1&&key<=Keys.NumPad3?(int)key-(int)Keys.NumPad1+1:-1;
+        var number=key>=Keys.D1&&key<=Keys.D4?(int)key-(int)Keys.D1+1:key>=Keys.NumPad1&&key<=Keys.NumPad4?(int)key-(int)Keys.NumPad1+1:-1;
         var index=Enumerable.Range(0,targets.Count).FirstOrDefault(i=>Number(targets[i])==number,-1);
         if(index>=0){Choices.SelectedIndex=index;DialogResult=DialogResult.OK;return true;}
         if(key==Keys.Enter&&Choices.SelectedIndex>=0){DialogResult=DialogResult.OK;return true;}
         return false;
     }
-    private static int Number(FocusTarget target)=>target.Kind==FocusTargetKind.Window?1:target.Kind==FocusTargetKind.BrowserTab?2:3;
+    private static int Number(FocusTarget target)=>target.Kind switch{FocusTargetKind.Window=>1,FocusTargetKind.BrowserTab=>2,FocusTargetKind.BrowserTabGroup=>3,_=>4};
     protected override bool ProcessCmdKey(ref Message msg,Keys keyData)=>ChooseKey(keyData)||base.ProcessCmdKey(ref msg,keyData);
     protected override CreateParams CreateParams{get{var value=base.CreateParams;value.ExStyle=(value.ExStyle|0x40000)&~0x08000080;return value;}}
     protected override void OnShown(EventArgs e)

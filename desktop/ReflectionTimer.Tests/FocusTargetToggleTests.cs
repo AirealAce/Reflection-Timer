@@ -8,6 +8,40 @@ internal static class FocusTargetToggleTests
     {
         var window=new FocusTarget(Guid.NewGuid(),FocusTargetKind.Window,"Browser","chrome",101,202,303);
         var tab=window with{Kind=FocusTargetKind.BrowserTab,Name="Tab",TabRuntimeId="tab"};var group=tab with{Kind=FocusTargetKind.BrowserTabGroup,Name="Work",TabRuntimeId="group"};
+        var site=tab with{Kind=FocusTargetKind.Site,Name="example.com",SiteHost="example.com"};
+        var browserChoices=FocusTargetToggle.BrowserChoices([site,group,tab,window]);
+        check(browserChoices.Take(3).SequenceEqual(new[]{window,tab,group})&&browserChoices[3].Key==site.Key,
+            "The browser shortcut retains a captured Site after Window, Tab and Tab Group");
+        check(FocusTargetToggle.BrowserChoices([window,tab,site]).Select(t=>t.Key).SequenceEqual(new[]{window.Key,tab.Key,site.Key})
+            &&FocusTargetToggle.BrowserChoices([window,tab]).SequenceEqual(new[]{window,tab}),
+            "The browser shortcut offers a captured Site for an ungrouped tab without inventing an unreadable website");
+        var savedSite=site with{Id=Guid.NewGuid(),App="msedge",WindowHandle=9,ProcessId=8,ProcessStartedAt=7,TabRuntimeId="other-tab",SiteHost="https://WWW.EXAMPLE.COM/page"};
+        var removeSite=FocusTargetToggle.Toggle(new(){Enabled=true,MultipleTargets=true,Targets=[window,savedSite]},site);
+        check(!removeSite.Added&&removeSite.Settings.SelectedTargets.SequenceEqual(new[]{window}),
+            "A Site shortcut unchecks the saved website across browsers, sessions, page paths and www aliases");
+        var addSite=FocusTargetToggle.Toggle(removeSite.Settings,site);
+        check(addSite.Added&&addSite.Settings.SelectedTargets.SequenceEqual(new[]{window,site})
+            &&addSite.Settings.MultipleTargets&&addSite.Settings.Enabled,
+            "Checking a Site again preserves existing window targets and enabled Focus mode");
+        check(FocusTargetToggle.Label(savedSite)=="Site: example.com"
+            &&FocusTargetToggle.Toggle(new(){Target=savedSite},site with{SiteHost="example.com:8443"}).Added,
+            "Site feedback uses the canonical host while separately chosen website ports stay independent");
+        var firstShortcutSite=FocusTargetToggle.BrowserChoices([site with{Id=Guid.Empty}]).Single();
+        var otherSite=site with{Id=Guid.Empty,SiteHost="other.example",Name="other.example"};
+        var secondShortcutSite=FocusTargetToggle.BrowserChoices([otherSite]).Single();
+        check(firstShortcutSite.Id!=Guid.Empty&&secondShortcutSite.Id!=Guid.Empty&&firstShortcutSite.Id!=secondShortcutSite.Id
+            &&firstShortcutSite.Id==PreviewApplication.FocusChoices(FocusTargetKind.Site,[savedSite]).Single(t=>!t.UseFocused).Id,
+            "Native shortcut Sites receive distinct stable picker IDs by canonical host instead of sharing Guid.Empty");
+        var shortcutSites=FocusTargetToggle.Toggle(FocusTargetToggle.Toggle(new(),firstShortcutSite).Settings,secondShortcutSite).Settings;
+        // Reopening the picker seeds saved targets before refreshing available
+        // sites. The second saved site is now absent from the native inventory.
+        var pickerLookup=shortcutSites.SelectedTargets.ToDictionary(t=>t.Id);
+        foreach(var choice in PreviewApplication.FocusChoices(FocusTargetKind.Site,[firstShortcutSite]))pickerLookup[choice.Id]=choice;
+        var pickerSelection=shortcutSites.SelectedTargets.Select(t=>t.Id).Distinct().Select(id=>pickerLookup[id]).ToArray();
+        var siteStore=new MemoryStore();var siteEngine=new TimerEngine(siteStore);
+        siteEngine.SetFocusMode(shortcutSites with{Target=pickerSelection.FirstOrDefault(),Targets=[..pickerSelection]});
+        check(new TimerEngine(siteStore).Snapshot.FocusMode.SelectedTargets.Select(t=>t.Key).Order().SequenceEqual(new[]{firstShortcutSite.Key,secondShortcutSite.Key}.Order()),
+            "Two shortcut-added Sites both survive a picker save when only one is currently available");
         var first=FocusTargetToggle.Toggle(new(){DelaySeconds=7,IdleEnabled=true,IdleSeconds=30},window);
         check(first.Added&&first.Settings.Target==window&&!first.Settings.Enabled&&first.Settings.IdleSeconds==30&&first.Settings.DelaySeconds==7,"Target hotkey adds a bookmark without changing Focus enablement, delay or idle options");
         var mixed=FocusTargetToggle.Toggle(first.Settings with{Enabled=true},tab);
@@ -36,25 +70,34 @@ internal static class FocusTargetToggleTests
         Exception? failure=null;var thread=new Thread(()=>{
             try{
                 foreach(var theme in Enum.GetValues<AppColorTheme>()){
-                    using var dialog=new FocusTargetToggleDialog([window,tab,group],theme,t=>t.Kind==FocusTargetKind.Window,_=>{});
+                    using var dialog=new FocusTargetToggleDialog([window,tab,group,site],theme,t=>t.Kind is FocusTargetKind.Window or FocusTargetKind.Site,_=>{});
                     check(dialog.AccessibleRole==AccessibleRole.Dialog&&dialog.ShowInTaskbar&&dialog.ActiveControl==dialog.Choices&&dialog.Choices.AccessibleName=="Target type",theme+": browser popup exposes a named native dialog and focuses its accessible choice list");
                     check(dialog.Choices.Items[0]!.ToString()!.StartsWith("1. Window:")&&dialog.Choices.Items[0]!.ToString()!.EndsWith("(checked)")&&dialog.Choices.Items[1]!.ToString()!.EndsWith("(unchecked)"),theme+": browser choices put Window first and expose their checkbox states in native accessible names");
-                    CheckLayout(dialog,check,theme+": three targets");
+                    check(dialog.Choices.Items[3]!.ToString()=="4. Site: example.com (checked)",theme+": the native accessible Site choice exposes its host, number and checked state");
+                    CheckLayout(dialog,check,theme+": four targets");
                     using var largeFont=new Font(dialog.Font.FontFamily,20);
                     dialog.Font=largeFont;CheckLayout(dialog,check,theme+": larger text");
                     dialog.ChooseKey(Keys.Down);check(dialog.SelectedTarget==tab,theme+": Down targets Tab");
                     check(dialog.Choices.AccessibilityObject.GetChild(1)?.State.HasFlag(AccessibleStates.Selected)==true,
                         theme+": keyboard selection remains exposed by the native list accessibility provider after custom drawing");
                     dialog.ChooseKey(Keys.Up);check(dialog.SelectedTarget==window,theme+": Up returns to Window");
+                    dialog.ChooseKey(Keys.Down);dialog.ChooseKey(Keys.Down);dialog.ChooseKey(Keys.Down);
+                    check(dialog.SelectedTarget==site&&dialog.Choices.AccessibilityObject.GetChild(3)?.State.HasFlag(AccessibleStates.Selected)==true,
+                        theme+": Down reaches Site and exposes its selected state through the native list provider");
                     check(dialog.ChooseKey(Keys.Enter)&&dialog.DialogResult==DialogResult.OK,theme+": Enter confirms the selected type");
                 }
-                foreach(var number in new[]{Keys.D1,Keys.D2,Keys.D3,Keys.NumPad1,Keys.NumPad2,Keys.NumPad3}){
-                    using var dialog=new FocusTargetToggleDialog([window,tab,group],AppColorTheme.Dark,_=>false,_=>{});
-                    check(dialog.ChooseKey(number)&&dialog.SelectedTarget!.Kind==(number is Keys.D1 or Keys.NumPad1?FocusTargetKind.Window:number is Keys.D2 or Keys.NumPad2?FocusTargetKind.BrowserTab:FocusTargetKind.BrowserTabGroup),"Top-row/numpad "+number+" selects its numbered browser target");
+                foreach(var number in new[]{Keys.D1,Keys.D2,Keys.D3,Keys.D4,Keys.NumPad1,Keys.NumPad2,Keys.NumPad3,Keys.NumPad4}){
+                    using var dialog=new FocusTargetToggleDialog([window,tab,group,site],AppColorTheme.Dark,_=>false,_=>{});
+                    var expected=number switch{Keys.D1 or Keys.NumPad1=>FocusTargetKind.Window,Keys.D2 or Keys.NumPad2=>FocusTargetKind.BrowserTab,Keys.D3 or Keys.NumPad3=>FocusTargetKind.BrowserTabGroup,_=>FocusTargetKind.Site};
+                    check(dialog.ChooseKey(number)&&dialog.SelectedTarget!.Kind==expected,"Top-row/numpad "+number+" selects its numbered browser target");
                 }
+                using var ungrouped=new FocusTargetToggleDialog([window,tab,site],AppColorTheme.Dark,_=>false,_=>{});
+                CheckLayout(ungrouped,check,"Ungrouped browser with Site");
+                check(ungrouped.Choices.Items.Count==3&&!ungrouped.ChooseKey(Keys.D3)&&ungrouped.ChooseKey(Keys.D4)&&ungrouped.SelectedTarget==site,
+                    "Site remains choice 4 when no tab group is available, preserving the existing numbered target shortcuts");
                 using var noGroup=new FocusTargetToggleDialog([window,tab],AppColorTheme.Dark,_=>false,_=>{});
                 CheckLayout(noGroup,check,"Ungrouped browser");
-                check(noGroup.Choices.Items.Count==2&&!noGroup.ChooseKey(Keys.D3)&&noGroup.ChooseKey(Keys.D2)&&noGroup.SelectedTarget==tab,"An ungrouped browser tab offers only Window and Tab; 3 cannot select a nonexistent group");
+                check(noGroup.Choices.Items.Count==2&&!noGroup.ChooseKey(Keys.D3)&&!noGroup.ChooseKey(Keys.D4)&&noGroup.ChooseKey(Keys.D2)&&noGroup.SelectedTarget==tab,"An ungrouped browser tab with no readable website offers Window and Tab; unavailable choices cannot be selected");
                 check(!noGroup.ChooseKey(Keys.Control|Keys.D1)&&noGroup.SelectedTarget==tab,"Modified number shortcuts do not accidentally confirm a target");
             }catch(Exception error){failure=error;}
         });thread.SetApartmentState(ApartmentState.STA);thread.Start();if(!thread.Join(TimeSpan.FromSeconds(15)))throw new TimeoutException("Target popup checks timed out.");if(failure is not null)throw failure;
@@ -62,6 +105,9 @@ internal static class FocusTargetToggleTests
         using var voice=new SessionVoice(engine,speech,(m,_)=>reader.Add(m));
         voice.Feedback("3. Tab Group: Work (checked)",nativeControlAnnounces:true);
         check(speech.Messages.Single()=="3. Tab Group: Work (checked)"&&reader.Count==0,"Native popup selection uses optional app speech without duplicating its native screen-reader announcement");
+        voice.Feedback("4. Site: example.com (unchecked)",nativeControlAnnounces:true);
+        check(speech.Messages.Last()=="4. Site: example.com (unchecked)"&&reader.Count==0,
+            "Site selection uses the same optional app speech and native screen-reader announcement path as other target types");
         voice.Feedback("Tab checked as a Focus target.",supplementary:true);
         check(reader.Single()=="Tab checked as a Focus target."&&speech.Messages.Last()==reader.Single(),"Successful target feedback reaches both the reader provider and optional vocalizer");
         engine.SetVoiceAnnouncements(false);speech.Messages.Clear();reader.Clear();voice.Feedback("Tab unchecked as a Focus target.",supplementary:true);

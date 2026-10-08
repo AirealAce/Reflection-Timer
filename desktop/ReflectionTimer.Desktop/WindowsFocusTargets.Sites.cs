@@ -30,10 +30,10 @@ internal sealed partial class WindowsFocusTargets
         var available=new List<FocusTarget>();string? first=null;
         foreach(var window in OpenWindows().Where(IsBrowser)){
             try{
-                var host=NativeBrowserSites.Read((nint)window.WindowHandle);
-                if(host is null)continue;
-                first??=host;
-                available.Add(new(Guid.Empty,FocusTargetKind.Site,host,window.App,0,0,0){SiteHost=host});
+                var listing=NativeBrowserSites.ReadListing((nint)window.WindowHandle);
+                first??=listing.Current;
+                foreach(var host in listing.Hosts)
+                    available.Add(new(Guid.Empty,FocusTargetKind.Site,host,window.App,0,0,0){SiteHost=host});
             }catch{ /* An inaccessible provider never turns a title into a website. */ }
         }
         if(browserSites?.Connected==true)available.AddRange(browserSites.ListSites());

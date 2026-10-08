@@ -155,8 +155,13 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
             // Never substitute another browser's selected tab when activation
             // happened outside a browser, or focus moved while UIA was queued.
             if (CheckWindow(window) != FocusPresence.Focused) return windows;
+            FocusTarget? site=null;
             try {
-                var site=selectedKinds.Contains(FocusTargetKind.Site)?CaptureSite(window):null;
+                // Document and tab-strip providers can fail independently.
+                // An unreadable URL must not hide otherwise usable tabs/groups.
+                if(selectedKinds.Contains(FocusTargetKind.Site)){
+                    try{site=CaptureSite(window);}catch{ }
+                }
                 if(selectedKinds.All(k=>k is FocusTargetKind.Window or FocusTargetKind.Site))
                     return CheckWindow(window)==FocusPresence.Focused&&site is not null?windows.Append(site).ToArray():windows;
                 var position = 0;
@@ -167,7 +172,11 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
                 var captured = FocusedBrowserTargets.Capture(window, selectedKinds, choices, strip.Select(s => s.Data).ToArray());
                 BindBrowserWindow(window,strip.Select(s=>s.Data).ToArray());
                 return CheckWindow(window) == FocusPresence.Focused ? site is null ? captured : captured.Append(site).ToArray() : windows;
-            } catch { return windows; }
+            } catch {
+                // Site capture is independent of tab-strip accessibility. Keep
+                // a verified committed host if tabs/groups cannot be inspected.
+                return site is not null&&CheckWindow(window)==FocusPresence.Focused?windows.Append(site).ToArray():windows;
+            }
         });
     }
     public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Site
