@@ -6,7 +6,6 @@ internal sealed partial class WindowsFocusTargets
 {
     private readonly object siteGate=new();
     private readonly NativeSiteAnchors siteAnchors=new();
-    private string? currentSite;
     private Task? warmingSites;
 
     public void Configure(FocusModeSettings settings,TimerState timer)
@@ -25,28 +24,10 @@ internal sealed partial class WindowsFocusTargets
         if(browserSites?.Connected==true&&Bounds(window) is {} bounds)browserSites.BindWindow(window,slots,bounds);
     }
 
-    private IReadOnlyList<FocusTarget> ListSites()
-    {
-        var available=new List<FocusTarget>();string? first=null;
-        foreach(var window in OpenWindows().Where(IsBrowser)){
-            try{
-                var listing=NativeBrowserSites.ReadListing((nint)window.WindowHandle);
-                first??=listing.Current;
-                foreach(var host in listing.Hosts)
-                    available.Add(new(Guid.Empty,FocusTargetKind.Site,host,window.App,0,0,0){SiteHost=host});
-            }catch{ /* An inaccessible provider never turns a title into a website. */ }
-        }
-        if(browserSites?.Connected==true)available.AddRange(browserSites.ListSites());
-        Volatile.Write(ref currentSite,first);
-        return available.GroupBy(t=>t.Key).Select(g=>g.First() with{App=string.Join(", ",g.Select(t=>t.App).Where(a=>a.Length>0).Distinct(StringComparer.OrdinalIgnoreCase))}).ToArray();
-    }
     private FocusTarget? CaptureSite(FocusTarget window)
     {
-        if(!IsBrowser(window))return null;
-        var fromCompanion=browserSites?.Connected==true&&Bounds(window) is {} bounds?browserSites.CaptureSite(window,bounds):null;
-        if(fromCompanion is not null)return fromCompanion;
-        var host=NativeBrowserSites.Read((nint)window.WindowHandle);
-        return host is null?null:new(Guid.Empty,FocusTargetKind.Site,host,window.App,0,0,0){SiteHost=host};
+        if(!IsBrowser(window)||!BrowserConnected)return null;
+        return Bounds(window) is {} bounds?browserSites!.CaptureSite(window,bounds):null;
     }
     private void WarmSiteTargets(IReadOnlyList<FocusTarget> targets,bool links,long token)
     {
@@ -84,8 +65,15 @@ internal sealed partial class WindowsFocusTargets
     }
     private FocusPresence CheckSiteTargets(IReadOnlyList<FocusTarget> targets,bool links)
     {
-        var staticSites=targets.Where(t=>!t.UseFocused&&t.Kind==FocusTargetKind.Site).ToArray();
+        var hasSites=targets.Any(t=>t.Kind==FocusTargetKind.Site);
+        // Keep saved choices during setup/disconnect, but never interpret missing
+        // extension metadata as a visit away from those chosen websites.
+        if(hasSites&&!BrowserConnected)return FocusPresence.Unknown;
         var foreground=CaptureForeground();
+        if(hasSites){
+            if(!targets.Any(t=>!t.UseFocused&&t.Kind==FocusTargetKind.Site))return FocusPresence.Unknown;
+            return browserSites!.Check(targets,foreground,links,foreground is {} window?Bounds(window):null);
+        }
         var companionAvailable=false;
         if(browserSites?.Connected==true&&foreground is not null&&Bounds(foreground) is {} bounds&&browserSites.CanLocate(foreground,bounds)){
             companionAvailable=true;
@@ -93,13 +81,14 @@ internal sealed partial class WindowsFocusTargets
             if(linked==FocusPresence.Focused)return linked;
         }
         var hosts=links&&!companionAvailable?siteAnchors.Hosts(targets):[];
-        if(staticSites.Length==0&&hosts.Length==0)return FocusPresence.Unavailable;
+        if(hosts.Length==0)return FocusPresence.Unavailable;
         if(foreground is null)return FocusPresence.Unknown;
         if(!IsBrowser(foreground))return FocusPresence.Away;
         var site=CaptureSite(foreground);
+        if(site is null&&NativeBrowserSites.Read((nint)foreground.WindowHandle) is {} host)
+            site=new(Guid.Empty,FocusTargetKind.Site,host,foreground.App,0,0,0){SiteHost=host};
         if(site is null)return FocusPresence.Unknown;
-        return staticSites.Any(t=>FocusSites.Matches(t.SiteHost,site.SiteHost))
-            ||hosts.Any(host=>FocusSites.Matches(host,site.SiteHost))?FocusPresence.Focused:FocusPresence.Away;
+        return hosts.Any(host=>FocusSites.Matches(host,site.SiteHost))?FocusPresence.Focused:FocusPresence.Away;
     }
     public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets,bool targetOnSiteLinks)
     {

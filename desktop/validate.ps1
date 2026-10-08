@@ -24,6 +24,10 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Collapsible help checks failed.' }
     & $Node desktop/ReflectionTimer.Tests/focus-mode.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Focus mode settings checks failed.' }
+    & $Node desktop/ReflectionTimer.Tests/site-focus.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'Site target availability checks failed.' }
+    & $Node browser-companion/tests.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'Browser companion checks failed.' }
     & $Node --test test/apps-script.test.js test/receiver-setup.test.js test/release-assets.test.js test/version.test.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Receiver/package/version tests failed.' }
 } finally { Pop-Location }

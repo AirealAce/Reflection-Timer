@@ -37,7 +37,7 @@ internal sealed partial class PreviewWindow
                 }break;
             case "focusTargets":
                 var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,3);
-                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")),browserConnected=app.BrowserConnected,nativeSites=true });break;
+                Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")),browserConnected=app.BrowserConnected,nativeSites=false });break;
             case "focusSite":
                 var site=app.AddFocusSite(ReadString(data,"website",2048));
                 Post(new{type="reply",requestId,target=PreviewSession.FocusTargetView(site)});return true;

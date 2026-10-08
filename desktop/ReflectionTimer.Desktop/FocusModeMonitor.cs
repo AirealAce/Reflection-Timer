@@ -84,7 +84,8 @@ internal sealed class FocusModeMonitor : IDisposable
             queuedCapture = null;
             if (!ReferenceEquals(captures.GetValueOrDefault(next.Session), next)) return;
             activeCapture = next;
-            try { capturing = source.CaptureSelectionsAsync(next.Window,next.Windows,next.Choices); }
+            var choices=next.Choices.Where(t=>t.Kind!=FocusTargetKind.Site||SiteTargetsAvailable()).ToArray();
+            try { capturing = choices.Length==0?Task.FromResult<IReadOnlyList<FocusTarget>>([]):source.CaptureSelectionsAsync(next.Window,next.Windows,choices); }
             catch { capturing = Task.FromResult<IReadOnlyList<FocusTarget>>([]); }
             CompleteCapture();
         }
@@ -97,12 +98,15 @@ internal sealed class FocusModeMonitor : IDisposable
             .DistinctBy(t => t.Key).ToImmutableArray();
         return state.FocusMode with { Target = targets.FirstOrDefault(), Targets = targets };
     }
-    private string ProbeKey(FocusModeSettings settings) => $"{generation}:{settings.SelectionKey}";
+    private bool SiteTargetsAvailable()=>FocusSitePolicy.Available(engine.SettingsSnapshot.FocusMode,source.BrowserConnected);
+    private string ProbeKey(FocusModeSettings settings) => $"{generation}:{settings.SelectionKey}:{(settings.SelectedTargets.Any(t=>t.Kind==FocusTargetKind.Site)?SiteTargetsAvailable():false)}";
     private async Task<FocusPresence> CheckEffectiveAsync(FocusModeSettings settings, Guid? session)
     {
         var captured = session is {} id ? captures.GetValueOrDefault(id) : null;
-        var pending = settings.SelectedTargets.Any(t => t.UseFocused && (captured?.Completed != true || !captured.Choices.Any(c=>c.Key==t.Key)));
-        var available = settings.SelectedTargets.Where(t => !t.UseFocused).ToArray();
+        var sitesAvailable=SiteTargetsAvailable();
+        var pending = settings.SelectedTargets.Any(t => t.Kind==FocusTargetKind.Site&&!sitesAvailable
+            ||t.UseFocused && (captured?.Completed != true || !captured.Choices.Any(c=>c.Key==t.Key)));
+        var available = settings.SelectedTargets.Where(t => !t.UseFocused&&(t.Kind!=FocusTargetKind.Site||sitesAvailable)).ToArray();
         if (available.Length == 0) return pending ? FocusPresence.Unknown : FocusPresence.Unavailable;
         var presence = await source.CheckAnyAsync(available,settings.TargetOnSiteLinks).ConfigureAwait(false);
         // A known missing group (for example an ungrouped active tab) cannot

@@ -5,7 +5,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   const targetButtons=[$('choose-focus-target'),$('choose-focus-target-settings')],list=$('focus-target-list'),use=$('focus-target-use');
   const multiple=$('focus-multiple-targets'),idle=$('focus-idle-enabled'),idleSeconds=$('focus-idle-seconds'),kindControl=$('focus-target-kind'),delay=$('focus-delay');
   const siteLinks=$('focus-target-on-site-links'),website=$('focus-site-website'),siteAdd=$('focus-site-add');
-  const companion=$('focus-browser-companion');
+  const companion=$('focus-browser-companion'),siteOption=kindControl.querySelector('option[value="3"]'),savedSites=$('focus-site-saved');
   let browserConnected;
   const glowControls=[$('focus-screen-glow'),$('focus-picker-screen-glow')];
   const glowStyles=[$('focus-glow-style'),$('focus-picker-glow-style')];
@@ -21,6 +21,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   for(const toggle of toggles){toggle.setAttribute('aria-keyshortcuts','Control+Alt+;');toggle.title='Ctrl+Alt+;: toggle Focus mode.';}
   let settings={enabled:false,delaySeconds:5,targets:[]},enabled=false,dirty=false,revision=0,pending=false,saving=Promise.resolve();
   let opener,enableOnChoose=false,loading=false,selecting=false,spaceRow=null,rows=[],activeKey=null,picked=new Map(),resetList=false,composing=false,targetRevision=0;
+  let previousSiteReady=false,reconnectRefreshPending=false,preserveInventoryDraft=false,restoringRowFocus=false;
+  const siteReady=()=>settings.browserCompanionEnabled===true&&companion.checked&&browserConnected===true;
+  const canChoose=target=>target.kind!==3||siteReady()||picked.has(key(target));
   const type=kind=>['Window','Tab','Tab Group','Site'][kind]??'Window';
   const key=target=>target.key??`${target.kind}:${target.id}`;
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
@@ -46,6 +49,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     });
     setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose a window, browser tab, tab group, or site.');
     setText($('focus-settings-target'),label+(value.idleEnabled?` · Idle for ${value.idleSeconds??20} seconds`:''));
+    syncSiteAvailability();
   }
   async function flush(){await flushGlow();await flushMode();}
   function flushMode(){
@@ -61,23 +65,48 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     $('focus-picker-target-overlap').hidden=!backgroundTabs||!selected.some(t=>t.kind===2||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase())));
     for(const row of list.querySelectorAll('tbody tr')){
       const checked=picked.has(row.dataset.key);row.classList.toggle('picked',checked);row.setAttribute('aria-current',checked&&!multiple.checked?'true':'false');
-      const checkbox=row.querySelector('input');if(checkbox){checkbox.checked=checked;checkbox.disabled=loading||selecting;}
+      const blocked=Number(row.dataset.kind)===3&&!siteReady()&&!checked;
+      row.setAttribute('aria-disabled',String(blocked));
+      const checkbox=row.querySelector('input');if(checkbox){checkbox.checked=checked;checkbox.disabled=loading||selecting;checkbox.setAttribute('aria-disabled',String(blocked));}
     }
-    use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked&&!(Number(kindControl.value)===3&&website.value.trim()));
-    siteAdd.disabled=loading||selecting||!website.value.trim();
+    use.disabled=loading||selecting||((enableOnChoose||enabled)&&!picked.size&&!idle.checked&&!(Number(kindControl.value)===3&&siteReady()&&website.value.trim()));
+    website.disabled=loading||selecting;website.readOnly=!siteReady();
+    siteAdd.disabled=loading||selecting||!siteReady()||!website.value.trim();
+    savedSites.hidden=siteReady()||Number(kindControl.value)===3||![...picked.values()].some(target=>target.kind===3);
+    savedSites.disabled=loading||selecting;
     setText(use,multiple.checked?'Save selected targets':'Use selected target');
     setText($('focus-picker-keys'),(multiple.checked?'Arrow keys move between rows. Enter, Space, double-click, or check a box to toggle a target. Choices stay checked across categories.':'Arrow keys move between rows. Enter, Space, or double-click confirms the selected target.')+' Ctrl+Enter or Ctrl+S saves from anywhere in this window. Dynamic choices capture on start/resume. Background choices include other windows; focused tabs means the selected tab in each browser window. Switching modes keeps the capture.');
+  }
+  function syncSiteAvailability(refreshOnReconnect=true){
+    const ready=siteReady(),becameReady=ready&&!previousSiteReady;previousSiteReady=ready;
+    siteOption.disabled=!ready;
+    $('focus-site-status').hidden=ready;
+    setText($('focus-site-status'),!companion.checked?'Site needs an enabled, connected browser companion. Configure it under Browser companion above.'
+      :settings.browserCompanionEnabled!==true?'Save to enable the browser companion. Site becomes available after it connects.'
+      :'Site is unavailable until the browser companion connects. Configure it under Browser companion above.');
+    syncSelection();if(dialog.open)status();
+    if(refreshOnReconnect&&becameReady&&dialog.open&&Number(kindControl.value)===3){
+      if(loading||selecting)reconnectRefreshPending=true;else run(()=>refresh(true));
+    }
+  }
+  function drainReconnectRefresh(failure, defer=false){
+    if(defer||loading||selecting||!reconnectRefreshPending)return;
+    reconnectRefreshPending=false;
+    if(dialog.open&&siteReady()&&Number(kindControl.value)===3)run(async()=>{
+      await refresh(true);
+      if(failure&&dialog.open)setText($('focus-picker-status'),failure.message??failure);
+    });
   }
   function status(){
     const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length;
     setText($('focus-picker-status'),`${available} ${Number(kindControl.value)===3?'sites':'open targets'}. ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
-      +(Number(kindControl.value)===3?(browserConnected===true
+      +(Number(kindControl.value)===3?(siteReady()
         ?' Open websites from connected browsers are listed. Saved sites remain available.'
-        :' Native mode lists sites your browser exposes. For every background tab, connect the optional browser companion, or enter a website. Saved sites remain available.') :''));
-    setText($('focus-browser-status'),!companion.checked?'Native Site tracking is active. The companion is off.'
-      :settings.browserCompanionEnabled!==true?'Save to enable the companion. Native Site tracking remains active.'
+        :' Site needs an enabled, connected browser companion. Saved choices are kept; select a saved site again to remove it.') :''));
+    setText($('focus-browser-status'),!companion.checked?'The companion is off. Site selection is unavailable.'
+      :settings.browserCompanionEnabled!==true?'Save to enable the companion. Site becomes available after it connects.'
       :browserConnected===true?'Companion connected. Background sites and links to other sites are available.'
-      :'Waiting for the companion connection. Native Site tracking remains active.');
+      :'Waiting for the companion connection. Site selection is unavailable.');
   }
   function focusRow(target){
     activeKey=key(target);
@@ -89,8 +118,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function choose(target){
     if(loading||selecting)return;
+    if(!canChoose(target)){syncSelection();return;}
     const identity=key(target);
-    if(multiple.checked){if(picked.has(identity))picked.delete(identity);else picked.set(identity,target);}
+    if(multiple.checked||target.kind===3&&!siteReady()){if(picked.has(identity))picked.delete(identity);else picked.set(identity,target);}
     else {picked.clear();picked.set(identity,target);}
     syncSelection();status();
   }
@@ -98,14 +128,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:['Site','App'];
     const widths=kind===0?['30%','']:kind===3?['','24%']:['64px','','24%'];
     $('focus-site-controls').hidden=kind!==3;
-    setText(list.querySelector('caption'),kind===3?'Open sites':'Open targets');
+    setText(list.querySelector('caption'),kind===3?siteReady()?'Open sites':'Saved sites':'Open targets');
     if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
     const head=document.createElement('tr');for(const text of headers){const th=document.createElement('th');th.scope='col';th.textContent=text;if(text.endsWith(' #'))th.className='focus-number-cell';if(!text){th.className='focus-selection-cell';th.setAttribute('aria-label','Selection');}head.append(th);}list.querySelector('thead').replaceChildren(head);
     const body=list.querySelector('tbody');body.replaceChildren();
     for(const target of rows){
-      const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
+      const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.dataset.kind=target.kind;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
       const description=fullName(target)+(target.current?(kind===3?' (current site)':' (current tab)'):'')+(target.unavailable?' (closed or unavailable)':target.savedSite?' (saved site)':'');
       row.setAttribute('aria-label',description);
       if(multiple.checked){
@@ -116,10 +146,10 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if((kind===1||kind===2)&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
       row.addEventListener('focusin',()=>{
         activeKey=key(target);for(const other of body.children){other.tabIndex=!multiple.checked&&other===row?0:-1;const checkbox=other.querySelector('input');if(checkbox)checkbox.tabIndex=other===row?0:-1;}
-        if(!multiple.checked&&!loading&&!selecting){picked.clear();picked.set(key(target),target);syncSelection();status();}
+        if(!multiple.checked&&!loading&&!selecting&&!restoringRowFocus&&(target.kind!==3||siteReady())){picked.clear();picked.set(key(target),target);syncSelection();status();}
       });
       row.addEventListener('click',event=>{if(event.target.closest('input')||event.detail>1)return;choose(target);focusRow(target);});
-      row.addEventListener('dblclick',event=>{if(event.ctrlKey||event.altKey||event.metaKey||loading||selecting)return;event.preventDefault();if(!multiple.checked)run(useSelection);});
+      row.addEventListener('dblclick',event=>{if(event.ctrlKey||event.altKey||event.metaKey||loading||selecting||!canChoose(target))return;event.preventDefault();if(!multiple.checked&&(target.kind!==3||siteReady()))run(useSelection);});
       body.append(row);
     }
     const initial=rows.find(t=>key(t)===activeKey)??rows.find(t=>picked.has(key(t)))??rows[0];
@@ -127,13 +157,17 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     const row=[...body.children].find(row=>row.dataset.key===activeKey);if(row){const checkbox=row.querySelector('input');if(checkbox)checkbox.tabIndex=0;else row.tabIndex=0;}
     syncSelection();status();
   }
-  async function refresh(){
-    if(loading||selecting)return;const active=document.activeElement;loading=true;kindControl.disabled=true;$('focus-target-refresh').disabled=true;use.disabled=true;list.inert=true;list.setAttribute('aria-busy','true');
+  async function refresh(preserveDraft=false){
+    if(loading||selecting)return;const active=document.activeElement,focused=list.contains(active)?active.closest('tr')?.dataset.key:null;preserveInventoryDraft=preserveDraft;loading=true;kindControl.disabled=true;$('focus-target-refresh').disabled=true;use.disabled=true;list.inert=true;list.setAttribute('aria-busy','true');
     setText($('focus-picker-status'),'Loading open targets…');
     try {await send('focusTargets',{kind:Number(kindControl.value),reset:resetList,quiet:true});resetList=false;}
     catch(error){setText($('focus-picker-status'),error.message);throw error;}
-    finally{loading=false;kindControl.disabled=false;$('focus-target-refresh').disabled=false;list.inert=false;list.setAttribute('aria-busy','false');syncSelection();
-      if(dialog.open&&dialog.contains(active)&&!active.disabled&&(document.activeElement===document.body||document.activeElement===dialog))active.focus();
+    finally{loading=false;preserveInventoryDraft=false;kindControl.disabled=false;$('focus-target-refresh').disabled=false;list.inert=false;list.setAttribute('aria-busy','false');syncSelection();
+      if(preserveDraft&&focused&&dialog.open){
+        const row=[...list.querySelectorAll('tbody tr')].find(row=>row.dataset.key===focused),control=row?.querySelector('input');
+        restoringRowFocus=true;try{(control&&!control.disabled?control:row)?.focus();}finally{restoringRowFocus=false;}
+      }else if(dialog.open&&dialog.contains(active)&&!active.disabled&&(document.activeElement===document.body||document.activeElement===dialog))active.focus();
+      drainReconnectRefresh();
     }
   }
   function open(button,enable=false){
@@ -141,7 +175,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     opener=button;enableOnChoose=enable;multiple.checked=!!settings.multipleTargets;siteLinks.checked=settings.targetOnSiteLinks!==false;website.value='';website.removeAttribute('aria-invalid');idle.checked=!!settings.idleEnabled;idleSeconds.value=settings.idleSeconds??20;$('focus-picker-audio').open=false;$('focus-picker-animations').open=false;
     companion.checked=settings.browserCompanionEnabled===true;$('focus-picker-companion').open=false;
     picked=new Map(selectedTargets(settings).filter(t=>t.id).map(t=>[key(t),t]));rows=[];activeKey=null;resetList=true;
-    kindControl.value=String(selectedTargets(settings)[0]?.kind??settings.targetKind??0);draw();dialog.showModal();kindControl.focus();run(refresh);
+    kindControl.value=String(selectedTargets(settings)[0]?.kind??settings.targetKind??0);syncSiteAvailability(false);draw();dialog.showModal();kindControl.focus();run(refresh);
   }
   for(const toggle of toggles)toggle.addEventListener('click',()=>{
     if(!enabled&&!selectedTargets(settings).length&&!settings.idleEnabled){open(toggle,true);return;}
@@ -157,11 +191,12 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     draw();
   });
   idle.addEventListener('change',syncSelection);
-  companion.addEventListener('change',status);
+  companion.addEventListener('change',()=>syncSiteAvailability());
+  savedSites.addEventListener('click',()=>{if(loading||selecting)return;kindControl.value='3';activeKey=null;run(refresh);});
   $('focus-browser-setup').addEventListener('click',()=>{if(!loading&&!selecting)run(()=>send('focusBrowserSetup',{quiet:true}));});
   website.addEventListener('input',()=>{website.removeAttribute('aria-invalid');syncSelection();});
   async function addWebsite(focus=true){
-    if(loading||selecting||Number(kindControl.value)!==3||!website.value.trim())return;
+    if(loading||selecting||!siteReady()||Number(kindControl.value)!==3||!website.value.trim())return;
     const controls=[...dialog.querySelectorAll('button,input,select')].map(control=>({control,disabled:control.disabled}));
     selecting=true;syncSelection();controls.forEach(({control})=>control.disabled=true);list.inert=true;dialog.setAttribute('aria-busy','true');
     let target,failure;
@@ -172,16 +207,19 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       const index=rows.findIndex(t=>key(t)===key(target));if(index>=0)rows[index]=target;else rows.push(target);
       activeKey=key(target);website.value='';website.removeAttribute('aria-invalid');draw();
     }catch(error){failure=error;website.setAttribute('aria-invalid','true');setText($('focus-picker-status'),error.message);throw error;}
-    finally{selecting=false;list.inert=false;dialog.removeAttribute('aria-busy');controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(failure)website.focus();else if(focus&&target)focusRow(target);}
+    finally{selecting=false;list.inert=false;dialog.removeAttribute('aria-busy');controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(failure)website.focus();else if(focus&&target)focusRow(target);
+      // A successful add during Save continues into the atomic selection below.
+      drainReconnectRefresh(failure,!focus&&!failure);
+    }
   }
   siteAdd.addEventListener('click',()=>run(()=>addWebsite()));
   website.addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.isComposing){event.preventDefault();if(!event.repeat)run(()=>addWebsite());}});
   async function useSelection(){
     if(selecting||loading||!dialog.open||use.disabled)return;
-    if(Number(kindControl.value)===3&&website.value.trim())await addWebsite(false);
-    if(!delay.checkValidity()){delay.reportValidity();return;}
-    if(!idleSeconds.checkValidity()){idleSeconds.reportValidity();return;}
-    if(!validateAudio())return;
+    if(Number(kindControl.value)===3&&siteReady()&&website.value.trim())await addWebsite(false);
+    if(!delay.checkValidity()){delay.reportValidity();drainReconnectRefresh();return;}
+    if(!idleSeconds.checkValidity()){idleSeconds.reportValidity();drainReconnectRefresh();return;}
+    if(!validateAudio()){drainReconnectRefresh();return;}
     selecting=true;let failure;const active=document.activeElement,controls=[...dialog.querySelectorAll('button,input,select')].map(control=>({control,disabled:control.disabled}));
     controls.forEach(({control})=>control.disabled=true);list.inert=true;dialog.setAttribute('aria-busy','true');
     try{
@@ -194,7 +232,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       }while(savedRevision!==targetRevision);
       dialog.close();announce('Focus settings saved.');
     }catch(error){failure=error.message;throw error;}
-    finally{selecting=false;dialog.removeAttribute('aria-busy');list.inert=false;controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(dialog.open)active?.focus();if(failure)setText($('focus-picker-status'),failure);}
+    finally{selecting=false;dialog.removeAttribute('aria-busy');list.inert=false;controls.forEach(({control,disabled})=>control.disabled=disabled);syncSelection();if(dialog.open)active?.focus();if(failure)setText($('focus-picker-status'),failure);drainReconnectRefresh(failure);}
   }
   use.addEventListener('click',()=>run(useSelection));
   const plainKey=event=>!event.ctrlKey&&!event.altKey&&!event.metaKey&&!event.shiftKey&&!event.isComposing;
@@ -206,11 +244,11 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       event.preventDefault();event.stopPropagation();const next=event.key==='Home'?0:event.key==='End'?rows.length-1:Math.max(0,Math.min(rows.length-1,index+(event.key==='ArrowDown'?1:-1)));focusRow(rows[next]);return;
     }
     if(event.key!=='Enter'&&event.key!==' ')return;event.preventDefault();event.stopPropagation();if(event.repeat)return;
-    if(event.key==='Enter'){if(multiple.checked)choose(rows[index]);else run(useSelection);}else spaceRow=rows[index];
+    if(event.key==='Enter'){if(multiple.checked||rows[index].kind===3&&!siteReady())choose(rows[index]);else run(useSelection);}else spaceRow=rows[index];
   });
   list.addEventListener('keyup',event=>{
     if(event.key!==' ')return;event.preventDefault();event.stopPropagation();const target=spaceRow;spaceRow=null;
-    if(target&&plainKey(event)&&!loading&&!selecting){if(multiple.checked)choose(target);else run(useSelection);}
+    if(target&&plainKey(event)&&!loading&&!selecting){if(multiple.checked||target.kind===3&&!siteReady())choose(target);else run(useSelection);}
   });
   list.addEventListener('focusout',()=>spaceRow=null);
   document.addEventListener('compositionstart',()=>composing=true);document.addEventListener('compositionend',()=>composing=false);
@@ -223,7 +261,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   return {render,flush,pickerShortcutActive:()=>view==='main'&&dialog.open&&!composing,state(state){if(view==='main')render(state.focusMode);},message(message){
     if(view!=='main')return false;
     if(message.type==='browserCompanionStatus'&&typeof message.connected==='boolean'){
-      browserConnected=message.connected;if(dialog.open)status();return true;
+      browserConnected=message.connected;syncSiteAvailability();return true;
     }
     if(message.type==='focusToggled'){
       enabled=message.enabled===true;settings={...settings,enabled};syncToggles();if(dirty)revision++;return true;
@@ -258,6 +296,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     if(message.type==='settings')render(message.settings.focusMode);
     if(message.type==='focusTargets'&&dialog.open&&Number(kindControl.value)===message.kind){
       if(typeof message.browserConnected==='boolean')browserConnected=message.browserConnected;
+      syncSiteAvailability(false);
       const keys=new Set();rows=message.targets.map(t=>({...t,kind:message.kind})).filter(t=>{const identity=key(t);if(keys.has(identity))return false;keys.add(identity);return true;});
       rows.sort((a,b)=>Number(!!b.useFocused)-Number(!!a.useFocused)||([1,3].includes(message.kind)?Number(!!b.current)-Number(!!a.current):0));
       for(const target of rows){
@@ -268,8 +307,10 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         }
         if(chosen)picked.set(identity,target);
       }
-      if(!multiple.checked&&!picked.size){const initial=rows.find(t=>t.selected)??rows[0];if(initial)picked.set(key(initial),initial);}
-      if(!multiple.checked&&picked.size&&![...picked.values()].some(t=>t.kind===message.kind)&&rows.length){picked.clear();const initial=rows.find(t=>t.selected)??rows[0];picked.set(key(initial),initial);}
+      if(!preserveInventoryDraft&&(message.kind!==3||siteReady())){
+        if(!multiple.checked&&!picked.size){const initial=rows.find(t=>t.selected)??rows[0];if(initial)picked.set(key(initial),initial);}
+        if(!multiple.checked&&picked.size&&![...picked.values()].some(t=>t.kind===message.kind)&&rows.length){picked.clear();const initial=rows.find(t=>t.selected)??rows[0];picked.set(key(initial),initial);}
+      }
       for(const target of picked.values())if(target.kind===message.kind&&!keys.has(key(target)))rows.push(target.kind===3&&!target.useFocused?{...target,savedSite:true,unavailable:false}:{...target,unavailable:true});
       draw();
     }

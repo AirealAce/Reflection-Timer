@@ -1,8 +1,8 @@
 # Reflection Timer Focus Companion (optional)
 
-Reflection Timer uses native Windows accessibility for Site targets by default. This separate companion is optional. It supplies browser metadata for linked sites opened from selected targets, including links to other websites, and more complete browser tab information. It is not the old browser timer extension.
+Reflection Timer uses native Windows accessibility for Window, Tab and Tab Group targets by default. This separate companion is optional and required for Site targets. It supplies a complete open-website inventory and browser metadata for linked sites opened from selected targets, including links to other websites. It is not the old browser timer extension.
 
-The app's **Browser companion** setting is off by default. Ordinary Window, Tab, Tab Group, and native Site targets do not require this companion. Linked-site tracking requires both the companion installed in the browser and the app setting enabled; enabling the app setting alone cannot install a browser extension.
+The app's **Browser companion** setting is off by default. Ordinary Window, Tab and Tab Group targets do not require this companion. Site selection and linked-site tracking require both the companion installed in the browser and the app setting enabled. Site selection additionally waits for a fresh, complete browser snapshot; a handshake alone is insufficient. Enabling the app setting cannot install a browser extension.
 
 ## One-time setup
 
@@ -13,7 +13,7 @@ The app's **Browser companion** setting is off by default. Ordinary Window, Tab,
 
 The fixed unpacked extension ID is `mgalafjodgnoeponalohbmdopkkbnfok`. The `key` in `manifest.json` is a public key used to keep that ID stable, not a credential. There is no Chrome Web Store installation in this package. The first-time Developer mode / Load unpacked step is required for this distribution.
 
-To stop the optional connection, turn off **Browser companion** in the app. You can also disable/remove the companion on the browser's extensions page to stop its reconnect attempts. Native Site matching continues to work independently. No app installer automatically registers or enables this connection.
+To stop the optional connection, turn off **Browser companion** in the app. You can also disable/remove the companion on the browser's extensions page to stop its reconnect attempts. Site selection becomes unavailable. Saved Site targets are retained and can be removed; they remain quiet until the connection is ready again. No app installer automatically registers or enables this connection. An app upgrade preserves a valid existing native-host configuration in the installed folder.
 
 ## Data and permissions
 
@@ -23,7 +23,7 @@ The `tabs`, `tabGroups`, `webNavigation`, and `nativeMessaging` permissions supp
 
 Tracking uses browser session IDs and actual navigation events. It does not guess links from matching titles, newly appearing tabs, or old opener metadata. Connections and inherited links reset after a service-worker restart or connection gap; links followed while disconnected cannot be reconstructed reliably. Unrelated address-bar navigation can end inherited targeting according to the app's focus policy.
 
-Desktop-to-browser window binding accounts for normal Windows display scaling and accessibility text scaling. It supports the primary monitor and ordinary mixed-scale monitor layouts whose touching displays form an unambiguous tree without overlapping scaled bounds. More complex monitor arrangements, unreadable display scaling, and custom browser device-scale launch overrides are not supported for companion window binding. When the app cannot establish coordinates safely, it keeps native Site matching available rather than identifying a browser window from its title alone.
+Desktop-to-browser window binding accounts for normal Windows display scaling and accessibility text scaling. It supports the primary monitor and ordinary mixed-scale monitor layouts whose touching displays form an unambiguous tree without overlapping scaled bounds. More complex monitor arrangements, unreadable display scaling, and custom browser device-scale launch overrides are not supported for companion window binding. When the app cannot establish coordinates safely, it treats the affected Site target as unavailable instead of guessing a browser window from its title.
 
 Only the companion's fixed extension origin is allowed in the native-host manifest. The native host connects only to the current Windows user's running Reflection Timer. It does not launch the main app, read app settings, or change drafts/audio. Its host-registration file contains the installed executable path; it does not contain browsing metadata.
 

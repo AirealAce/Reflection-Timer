@@ -23,7 +23,7 @@ internal sealed partial class PreviewApplication
         }catch{
             companionStartFailed=true;
             Services.Log.Record("focus.companionUnavailable");
-            Announce("Browser companion could not connect. Native Site tracking remains available. Turn the companion off and on to retry.");
+            Announce("Browser companion could not connect. Site targets are unavailable. Turn the companion off and on to retry.");
         }
     }
     private void StopBrowserCompanion()

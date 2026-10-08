@@ -20,7 +20,7 @@ internal static class DynamicFocusTests
                 && !PreviewApplication.MatchesSavedFocusTarget(ordinary, first[0]), kind + ": a dynamic choice cannot match an ordinary target");
         }
         var store = new MemoryStore(); var engine = new TimerEngine(store);
-        var options = new FocusModeSettings { Enabled = true, MultipleTargets = true, Targets = dynamic, DelaySeconds = 0 };
+        var options = new FocusModeSettings { Enabled = true, BrowserCompanionEnabled = true, MultipleTargets = true, Targets = dynamic, DelaySeconds = 0 };
         engine.SetFocusMode(options with { Targets = dynamic.Add(dynamic[0] with { Id = Guid.NewGuid() }).Add(window) });
         var saved = JsonSerializer.Deserialize<FocusModeSettings>(JsonSerializer.Serialize(engine.Snapshot.FocusMode))!;
         check(saved.SelectedTargets.Length == 5 && saved.SelectedTargets.Count(t => t.UseFocused) == 4,
@@ -131,6 +131,7 @@ internal static class DynamicFocusTests
     }
     private sealed class Source : IFocusTargetSource
     {
+        public bool BrowserConnected => true;
         internal FocusTarget? Foreground;
         internal int Snapshots, Captures;
         internal bool ResolveBrowsers;

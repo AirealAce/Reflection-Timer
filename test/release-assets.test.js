@@ -56,3 +56,10 @@ test('desktop includes only the approved clips in both developer and public buil
   const ignored = execFileSync('git', ['check-ignore', '--stdin'], {cwd:root, input:'private.mp3\ndesktop/Sounds/my-private.mp3\n', encoding:'utf8'});
   assert.equal(ignored.trim().split(/\r?\n/).length, 2);
 });
+
+test('Windows installer preserves only a previously configured browser companion', {skip:process.platform !== 'win32'}, () => {
+  const output = execFileSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass',
+    '-File', path.join(root, 'desktop/ReflectionTimer.Tests/installer-companion.tests.ps1')],
+    {cwd:root, encoding:'utf8', timeout:15000});
+  assert.match(output, /\d+ browser companion installer checks passed/);
+});

@@ -5,6 +5,7 @@ using ReflectionTimer.Desktop;
 
 if(args.Contains("--focus-mode")){var checks=0;await FocusModeTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} focus mode checks passed.");return;}
 if(args.Contains("--native-site")){NativeSiteSmoke.Run();return;}
+if(args.Contains("--site-availability")){var checks=0;await SiteAvailabilityTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} Site availability checks passed.");return;}
 if(args.Contains("--browser-companion-transport")){var checks=0;await BrowserCompanionHostTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} companion transport checks passed.");return;}
 if(args.Contains("--focus-target-scan")){
     using var targets=new WindowsFocusTargets();
@@ -84,6 +85,7 @@ await FocusModeTests.Run(Check);
 SiteFocusTests.Run(Check);
 NativeSiteTests.Run(Check);
 BrowserSiteTrackingTests.Run(Check);
+await SiteAvailabilityTests.Run(Check);
 BrowserWindowBoundsTests.Run(Check);
 await BrowserCompanionHostTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);

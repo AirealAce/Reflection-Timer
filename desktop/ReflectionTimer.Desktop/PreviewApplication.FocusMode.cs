@@ -58,7 +58,8 @@ internal sealed partial class PreviewApplication
         var saved = Session.Engine.SettingsSnapshot.FocusMode.SelectedTargets;
         foreach (var target in saved) focusChoices[target.Id] = target;
         if (focusChoices.Count > 4096) throw new ArgumentException("Reopen the target chooser to refresh its saved choices.");
-        var choices = FocusChoices(kind, list);
+        var choices = kind == FocusTargetKind.Site && !BrowserConnected
+            ? saved.Where(t=>t.Kind==FocusTargetKind.Site).ToArray() : FocusChoices(kind, list);
         foreach (var target in choices) focusChoices[target.Id] = target;
         var windowLabels = FocusWindowLabels.Create(choices, WindowsFocusTargets.IsMinimized);
         return choices.Select(t => new { id = t.Id, key = FocusTargetKey(t), kind=(int)t.Kind,name = t.Name, app = t.App, windowName=t.WindowName,tabPosition=t.TabPosition,
@@ -67,6 +68,7 @@ internal sealed partial class PreviewApplication
     }
     internal FocusTarget AddFocusSite(string website)
     {
+        FocusSitePolicy.RequireAvailable(Session.Engine.SettingsSnapshot.FocusMode,BrowserConnected);
         var host=FocusSites.CanonicalHost(website);
         var target=FocusChoices(FocusTargetKind.Site,[new(Guid.Empty,FocusTargetKind.Site,host,"",0,0,0){SiteHost=host}]).Single(t=>!t.UseFocused);
         if(focusChoices.Count>=4096&&!focusChoices.ContainsKey(target.Id))throw new ArgumentException("Reopen the target chooser to refresh its saved choices.");
@@ -86,16 +88,20 @@ internal sealed partial class PreviewApplication
     {
         if (!focusChoices.TryGetValue(id, out var target)) throw new ArgumentException("That target list expired. Refresh it and choose again.");
         var current = Session.Engine.SettingsSnapshot.FocusMode;
-        Session.Engine.SetFocusMode(enable || current.Enabled, current.DelaySeconds, focusMonitor.CurrentWindow(target));
+        var next = current with { Enabled=enable||current.Enabled,Target=focusMonitor.CurrentWindow(target),Targets=[],MultipleTargets=false };
+        FocusSitePolicy.ValidateSelection(current,next,BrowserConnected);
+        Session.Engine.SetFocusMode(next);
     }
     internal void SelectFocusTargets(IReadOnlyList<Guid> ids, bool enable, bool multiple, bool idle, int idleSeconds, bool? targetOnSiteLinks=null, bool? browserCompanionEnabled=null)
     {
         var selected = ids.Distinct().Select(id => focusChoices.TryGetValue(id, out var target) ? target
             : throw new ArgumentException("That target list expired. Refresh it and choose again.")).Select(focusMonitor.CurrentWindow).DistinctBy(t => t.Key).ToArray();
         var current = Session.Engine.SettingsSnapshot.FocusMode;
-        Session.Engine.SetFocusMode(current with { Enabled = enable || current.Enabled, MultipleTargets = multiple, IdleEnabled = idle,
+        var next = current with { Enabled = enable || current.Enabled, MultipleTargets = multiple, IdleEnabled = idle,
             IdleSeconds = idleSeconds, TargetOnSiteLinks=targetOnSiteLinks??current.TargetOnSiteLinks,
             BrowserCompanionEnabled=browserCompanionEnabled??current.BrowserCompanionEnabled,
-            Target = selected.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(selected) });
+            Target = selected.FirstOrDefault(), Targets = System.Collections.Immutable.ImmutableArray.CreateRange(selected) };
+        FocusSitePolicy.ValidateSelection(current,next,BrowserConnected);
+        Session.Engine.SetFocusMode(next);
     }
 }

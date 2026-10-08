@@ -19,6 +19,7 @@ foreach ($required in @('ReflectionTimer.exe', 'coreclr.dll', 'Web\index.html', 
     if (-not (Test-Path -LiteralPath (Join-Path $PackageDirectory $required) -PathType Leaf)) { throw "Incomplete app package: $required" }
 }
 if (Test-Path -LiteralPath (Join-Path $PackageDirectory 'state.dat')) { throw 'A package must not contain saved user data.' }
+if (Test-Path -LiteralPath (Join-Path $PackageDirectory 'browser-companion\native-host.json')) { throw 'A package must not contain configured browser companion data.' }
 $manifestPath = Join-Path $PackageDirectory 'package-manifest.json'
 if (Test-Path -LiteralPath $manifestPath) {
     $manifest = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
@@ -37,6 +38,10 @@ foreach ($path in @($installPath, $stagingPath, $backupPath)) {
     if (-not [IO.Path]::GetFullPath($path).StartsWith($programsBoundary, [StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe installation path.' }
 }
 Copy-Item -LiteralPath $PackageDirectory -Destination $stagingPath -Recurse
+# Keep explicitly configured browser connections working across upgrades. This
+# preserves the existing final path without registering or enabling a companion.
+. (Join-Path $PSScriptRoot 'Preserve-BrowserCompanion.ps1')
+$companionConfigurationPreserved = Copy-ConfiguredBrowserCompanion -InstallDirectory $installPath -StagingDirectory $stagingPath
 # Locally added audio stays available at its previous location after the upgrade.
 if (Test-Path -LiteralPath $installPath) {
     foreach ($file in Get-ChildItem -LiteralPath $installPath -File -Recurse -Filter '*.mp3') {
@@ -85,5 +90,5 @@ $shortcut.WorkingDirectory = $installPath
 $shortcut.Description = 'Accessible focus sessions and Google Sheets reflections'
 $shortcut.IconLocation = $exePath + ',0'
 $shortcut.Save()
-[pscustomobject]@{ Installed = $exePath; PreviousApp = $(if ($hadPrevious) { $backupPath } else { $null }); EncryptedDataBackup = $dataBackup; Shortcut = $shortcutPath } | ConvertTo-Json
+[pscustomobject]@{ Installed = $exePath; PreviousApp = $(if ($hadPrevious) { $backupPath } else { $null }); EncryptedDataBackup = $dataBackup; Shortcut = $shortcutPath; CompanionConfigurationPreserved = $companionConfigurationPreserved } | ConvertTo-Json
 Write-Host 'Installed. Launch the usual shortcut. Your existing desktop settings and Sheets connection are retained. Microsoft Edge WebView2 Runtime is required.'

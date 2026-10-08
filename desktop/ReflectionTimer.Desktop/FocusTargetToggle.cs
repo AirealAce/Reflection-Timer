@@ -57,7 +57,7 @@ internal sealed partial class PreviewApplication
                 if(WindowsFocusTargets.IsBrowser(window)){
                     var capture=focusTargets.CaptureAsync(window,Enum.GetValues<FocusTargetKind>());targetShortcutBrowserRead=capture;
                     var captured=await capture.WaitAsync(TimeSpan.FromSeconds(6));
-                    var choices=FocusTargetToggle.BrowserChoices(captured);
+                    var choices=FocusTargetToggle.BrowserChoices(captured.Where(t=>t.Kind!=FocusTargetKind.Site||BrowserConnected).ToArray());
                     if(choices.Length==0)throw new ArgumentException("The browser target could not be identified. No targets changed.");
                     if(await focusTargets.CheckAsync(window).WaitAsync(TimeSpan.FromSeconds(6))!=FocusPresence.Focused)
                         throw new ArgumentException("The initiating browser is no longer focused. Press Ctrl+Alt+] again in the browser you want.");
@@ -79,6 +79,7 @@ internal sealed partial class PreviewApplication
                 var changedKeys=FocusTargetToggle.Matching(before,chosen,open).Select(PreviewApplication.FocusTargetKey)
                     .Append(PreviewApplication.FocusTargetKey(chosen)).Concat(focusMonitor.PreviousWindowKeys(chosen).Select(HashFocusKey)).Distinct().ToArray();
                 var result=FocusTargetToggle.Toggle(before,chosen,open);
+                FocusSitePolicy.ValidateSelection(before,result.Settings,BrowserConnected);
                 Session.Engine.SetFocusMode(result.Settings);
                 if(result.Added)focusChoices[chosen.Id]=chosen;
                 Broadcast(new{type="focusTargetToggled",target=PreviewSession.FocusTargetView(chosen),@checked=result.Added,

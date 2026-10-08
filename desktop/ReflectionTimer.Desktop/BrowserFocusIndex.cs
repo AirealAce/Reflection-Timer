@@ -43,7 +43,9 @@ internal sealed class BrowserFocusIndex(TimeProvider? clock = null)
     private sealed record Binding(string Connection,Guid Epoch,int WindowId);
     private sealed record Located(Connection Connection,Window Window,Tab Tab);
 
-    internal bool Connected { get { lock(gate) return enabled&&connections.Values.Any(Fresh); } }
+    // A native host handshake alone does not prove that the extension has the
+    // permissions/configuration needed to provide a complete browser inventory.
+    internal bool Connected { get { lock(gate) return enabled&&connections.Values.Any(Readable); } }
     internal void Configure(FocusModeSettings settings,TimerState timer)
     {
         lock(gate){
