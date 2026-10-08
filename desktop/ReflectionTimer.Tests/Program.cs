@@ -28,6 +28,8 @@ if(args.Contains("--native-retry-delivery")){NativeRetryDeliverySmoke.Run();retu
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 if(args.Contains("--native-global-playback-focus")){NativeGlobalPlaybackFocusSmoke.Run();return;}
 if(args.Contains("--native-global-playback-focus-interactive")){NativeGlobalPlaybackFocusSmoke.RunInteractive();return;}
+if(args.Contains("--native-focus-target-popup")){NativeFocusTargetPopupSmoke.Run();return;}
+if(args.Contains("--native-focus-target-popup-interactive")){NativeFocusTargetPopupSmoke.RunInteractive();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 if(args.Contains("--native-view-restore")){NativeViewRestoreSmoke.Run();return;}

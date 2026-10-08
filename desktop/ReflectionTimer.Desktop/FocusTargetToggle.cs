@@ -34,6 +34,18 @@ internal sealed partial class PreviewApplication
 {
     private bool targetShortcutBusy;
     private Task? targetShortcutBrowserRead;
+    private FocusTargetToggleDialog? targetShortcutDialog;
+    internal async Task<FocusTarget?> ChooseBrowserFocusTargetAsync(nint sourceWindow,IReadOnlyList<FocusTarget> choices,IReadOnlyList<FocusTarget> open)
+    {
+        if(closing)return null;
+        var current=Session.Engine.SettingsSnapshot.FocusMode;
+        using var dialog=new FocusTargetToggleDialog(choices,Session.Engine.SettingsSnapshot.Theme,
+            target=>FocusTargetToggle.Matching(current,target,open).Length>0,
+            message=>Services.AnnounceFeedback(message,nativeControlAnnounces:true));
+        targetShortcutDialog=dialog;
+        try {return await dialog.ShowForShortcutAsync(sourceWindow)==DialogResult.OK?dialog.SelectedTarget:null;}
+        finally {if(ReferenceEquals(targetShortcutDialog,dialog))targetShortcutDialog=null;}
+    }
     private void ToggleTargetFromGlobalShortcut()
     {
         compactPresses.Reset();
@@ -62,18 +74,15 @@ internal sealed partial class PreviewApplication
                     if(await focusTargets.CheckAsync(window).WaitAsync(TimeSpan.FromSeconds(6))!=FocusPresence.Focused)
                         throw new ArgumentException("The initiating browser is no longer focused. Press Ctrl+Alt+] again in the browser you want.");
                     if(closing)return;
-                    var current=Session.Engine.SettingsSnapshot.FocusMode;
-                    using var dialog=new FocusTargetToggleDialog(choices,Session.Engine.SettingsSnapshot.Theme,
-                        target=>FocusTargetToggle.Matching(current,target,open).Length>0,
-                        message=>Services.AnnounceFeedback(message,nativeControlAnnounces:true));
-                    chosen=dialog.ShowDialog(MainForm)==DialogResult.OK?dialog.SelectedTarget:null;
+                    chosen=await ChooseBrowserFocusTargetAsync(new nint(window.WindowHandle),choices,open);
                 }
-                if(chosen is null){Services.AnnounceFeedback("Focus target selection cancelled.",supplementary:true);return;}
                 if(closing)return;
+                if(chosen is null){Services.AnnounceFeedback("Focus target selection cancelled.",supplementary:true);return;}
                 var validation=focusTargets.CheckAsync(chosen);if(chosen.Kind!=FocusTargetKind.Window)targetShortcutBrowserRead=validation;
                 if(await validation.WaitAsync(TimeSpan.FromSeconds(6))==FocusPresence.Unavailable)
                     throw new ArgumentException("That target closed or moved before it could be saved. No targets changed.");
                 open=await focusTargets.ListAsync(FocusTargetKind.Window).WaitAsync(TimeSpan.FromSeconds(6));
+                if(closing)return;
                 focusMonitor.RestoreWindows(open);
                 var before=Session.Engine.SettingsSnapshot.FocusMode;
                 var changedKeys=FocusTargetToggle.Matching(before,chosen,open).Select(PreviewApplication.FocusTargetKey)

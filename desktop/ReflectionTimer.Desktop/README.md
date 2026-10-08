@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.13
+# Reflection Timer 4.3.14
 
 Focus targets also include **Site**, available only with a configured, enabled browser companion and a current complete browser snapshot. Use the focused site on start/resume, choose an open website reported by the companion, or enter its address. Ctrl+Alt+] offers **Site (4)** when the companion can read the focused website. Saved websites match their host and subdomains. A disconnected companion disables new Site selections while preserving saved Sites for reconnection or removal; unavailable Site targets remain quiet. Window, Tab and Tab Group still work through native Windows accessibility without a companion.
 

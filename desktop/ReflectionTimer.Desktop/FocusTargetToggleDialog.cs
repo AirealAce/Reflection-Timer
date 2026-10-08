@@ -10,6 +10,8 @@ internal sealed class FocusTargetToggleDialog : Form
     private readonly IReadOnlyList<FocusTarget> targets;
     private int selectedIndex;
     private bool confirmed;
+    private nint shortcutSourceWindow;
+    private TaskCompletionSource<DialogResult>? shortcutCompletion;
     internal IReadOnlyList<CheckBox> Choices { get; }
     internal TableLayoutPanel ChoiceList { get; }
     internal FocusTarget? SelectedTarget=>targets[selectedIndex];
@@ -78,6 +80,23 @@ internal sealed class FocusTargetToggleDialog : Form
         for(var i=0;i<4;i++)layout.RowStyles.Add(new(SizeType.AutoSize));
         layout.Controls.Add(instructions,0,0);layout.Controls.Add(ChoiceList,0,1);layout.Controls.Add(keys,0,2);layout.Controls.Add(buttons,0,3);Controls.Add(layout);
         AcceptButton=confirm;CancelButton=cancel;ActiveControl=Choices[0];
+        cancel.Click+=(_,_)=>{DialogResult=DialogResult.Cancel;Close();};
+        Disposed+=(_,_)=>shortcutCompletion?.TrySetResult(DialogResult==DialogResult.None?DialogResult.Cancel:DialogResult);
+    }
+    internal Task<DialogResult> ShowForShortcutAsync(nint sourceWindow)
+    {
+        if(IsDisposed||shortcutCompletion is not null)throw new InvalidOperationException("This target popup is no longer available.");
+        shortcutSourceWindow=sourceWindow;
+        shortcutCompletion=new(TaskCreationOptions.RunContinuationsAsynchronously);
+        // ShowDialog restores the timer thread's last active window on exit,
+        // even when this shortcut came from a browser. This independent popup
+        // keeps timer viewers enabled and leaves their visibility/layout alone.
+        try {
+            Show();WindowActivation.Focus(this);
+            if(WindowActivation.IsForeground(this)){ActiveControl=Choices[selectedIndex];Choices[selectedIndex].Focus();}
+        }
+        catch(Exception error){shortcutCompletion.TrySetException(error);Close();}
+        return shortcutCompletion.Task;
     }
     private void ConfirmChoice(int index)
     {
@@ -85,6 +104,7 @@ internal sealed class FocusTargetToggleDialog : Form
         confirmed=true;selectedIndex=index;
         foreach(var choice in Choices)choice.AutoCheck=false;
         DialogResult=DialogResult.OK;
+        if(!Modal&&Visible)Close();
     }
     private void ToggleChoice(int index)
     {
@@ -108,8 +128,18 @@ internal sealed class FocusTargetToggleDialog : Form
         return ChooseKey(keyData)||base.ProcessCmdKey(ref msg,keyData);
     }
     protected override CreateParams CreateParams{get{var value=base.CreateParams;value.ExStyle=(value.ExStyle|0x40000)&~0x08000080;return value;}}
-    protected override void OnShown(EventArgs e)
+    protected override void OnFormClosing(FormClosingEventArgs e)
     {
-        base.OnShown(e);BeginInvoke(()=>{if(IsDisposed||!Visible)return;WindowActivation.Focus(this);ActiveControl=Choices[selectedIndex];Choices[selectedIndex].Focus();});
+        base.OnFormClosing(e);
+        if(e.Cancel)return;
+        if(DialogResult==DialogResult.None)DialogResult=DialogResult.Cancel;
+        // Restore before hiding while the popup still owns foreground focus.
+        // If the user switched away, or the source closed, leave focus alone.
+        if(shortcutCompletion is not null)WindowActivation.ReleaseFocus(this,shortcutSourceWindow,window=>window==shortcutSourceWindow);
+    }
+    protected override void OnFormClosed(FormClosedEventArgs e)
+    {
+        base.OnFormClosed(e);
+        shortcutCompletion?.TrySetResult(DialogResult);
     }
 }
