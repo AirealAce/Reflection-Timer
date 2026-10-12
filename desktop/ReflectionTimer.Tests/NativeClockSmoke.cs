@@ -107,12 +107,13 @@ static class NativeClockSmoke
                         keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleId);
                         Check(session.Engine.Snapshot.Timer is {IsRunning:true,DurationSeconds:123},"Global Ctrl+Space starts the shared edited duration through the production shortcut action");
                         Check(windows.All(w=>!w.Visible)&&JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==draftBefore,"Global toggling keeps viewers hidden and leaves pending reflection text unchanged");
-                        var aliasSession=session.Engine.Snapshot.Timer.SessionId;
-                        foreach(var running in new[]{false,true}){
-                            Check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerToggleAltId)
-                                &&session.Engine.Snapshot.Timer.IsRunning==running&&session.Engine.Snapshot.Timer.SessionId==aliasSession
-                                &&windows.All(w=>!w.Visible),"Ctrl+Alt+Space toggles the same timer once while all windows stay hidden: running="+running);
-                        }
+                        var statusMessages=new List<string>();
+                        app.Services.SessionAnnouncement+=(message,_)=>statusMessages.Add(message);
+                        var statusBefore=JsonSerializer.Serialize(session.Engine.Snapshot);
+                        Check(keys.Dispatch(GlobalShortcut.HotKeyMessage,GlobalShortcut.TimerStatusId)
+                            &&statusMessages.Single()=="Timer running, 2 minutes 3 seconds remaining."
+                            &&JsonSerializer.Serialize(session.Engine.Snapshot)==statusBefore&&windows.All(w=>!w.Visible),
+                            "Ctrl+Alt+Space reads the current running timer once without changing it or showing hidden viewers");
                         compact.Show();
                         await Until(()=>Task.FromResult(compact.Visible&&compact.IsTimeOnly));
                         var timeOnlyBounds=compact.Bounds;
@@ -122,8 +123,8 @@ static class NativeClockSmoke
                             using var message=JsonDocument.Parse(e.WebMessageAsJson);
                             if(message.RootElement.GetProperty("action").GetString()=="compactSize")resizedModes.Add(message.RootElement.GetProperty("data").GetProperty("tiny").GetBoolean());
                         };
-                        foreach(var shortcutId in new[]{GlobalShortcut.TimerToggleId,GlobalShortcut.TimerToggleAltId})foreach(var focused in new[]{true,false}){
-                            var shortcut=shortcutId==GlobalShortcut.TimerToggleId?"Ctrl+Space":"Ctrl+Alt+Space";
+                        foreach(var shortcutId in new[]{GlobalShortcut.TimerToggleId})foreach(var focused in new[]{true,false}){
+                            var shortcut="Ctrl+Space";
                             if(focused)WindowActivation.Focus(compact);else app.Open("main");
                             await Script(compact,"document.querySelector('#read-time').focus()");
                             var toggleSession=session.Engine.Snapshot.Timer.SessionId;
@@ -137,8 +138,8 @@ static class NativeClockSmoke
                             }
                         }
                         Check(JsonSerializer.Serialize(session.Engine.Snapshot.Prompts.Select(p=>p with {Pauses=[]}))==draftBefore,"Time-only global pause/resume retains all reflection drafts");
-                        foreach(var shortcutId in new[]{GlobalShortcut.TimerToggleId,GlobalShortcut.TimerToggleAltId}){
-                            var shortcut=shortcutId==GlobalShortcut.TimerToggleId?"Ctrl+Space":"Ctrl+Alt+Space";
+                        foreach(var shortcutId in new[]{GlobalShortcut.TimerToggleId}){
+                            var shortcut="Ctrl+Space";
                             session.Execute("reset",JsonSerializer.SerializeToElement(new{seconds=123}));
                             await Until(()=>Task.FromResult(!compact.IsTimeOnly));
                             compact.Post(new{type="shrinkCompact"});await Until(()=>Task.FromResult(compact.IsTimeOnly));

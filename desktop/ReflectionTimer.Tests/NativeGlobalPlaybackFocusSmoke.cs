@@ -97,8 +97,8 @@ static class NativeGlobalPlaybackFocusSmoke
                         Check(ExternalFocused(external, editor) && focusLosses == startupLosses,
                             "Cold App initialization does not reclaim external input focus after the user switches away");
                         app.HideAppView();
-                        foreach (var chord in new[] { GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleAltId }) {
-                            var name = chord == GlobalShortcut.TimerToggleId ? "Ctrl+Space" : "Ctrl+Alt+Space";
+                        foreach (var chord in new[] { GlobalShortcut.TimerToggleId }) {
+                            var name = "Ctrl+Space";
                             session.Engine.SwitchMode(SessionMode.Timer); session.Engine.Reset(); session.SetDurationDraft(["0", "0", "0"]);
                             await FocusEditor(); var lost = focusLosses;
                             Check(keys.Dispatch(GlobalShortcut.HotKeyMessage, chord), name + ": invalid duration dispatches through production error handler");
@@ -115,12 +115,12 @@ static class NativeGlobalPlaybackFocusSmoke
                                 name + ": failed storage retains timer and external focus without showing App");
                             if (app.MainForm.Visible) app.HideAppView();
                         }
-                        foreach (var chord in new[] { GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleAltId }) foreach (var popups in new[] { false, true }) {
+                        foreach (var chord in new[] { GlobalShortcut.TimerToggleId }) foreach (var popups in new[] { false, true }) {
                             session.Engine.SetViewerAutoHide(false, 1); session.Engine.SwitchMode(SessionMode.Timer); session.Engine.Reset();
                             session.Engine.SetSessionEndPopups(popups); session.Engine.Start(2, false, 0, lowTime: new() { Enabled = false });
                             await FocusEditor(); var lost = focusLosses; var foreground = GetForegroundWindow(); var keyboard = KeyboardFocus(external.Handle);
                             now = now.AddSeconds(2);
-                            var label = (chord == GlobalShortcut.TimerToggleId ? "Ctrl+Space" : "Ctrl+Alt+Space") + "/exact-deadline/popups-" + popups;
+                            var label = ("Ctrl+Space") + "/exact-deadline/popups-" + popups;
                             Check(keys.Dispatch(GlobalShortcut.HotKeyMessage, chord), label + ": shortcut handles the completion boundary");
                             Check(GetForegroundWindow() == foreground && KeyboardFocus(external.Handle) == keyboard && focusLosses == lost,
                                 label + ": synchronous completion preserves external foreground and keyboard focus");
@@ -138,8 +138,8 @@ static class NativeGlobalPlaybackFocusSmoke
                             foreach (var reflection in Windows(app).Where(w => w.View == "reflection").ToArray()) reflection.CloseAfterSave();
                             foreach (var prompt in session.Engine.Snapshot.Prompts) session.Engine.SkipPrompt(prompt.Id);
                         }
-                        foreach (var mode in Enum.GetValues<SessionMode>()) foreach (var chord in new[] { GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleAltId }) {
-                            var name = mode + "/" + (chord == GlobalShortcut.TimerToggleId ? "Ctrl+Space" : "Ctrl+Alt+Space");
+                        foreach (var mode in Enum.GetValues<SessionMode>()) foreach (var chord in new[] { GlobalShortcut.TimerToggleId }) {
+                            var name = mode + "/" + ("Ctrl+Space");
                             foreach (var tiny in new[] { false, true }) {
                                 session.Engine.SetViewerAutoHide(false, 1); session.Engine.SwitchMode(mode); session.Engine.Reset(); session.SetDurationDraft(["0", "2", "0"]);
                                 session.Engine.SetAlwaysOnTop(!tiny, tiny, true);
@@ -163,7 +163,7 @@ static class NativeGlobalPlaybackFocusSmoke
                         // Each cold case starts a fresh tray app with no Compact ever
                         // created. Normal close/hide reuses the controller in production;
                         // forced teardown/recreation would instead stress WebView lifetime.
-                        foreach (var mode in Enum.GetValues<SessionMode>()) foreach (var chord in new[] { GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleAltId }) foreach (var tiny in new[] { false, true })
+                        foreach (var mode in Enum.GetValues<SessionMode>()) foreach (var chord in new[] { GlobalShortcut.TimerToggleId }) foreach (var tiny in new[] { false, true })
                             await Task.Run(() => ColdViewer(Check, mode, chord, tiny));
                         Check(!app.MainForm.Visible && session.Engine.Snapshot.Connection.WebAppUrl.Length == 0 && session.Engine.Snapshot.Outbox.Count == 0,
                             "Global playback never shows App view, submits a response or configures a destination");
@@ -201,7 +201,7 @@ static class NativeGlobalPlaybackFocusSmoke
                 ((System.Windows.Forms.Timer)Field(app, "pulse")).Stop(); _ = app.MainForm!.Handle;
                 app.MainForm.BeginInvoke(async () => {
                     try {
-                        var label = mode + "/" + (chord == GlobalShortcut.TimerToggleId ? "Ctrl+Space" : "Ctrl+Alt+Space") + "/cold-hidden/" + (tiny ? "Time-only" : "Compact");
+                        var label = mode + "/" + ("Ctrl+Space") + "/cold-hidden/" + (tiny ? "Time-only" : "Compact");
                         check(Windows(app).All(w => w.View != "compact"), label + ": tray start has no floating controller");
                         external.Show(); WindowActivation.Focus(external); editor.Focus(); editor.Select(9, 5);
                         await Until(() => Task.FromResult(ExternalFocused(external, editor)));

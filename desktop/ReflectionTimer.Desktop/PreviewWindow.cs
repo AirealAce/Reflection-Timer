@@ -357,6 +357,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 await app.NavigateReflectionAsync(from,direction);if(IsCurrent(sender))Reply(requestId);return;
             }
             if (action == "close") { Reply(requestId); Close(); return; }
+            if (action == "readStatus") { app.AnnounceTimerStatus(); Reply(requestId); return; }
             if (action == "readTime") {
                 var clock = app.Session.Clock(); Post(new { type = "timeRead", clock }); Reply(requestId); return;
             }

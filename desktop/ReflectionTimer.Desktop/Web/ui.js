@@ -31,6 +31,18 @@ export function bindResetAndReload({bridge,send,run,canReset,selectTab=()=>{}}) 
     restore=undefined;
   };
 }
+// Native global registration normally handles this chord. Keep the WebView
+// fallback identical in every viewer, including text fields and open dialogs.
+export function bindReadStatusShortcut({send,run,canRead=()=>true}) {
+  let pending=false;
+  document.addEventListener('keydown',event=>{
+    if(event.key!==' '||!event.ctrlKey||!event.altKey||event.metaKey||event.shiftKey||event.isComposing)return;
+    event.preventDefault();event.stopImmediatePropagation();
+    if(event.repeat||pending||!canRead())return;
+    pending=true;
+    run(async()=>{try{await send('readStatus');}finally{pending=false;}});
+  },true);
+}
 export function setText(element, value) {
   const text = String(value ?? '');
   if (element.textContent !== text) element.textContent = text;

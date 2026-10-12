@@ -1,4 +1,4 @@
-import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,focusTimerControl} from './ui.js';
+import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,bindReadStatusShortcut,focusTimerControl} from './ui.js';
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
@@ -63,6 +63,7 @@ bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply
   else if(m.type==='measureCompact')resize();
 });
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>Boolean(state)});
+bindReadStatusShortcut({send,run,canRead:()=>Boolean(state)});
 ['hours','minutes','seconds'].forEach(id=>{
   const changed=()=>{const parts=['hours','minutes','seconds'].map(id=>$(id).value);sharedDuration(parts);run(()=>send('durationDraft',{parts}));$('reset').setAttribute('aria-disabled','false');};
   $(id).addEventListener('input',changed);normalizeEmptyDuration($(id),changed);

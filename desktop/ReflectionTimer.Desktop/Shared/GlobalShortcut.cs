@@ -24,7 +24,8 @@ public sealed class GlobalShortcut : NativeWindow, IDisposable
     internal const int ReflectionFocusId = 0x5258;
     internal const uint ReflectionFocusKey = 0xBF; // VK_OEM_2: slash/question mark on a US keyboard.
     internal const int TimerToggleId = 0x5259;
-    internal const int TimerToggleAltId = 0x525A;
+    internal const int TimerStatusId = 0x525A;
+    internal const uint TimerStatusKey = 0x20; // VK_SPACE: Ctrl+Alt reads status without changing the session.
     internal const int ModeToggleId = 0x525B;
     internal const int ResetTimerId = 0x525C;
     internal const int CompactReverseId = 0x525D;

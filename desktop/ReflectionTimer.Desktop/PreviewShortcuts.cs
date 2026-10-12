@@ -32,7 +32,7 @@ internal sealed class PreviewShortcuts : IDisposable
         (GlobalShortcut.CompactFocusKey, GlobalShortcut.CompactFocusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.ReflectionFocusKey, GlobalShortcut.ReflectionFocusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleId, GlobalShortcut.TimerToggleModifiers),
-        (GlobalShortcut.TimerToggleKey, GlobalShortcut.TimerToggleAltId, GlobalShortcut.Modifiers),
+        (GlobalShortcut.TimerStatusKey, GlobalShortcut.TimerStatusId, GlobalShortcut.Modifiers),
         (GlobalShortcut.ModeToggleKey, GlobalShortcut.ModeToggleId, GlobalShortcut.Modifiers),
         (GlobalShortcut.ResetTimerKey, GlobalShortcut.ResetTimerId, GlobalShortcut.Modifiers),
         (GlobalShortcut.CompactKey, GlobalShortcut.CompactReverseId, GlobalShortcut.CompactReverseModifiers),

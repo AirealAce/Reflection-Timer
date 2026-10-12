@@ -76,7 +76,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(3, _=>{if(compactPresses.Press())Open("main",timerPage:true);else Open("compact");}),
             Shortcut(4, ReflectionHotkey),
             Shortcut(5, ToggleTimerFromGlobalShortcut),
-            Shortcut(6, ToggleTimerFromGlobalShortcut),
+            Shortcut(6, _=>AnnounceTimerStatus()),
             Shortcut(7, ToggleModeFromGlobalShortcut),
             Shortcut(8, _=>ResetFromGlobalShortcut()),
             Shortcut(9, _=>CycleCompact(true)),
@@ -314,6 +314,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         if (message.Length == 0) return;
         (active is { Visible: true } ? active : MainForm as PreviewWindow)?.Post(new { type = "announcement", message });
     }
+    internal void AnnounceTimerStatus() => Services.AnnounceFeedback(Session.StatusMessage());
     internal void Announce(CommandResult result)
     {
         // The committed transition already supplied the more informative

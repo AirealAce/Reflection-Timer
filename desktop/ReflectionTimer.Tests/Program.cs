@@ -44,6 +44,7 @@ if(args.Contains("--native-compact-focus")){NativeCompactCycleSmoke.RunInteracti
 if(args.Contains("--native-shutdown")){NativeShutdownSmoke.Run();return;}
 if(args.Contains("--native-voice-synthesis")){NativeVoiceSynthesisSmoke.Run();return;}
 if(args.Contains("--native-reader-notification")){NativeReaderNotificationSmoke.Run();return;}
+if(args.Contains("--native-timer-status")){NativeTimerStatusSmoke.Run();return;}
 if(args.Contains("--native-popup-policy")){NativePopupPolicySmoke.Run();return;}
 if(args.Contains("--native-viewer-auto-hide")){NativeViewerAutoHideSmoke.Run();return;}
 if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
@@ -84,6 +85,7 @@ DeliveryFailureTests.Run(Check);
 await RetryAllServicesTests.Run(Check);
 await RandomAudioTests.Run(Check);
 TimerToggleShortcutTests.Run(Check);
+TimerStatusShortcutTests.Run(Check);
 ResetShortcutTests.Run(Check);
 ResetConfirmationTests.Run(Check);
 ClockDisplayTests.Run(Check);

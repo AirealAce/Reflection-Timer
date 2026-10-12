@@ -1,4 +1,4 @@
-import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, focusTimerControl} from './ui.js';
+import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, bindReadStatusShortcut, focusTimerControl} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
 import {mountReflectionHelp} from './help.js';
@@ -350,6 +350,7 @@ bridge?.addEventListener('message', event => {
 });
 const settings=settingsUI({send,run,bind,view,announce,selectTab:layout.select});
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>state&&(view!=='reflection'||(loadedPrompt&&!queued&&!reflectionBusy&&!savingAndClosing)),selectTab:layout.select});
+bindReadStatusShortcut({send,run,canRead:()=>Boolean(state)});
 bind('delivery-confirm',async()=>{
   const decision=deliveryDecision;if(!decision)return;
   if(decision.resolve){decision.resolve(true);$('delivery-dialog').close();return;}

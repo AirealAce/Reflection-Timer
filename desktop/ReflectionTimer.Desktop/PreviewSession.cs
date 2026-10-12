@@ -86,12 +86,30 @@ public sealed class PreviewSession
     }
     private object Clock(TimerState timer)
     {
+        var (seconds, status) = ClockReading(timer);
+        return timer.Mode==SessionMode.Stopwatch
+            ? new { seconds, text=SpeakTime(seconds), status, stopwatch=true }
+            : (object)new { seconds, text=SpeakTime(seconds), status };
+    }
+    // Read only the same clock preview used by the viewers. Do not tick the
+    // engine, commit settings, open a reflection, or change keyboard focus.
+    internal string StatusMessage()
+    {
+        var timer=Engine.CurrentTimer;
+        var (seconds,status)=ClockReading(timer);
+        var stopwatch=timer.Mode==SessionMode.Stopwatch;
+        var kind=stopwatch?"Stopwatch":"Timer";
+        var unit=stopwatch?"elapsed":status is "Ready" or "Finished"?"set":"remaining";
+        return $"{kind} {status.ToLowerInvariant()}, {SpeakTime(seconds)} {unit}.";
+    }
+    private (int Seconds, string Status) ClockReading(TimerState timer)
+    {
         var status = Status(timer);
         if(timer.Mode==SessionMode.Stopwatch) {
             // Preview the next stopwatch at zero after sending, while retaining
             // the finished session's elapsed time for reflection accounting.
             var elapsed=status=="Finished"?0:TimerEngine.ActualSeconds(timer,Engine.ElapsedNow);
-            return new { seconds=elapsed,text=SpeakTime(elapsed),status,stopwatch=true };
+            return (elapsed,status);
         }
         // Keep completion and reflection accounting in the engine, but show the
         // duration ready for the next session once the countdown has ended.
@@ -106,7 +124,7 @@ public sealed class PreviewSession
                 if(preview<=TimerEngine.MaxDuration)seconds=(int)preview;
             }
         }
-        return new { seconds, text = SpeakTime(seconds), status };
+        return (seconds,status);
     }
     public static string Status(TimerState timer) => timer.IsRunning ? "Running" : TimerEngine.IsPaused(timer) ? "Paused"
         : timer.Mode==SessionMode.Stopwatch ? timer.StopwatchCompleted?"Finished":"Ready" : timer.RemainingSeconds == 0 ? "Finished" : "Ready";
