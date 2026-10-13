@@ -33,10 +33,10 @@ public sealed partial class PreviewServices : IDisposable
     public DiagnosticLog Log { get; }
     public event Action<string>? Announcement;
     internal event Action<string,bool>? SessionAnnouncement;
-    public PreviewServices(TimerEngine engine, string directory, SheetsClient? sheets = null, IAlertAudioBackend? audio = null, TimeProvider? time = null, IVoiceOutput? speech = null)
+    public PreviewServices(TimerEngine engine, string directory, SheetsClient? sheets = null, IAlertAudioBackend? audio = null, TimeProvider? time = null, IVoiceOutput? speech = null, Action<Action,bool>? feedbackDispatcher = null)
     {
         this.engine = engine; this.sheets = sheets ?? new(); sounds = new(audio);
-        voice=new(engine,speech??new WindowsVoiceOutput(),(message,supplementary)=>SessionAnnouncement?.Invoke(message,supplementary));
+        voice=new(engine,speech??new WindowsVoiceOutput(),(message,supplementary)=>SessionAnnouncement?.Invoke(message,supplementary),feedbackDispatcher);
         this.time = time ?? TimeProvider.System;
         Log = new(directory) { Enabled = engine.SettingsSnapshot.LoggingEnabled };
         foreach (var prompt in engine.Snapshot.Prompts.Where(p=>!p.IsCheckIn&&p.RetryOutboxId is null)) sounded.Add(prompt.Id);

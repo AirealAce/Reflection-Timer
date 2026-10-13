@@ -44,6 +44,8 @@ if(args.Contains("--native-compact-focus")){NativeCompactCycleSmoke.RunInteracti
 if(args.Contains("--native-shutdown")){NativeShutdownSmoke.Run();return;}
 if(args.Contains("--native-voice-synthesis")){NativeVoiceSynthesisSmoke.Run();return;}
 if(args.Contains("--native-reader-notification")){NativeReaderNotificationSmoke.Run();return;}
+if(args.Contains("--keyboard-feedback")){var checks=0;KeyboardFeedbackDeliveryTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} keyboard feedback delivery checks passed.");return;}
+if(args.Contains("--jaws-announcement-smoke")){NativeJawsAnnouncementSmoke.Run();return;}
 if(args.Contains("--native-timer-status")){NativeTimerStatusSmoke.Run();return;}
 if(args.Contains("--native-popup-policy")){NativePopupPolicySmoke.Run();return;}
 if(args.Contains("--native-viewer-auto-hide")){NativeViewerAutoHideSmoke.Run();return;}
@@ -104,6 +106,7 @@ BrowserWindowBoundsTests.Run(Check);
 await BrowserCompanionHostTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);
 ScreenReaderFeedbackTests.Run(Check);
+KeyboardFeedbackDeliveryTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);
 ProfileStorageTests.Run(Check);

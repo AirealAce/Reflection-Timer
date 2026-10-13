@@ -18,11 +18,12 @@ internal sealed class SessionVoice : IDisposable
     private readonly TimerEngine engine;
     private readonly IVoiceOutput output;
     private readonly Action<string,bool>? screenReader;
+    private readonly Action<Action,bool> dispatch;
     private AppState previous;
     private bool disposed, failed, failureReported;
-    internal SessionVoice(TimerEngine engine, IVoiceOutput output, Action<string,bool>? screenReader = null)
+    internal SessionVoice(TimerEngine engine, IVoiceOutput output, Action<string,bool>? screenReader = null, Action<Action,bool>? dispatcher = null)
     {
-        this.engine=engine; this.output=output; this.screenReader=screenReader; previous=engine.SettingsSnapshot;
+        this.engine=engine; this.output=output; this.screenReader=screenReader; dispatch=dispatcher??((action,_)=>action()); previous=engine.SettingsSnapshot;
         engine.ActivityRecorded+=OnActivity;
     }
     private void OnActivity(Activity activity)
@@ -80,10 +81,14 @@ internal sealed class SessionVoice : IDisposable
     {
         // Keep failures in either delivery path from affecting the other path
         // or undoing the already-saved timer action.
-        try { if(notifyReader)screenReader?.Invoke(message,supplementary); } catch { }
-        if(!speak)return;
-        try { if(supplementary)output.SpeakSupplement(message,volume);else output.Speak(message,volume); }
-        catch { failed=true; }
+        dispatch(()=>{
+            if(disposed)return;
+            try { if(notifyReader)screenReader?.Invoke(message,supplementary); } catch { }
+            var current=engine.SettingsSnapshot;
+            if(!speak||!current.VoiceAnnouncements||current.Timer.Volume<=0)return;
+            try { if(supplementary)output.SpeakSupplement(message,current.Timer.Volume);else output.Speak(message,current.Timer.Volume); }
+            catch { failed=true; }
+        },supplementary);
     }
     internal static string Message(TimerState timer, string action, long now)
     {

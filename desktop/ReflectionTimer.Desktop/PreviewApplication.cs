@@ -28,14 +28,26 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
     private readonly Func<Control?,string,bool,bool> notifyScreenReader;
-    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null, Func<Control?,string,bool,bool>? screenReaderNotification = null, IVoiceOutput? speech = null)
+    private readonly JawsScreenReaderOutput? jaws;
+    private readonly KeyboardReleasedFeedback? feedback;
+    private readonly System.Windows.Forms.Timer feedbackPoll = new() { Interval = 40 };
+    private Action? pendingFeedbackPoll;
+    internal PreviewApplication(PreviewSession session, string directory, string? recoveryNotice = null, bool startInTray = false, string? profileName = null, IHotKeyRegistration? shortcutRegistration = null, Func<PreviewWindow,ResetWarning,Task<bool>>? resetConfirmation = null, Func<Control?,string,bool,bool>? screenReaderNotification = null, IVoiceOutput? speech = null, Action<Action,bool>? feedbackDispatcher = null)
     {
         Session = session; ProfileDirectory = directory; ProfileName=profileName; StartInTray=startInTray; RecoveryNotice=recoveryNotice ?? session.Engine.ClockRecoveryNotice;
         viewerSession=session.Engine.CurrentTimer;
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
-        notifyScreenReader=screenReaderNotification??ScreenReaderAnnouncements.TryAnnounce;
-        Services = new(session.Engine, directory, speech:speech); Services.Announcement += Announce;
+        if(screenReaderNotification is not null)notifyScreenReader=screenReaderNotification;
+        else {
+            // Ordinary isolated tests must not call the real reader API.
+            if(!session.IsolatedProfile)jaws=new();
+            var router=new ScreenReaderAnnouncementRouter((text,extra)=>jaws?.TryAnnounce(text,extra)==true,ScreenReaderAnnouncements.TryAnnounce);
+            notifyScreenReader=router.TryAnnounce;
+            feedback=new(callback=>{pendingFeedbackPoll=callback;feedbackPoll.Start();},KeyboardReleasedFeedback.ShortcutKeysPressed,()=>Environment.TickCount64);
+            feedbackPoll.Tick+=(_,_)=>{feedbackPoll.Stop();var callback=pendingFeedbackPoll;pendingFeedbackPoll=null;callback?.Invoke();};
+        }
+        Services = new(session.Engine, directory, speech:speech,feedbackDispatcher:feedbackDispatcher??(feedback is null?null:feedback.Publish)); Services.Announcement += Announce;
         session.DeliveryFailure=Services.IsFailedDelivery;
         session.DeliveryRetryBusy=()=>Services.RetryAllBusy;
         focusTargets=new WindowsFocusTargets(browserIndex);
@@ -347,5 +359,5 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again.");return false; }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { DisposeUpdates();targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { DisposeUpdates();feedback?.Dispose();feedbackPoll.Dispose();pendingFeedbackPoll=null;jaws?.Dispose();targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }
