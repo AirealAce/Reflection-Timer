@@ -73,7 +73,7 @@ public sealed class DiagnosticLog : IDisposable
         "sound.changed", "sound.preview", "sound.played", "sound.fallback", "sound.muted", "sound.stopped", "sound.failed", "display.changed", "theme.changed", "theme.loaded",
         "shortcut.registered", "shortcut.unavailable", "shortcut.used", "timer.endedEarly", "timer.lowTime", "timer.lowTimeOptions", "sound.thresholdChanged", "sound.requested",
         "schedule.policy", "schedule.resolved", "prompt.checkIn", "webview.processFailed", "webview.failureReason", "webview.exitCode",
-        "webview.recoveryStarted", "webview.recovered", "webview.recoveryFailed",
+        "webview.recoveryStarted", "webview.recovered", "webview.recoveryFailed", "webview.startupTimedOut",
         "session.modeChanged", "stopwatch.started", "stopwatch.reviewOpened", "stopwatch.timeReached", "stopwatch.alertChanged"
     };
     public bool Enabled { get; set; } = true;

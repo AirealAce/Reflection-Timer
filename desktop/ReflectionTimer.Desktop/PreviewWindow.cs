@@ -64,7 +64,10 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             await (initialization??=InitializeAsync());
             if(View=="reflection"||IsDisposed)return;
             try {await interfaceReady.Task.WaitAsync(TimeSpan.FromSeconds(20));}
-            catch {if(!IsDisposed&&!recoveringInterface)ShowFailure("Saved settings could not be loaded into the interface. Close and reopen the app. Your saved data has not been reset.");}
+            catch(TimeoutException) {ShowStartupTimeout();}
+            // InitializeAsync/renderer recovery already supplied a specific
+            // failure. Do not replace it with a misleading settings error.
+            catch { }
         };
         ResizeEnd+=(_,_)=>{if(View=="compact")try{app.Session.Engine.SetFloatingTimerPosition(Left,Top);}catch{app.Announce("Could not save the compact position.");}};
         FormClosing += async (_, e) => {
@@ -275,6 +278,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
                 if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
                 interfaceReady.TrySetResult();
+                if(startupTimedOut&&!recoveringInterface)FinishInterfaceRecovery();
                 if(chooseFocusOnReady){chooseFocusOnReady=false;ChooseFocusTarget();}
                 if(outboxEntryOnReady is {} outboxId){outboxEntryOnReady=null;ShowOutboxEntry(outboxId);}
                 ScheduleAutoHide();Reply(requestId);return;
