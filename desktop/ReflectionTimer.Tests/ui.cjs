@@ -564,6 +564,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./select-announcements.cjs')(context,initial,settings,check);
     await require('./reset-reload.cjs')(context,initial,settings,check);
     await require('./status-shortcut.cjs')(context,initial,settings,check);
+    await require('./reflection-focus.cjs')(context,initial,check);
     await require('./stopwatch.cjs')(context,initial,settings,check);
     await require('./timer-focus.cjs')(context,initial,settings,check);
     check(failures.length===0,'No browser JavaScript errors');

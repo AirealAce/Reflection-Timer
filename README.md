@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.17
+# Reflection Timer 4.3.18
 
 An accessible Windows timer and stopwatch with reflection prompts, focus reminders, and local CSV or optional Google Sheets logging.
 

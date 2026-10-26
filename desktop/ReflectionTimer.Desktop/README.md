@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.17
+# Reflection Timer 4.3.18
 
 Focus targets also include **Site**, available only with a configured, enabled browser companion and a current complete browser snapshot. Use the focused site on start/resume, choose an open website reported by the companion, or enter its address. Ctrl+Alt+] offers **Site (4)** when the companion can read the focused website. Saved websites match their host and subdomains. A disconnected companion disables new Site selections while preserving saved Sites for reconnection or removal; unavailable Site targets remain quiet. Window, Tab and Tab Group still work through native Windows accessibility without a companion.
 
@@ -83,3 +83,5 @@ After completion, App, Compact, and Time-only derive the displayed time directly
 Open START-HERE.html for setup and keyboard help. Normal launches use the installed profile. Developers may use --profile NAME for isolated test data; old preview samples remain local. APP-PAGE-AUDIT.md records the earlier interface parity review.
 
 Reflection prompts use Save to keep a local draft and close; Save & send remains the submission action. Ctrl+Alt+slash focuses the first reflection box when neither box is focused, and acts as Save when either box is focused. From another window it brings a reflection forward without saving, reopens the latest pending draft, or opens a running/paused-session check-in. It never redirects to App. Failed draft saves leave the text editable and the prompt open.
+
+An explicit reflection shortcut hands native keyboard focus to WebView2 before focusing the labelled response field. Reused editors refresh the field's focus after the shortcut keys are released, preserving the draft, selection and scroll position. A retained DOM selection alone cannot trigger Save: the document and native browser must own focus. Cancelled or delayed handoffs cannot reclaim focus after the user moves elsewhere, and automatically displayed prompts remain passive. Native focus tests check the actual Windows child window and document focus; NVDA forms-mode and typing speech still require reader acceptance testing.

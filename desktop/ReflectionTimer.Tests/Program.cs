@@ -30,6 +30,8 @@ if(args.Contains("--focus-target-scan")){
 if(args.Contains("--pauses")){var checks=0;await PauseTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} pause checks passed.");return;}
 if(args.Contains("--native-smoke")){NativeReflectionSmoke.Run();return;}
 if(args.Contains("--native-reflection-send")){NativeReflectionSmoke.Run(sendModeOnly:true);return;}
+if(args.Contains("--native-reflection-focus")){NativeReflectionFocusSmoke.Run();return;}
+if(args.Contains("--native-reflection-focus-interactive")){NativeReflectionFocusSmoke.RunInteractive();return;}
 if(args.Contains("--native-retry-delivery")){NativeRetryDeliverySmoke.Run();return;}
 if(args.Contains("--native-clock")){NativeClockSmoke.Run();return;}
 if(args.Contains("--native-global-playback-focus")){NativeGlobalPlaybackFocusSmoke.Run();return;}

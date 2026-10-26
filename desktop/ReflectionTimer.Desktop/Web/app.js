@@ -22,8 +22,10 @@ const requests = new Map();
 const requestPrefix=crypto.randomUUID();
 let requestSequence = 0, state, promptId, initial = true, durationDirty = false, loadedPrompt;
 let reflectionBusy=false, savingAndClosing=false, repeatPending=false, repeatDraft=false, retryAllBusy=false, retryAllNativeBusy=false;
+let reflectionFocusSequence=0,reflectionFocusTicket;
 function setReflectionBusy(busy){
   reflectionBusy=busy;const blocked=busy||savingAndClosing;
+  if(blocked)reflectionFocusSequence++;
   $('reflection-form').setAttribute('aria-busy',String(blocked));
   reflectionInputs().forEach(input=>input.readOnly=blocked);
   document.querySelectorAll('#reflection-form button').forEach(button=>available(button,!blocked));
@@ -76,6 +78,46 @@ function renderDuration(clock=state?.clock){
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
 function reflectionInputs(){return [$('reflection-text'),$('early-reason'),...document.querySelectorAll('#pause-reasons textarea')];}
+function focusReflectionEditor(refreshFocus=false){
+  const sequence=++reflectionFocusSequence,expected=promptId,input=$('reflection-text');
+  const eligible=()=>view==='reflection'&&loadedPrompt===expected&&promptId===expected&&document.hasFocus()
+    &&!queued&&!reflectionBusy&&!savingAndClosing&&!input.readOnly&&!document.querySelector('dialog[open]');
+  if(!eligible())return false;
+  if(document.activeElement!==input){input.focus();return document.activeElement===input;}
+  if(!refreshFocus)return true;
+  // A reused hidden document can retain its DOM activeElement while the reader
+  // still follows another app. After native WebView focus, create a fresh focus
+  // transition in a separate frame without changing the draft or selection.
+  const selection=[input.selectionStart,input.selectionEnd,input.selectionDirection],scroll=[input.scrollLeft,input.scrollTop];
+  input.blur();
+  requestAnimationFrame(()=>{
+    if(sequence!==reflectionFocusSequence||!eligible()||document.activeElement!==document.body)return;
+    input.focus({preventScroll:true});input.setSelectionRange(...selection);
+    input.scrollLeft=scroll[0];input.scrollTop=scroll[1];
+  });
+  return true;
+}
+function prepareReflectionInputFocus(requestId){
+  reflectionFocusTicket=undefined;
+  if(!Number.isSafeInteger(requestId)||requestId<1)return;
+  // Accept immediate typing while the native host waits for shortcut release.
+  // Later user navigation must cancel that host's delayed refresh.
+  if(focusReflectionEditor())reflectionFocusTicket={id:requestId,sequence:reflectionFocusSequence,prompt:promptId};
+}
+function applyReflectionInputFocus(message){
+  if(message.focusRequestId!==undefined){
+    const ticket=reflectionFocusTicket;
+    if(!ticket||ticket.id!==message.focusRequestId)return;
+    reflectionFocusTicket=undefined;
+    if(ticket.sequence!==reflectionFocusSequence||ticket.prompt!==promptId)return;
+  }
+  focusReflectionEditor(message.refreshFocus===true);
+}
+window.addEventListener('blur',()=>{reflectionFocusSequence++;});
+document.addEventListener('pointerdown',()=>{reflectionFocusSequence++;});
+document.addEventListener('focusin',event=>{
+  if(reflectionFocusTicket&&event.target!==$('reflection-text'))reflectionFocusSequence++;
+});
 function preservePromptWidth(){const fields=$('reflection-fields');fields.style.setProperty('--pause-gutter',`${Math.max(0,fields.offsetWidth-fields.clientWidth)}px`);}
 if(view==='reflection')new ResizeObserver(preservePromptWidth).observe($('reflection-fields'));
 function draft() { return {id: promptId, text: $('reflection-text').value, reason: $('early-reason').value,
@@ -126,6 +168,7 @@ function renderReflection() {
   if($('reason-group').hidden&&document.activeElement===$('early-reason')&&document.hasFocus())$('reflection-text').focus();
   renderPauses(prompt);
   if(loadedPrompt===prompt.id)return;
+  reflectionFocusSequence++;
   loadedPrompt = prompt.id;
   $('reflection-text').value = prompt.draft; $('early-reason').value = prompt.earlyEndReason;
   lastSavedDraft = JSON.stringify(draft());
@@ -305,7 +348,7 @@ bridge?.addEventListener('message', event => {
     promptId=message.promptId; render(message.state);
     if(view!=='reflection'&&message.state.durationDraft)sharedDuration(message.state.durationDraft);
     // Initial focus is deliberate; subsequent updates never repeat this.
-    if(view==='reflection'){$('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;}
+    if(view==='reflection'){focusReflectionEditor();$('reflection-text').selectionStart=$('reflection-text').value.length;}
     else if(state.timer.mode===1)$('toggle').focus();
     else {const id=['hours','minutes','seconds'].find(id=>Number($(id).value)>0)||'hours';$(id).focus();$(id).select();}
     if(view==='reflection')run(async()=>{restoreReloadView();await send('reflectionReady',{id:promptId});});
@@ -320,7 +363,7 @@ bridge?.addEventListener('message', event => {
     queued=false;savingAndClosing=false;setReflectionBusy(false);
     $('reflection-text').removeAttribute('aria-invalid');error('');
     render(message.state);setText($('draft-status'),'Draft saved locally.');
-    $('reflection-text').focus();$('reflection-text').selectionStart=$('reflection-text').value.length;
+    focusReflectionEditor();$('reflection-text').selectionStart=$('reflection-text').value.length;
     run(()=>send('reflectionReady',{id:promptId}));
   } else if(message.type==='retryAllState') {retryAllNativeBusy=message.busy===true;if(state&&view!=='reflection')renderSelections();}
   else if (message.type === 'state') render(message.state);
@@ -329,11 +372,12 @@ bridge?.addEventListener('message', event => {
   else if (message.type === 'announcement') announce(message.message);
   else if (message.type === 'sessionStatus') setText($('session-status'),message.message);
   else if (message.type === 'durationDraft'&&view!=='reflection')sharedDuration(message.parts);
-  else if (message.type === 'focusReflection') {if(view==='reflection'&&!document.querySelector('dialog[open]'))$('reflection-text').focus();}
+  else if (message.type === 'prepareReflectionFocus') prepareReflectionInputFocus(message.focusRequestId);
+  else if (message.type === 'focusReflection') applyReflectionInputFocus(message);
   else if (message.type === 'reflectionShortcut') {
     if(view!=='reflection'||!loadedPrompt||queued||reflectionBusy||savingAndClosing||document.querySelector('dialog[open]'))return;
-    if(reflectionInputs().includes(document.activeElement))$('later').click();
-    else $('reflection-text').focus();
+    if(message.allowSave!==false&&document.hasFocus()&&reflectionInputs().includes(document.activeElement))$('later').click();
+    else focusReflectionEditor(message.allowSave===false||message.refreshFocus===true);
   }
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
   else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;focusTimerControl(state?.timer.mode===1);}

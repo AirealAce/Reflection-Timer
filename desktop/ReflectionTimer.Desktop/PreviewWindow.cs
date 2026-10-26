@@ -22,7 +22,17 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     private TaskCompletionSource reflectionReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool handoffInProgress;
     bool IReflectionShortcutTarget.IsForegroundReflection => View=="reflection" && ReflectionTimer.Desktop.WindowActivation.IsForeground(this);
-    void IReflectionShortcutTarget.FocusOrSaveDraft(){if(!handoffInProgress&&!requestingClose)Post(new{type="reflectionShortcut"});}
+    void IReflectionShortcutTarget.FocusOrSaveDraft()
+    {
+        if(handoffInProgress||requestingClose)return;
+        // A retained DOM activeElement does not prove this WebView owns the
+        // keyboard. Recover focus first instead of saving a background editor.
+        var allowSave=browser.ContainsFocus;
+        if(!allowSave){RequestReflectionInputFocus();return;}
+        if(!CanFocusReflectionInput())return;
+        browser.Focus();
+        Post(new{type="reflectionShortcut",allowSave});
+    }
     void IReflectionShortcutTarget.FocusReflection()=>app.Open("reflection",PromptId);
     Guid IReflectionPromptWindow.ReflectionId => PromptId!.Value;
     async Task IReflectionPromptWindow.PrepareHandoffAsync(){handoffInProgress=true;await FlushDraftAsync(freeze:true);}
@@ -128,7 +138,13 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
         desiredTopMost=top;
         if(IsHandleCreated)ApplyNativeTopMost();
     }
-    internal void FocusControls(bool timerPage=false){if(View=="compact"){SetCompactMode(false,true);return;}if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}Post(new{type=View=="reflection"?"focusReflection":"focusTimer",selectTimer=timerPage});}
+    internal void FocusControls(bool timerPage=false)
+    {
+        if(View=="compact"){SetCompactMode(false,true);return;}
+        if(!ready){focusOnReady=true;selectTimerOnReady=timerPage;return;}
+        if(View=="reflection"){RequestReflectionInputFocus();return;}
+        Post(new{type="focusTimer",selectTimer=timerPage});
+    }
     internal void ChooseFocusTarget()
     {
         if(View!="main"||IsDisposed)return;
@@ -413,7 +429,7 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
     // A hidden reflection is no longer an editor: it cannot be flushed/submitted.
     internal void CloseAfterSave() { ReflectionOpen=false;handoffInProgress=false;Hide(); }
     internal void ClosePermanently() { allowClose = true; Close(); }
-    protected override void Dispose(bool disposing) { if (disposing) { autoHideTimer?.Dispose(); autoHideTimer=null; autoHideDeadline.Cancel(); browser.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { CancelReflectionInputFocus();reflectionFocusPoll?.Dispose();reflectionFocusPoll=null; autoHideTimer?.Dispose(); autoHideTimer=null; autoHideDeadline.Cancel(); browser.Dispose(); } base.Dispose(disposing); }
     [DllImport("user32.dll")]private static extern bool ReleaseCapture();
     [DllImport("user32.dll")][return:MarshalAs(UnmanagedType.Bool)]private static extern bool SetWindowPos(nint window,nint after,int x,int y,int width,int height,uint flags);
     [DllImport("user32.dll",EntryPoint="SendMessageW")]private static extern nint SendMessage(nint window,int message,nint wParam,nint lParam);

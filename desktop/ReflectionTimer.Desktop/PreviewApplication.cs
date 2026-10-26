@@ -282,6 +282,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
     }
     private async Task ShowReflection(Guid id,bool activate)
     {
+        var focusOrigin=WindowActivation.Foreground;
         var window=windows.FirstOrDefault(w=>w.View=="reflection"&&w.PromptId==id);
         // Keep the visible browser and its accessibility objects alive while
         // browsing. Prev/Next must not tear down one WebView2 and create another.
@@ -300,6 +301,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
         }
         if(closing||window.IsDisposed||!Session.Engine.Snapshot.Prompts.Any(p=>p.Id==id)){if(!window.IsDisposed)window.CloseAfterSave();return;}
         foreach(var previous in windows.Where(w=>w.View=="reflection"&&w!=window).ToArray())previous.CloseAfterSave();
+        if(activate&&WindowActivation.Foreground!=focusOrigin&&!WindowActivation.IsForeground(window))activate=false;
         if(activate){WindowActivation.Focus(window);if(WindowActivation.CanReceiveFocus(window))window.FocusControls();}
         else if(!window.Visible)window.Show();
     }
