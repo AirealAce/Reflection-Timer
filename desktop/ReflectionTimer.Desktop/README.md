@@ -1,4 +1,6 @@
-# Reflection Timer 4.3.18
+# Reflection Timer 4.3.19
+
+If the interface takes more than 20 seconds to open, the loading screen offers **Retry interface** without resetting the timer or saved data. A late startup can still finish and dismiss that screen automatically. Retry reloads only the affected view. Actual initialization errors keep their specific message instead of being replaced by a generic settings error.
 
 Focus targets also include **Site**, available only with a configured, enabled browser companion and a current complete browser snapshot. Use the focused site on start/resume, choose an open website reported by the companion, or enter its address. Ctrl+Alt+] offers **Site (4)** when the companion can read the focused website. Saved websites match their host and subdomains. A disconnected companion disables new Site selections while preserving saved Sites for reconnection or removal; unavailable Site targets remain quiet. Window, Tab and Tab Group still work through native Windows accessibility without a companion.
 

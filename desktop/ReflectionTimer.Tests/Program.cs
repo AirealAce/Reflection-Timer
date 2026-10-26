@@ -40,6 +40,7 @@ if(args.Contains("--native-focus-target-popup")){NativeFocusTargetPopupSmoke.Run
 if(args.Contains("--native-focus-target-popup-interactive")){NativeFocusTargetPopupSmoke.RunInteractive();return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
+if(args.Contains("--native-interface-loading")){NativeInterfaceLoadingSmoke.Run();return;}
 if(args.Contains("--native-view-restore")){NativeViewRestoreSmoke.Run();return;}
 if(args.Contains("--native-compact-cycle")){NativeCompactCycleSmoke.Run();return;}
 if(args.Contains("--native-compact-focus")){NativeCompactCycleSmoke.RunInteractive();return;}

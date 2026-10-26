@@ -64,7 +64,7 @@ internal sealed partial class PreviewApplication
 internal sealed partial class PreviewWindow
 {
     private TaskCompletionSource interfaceReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private bool recoveringInterface,rendererRecovery;
+    private bool recoveringInterface,rendererRecovery,startupTimedOut;
     private readonly Queue<DateTime> rendererRestarts=[];
     private Panel? recoveryPanel;
     private TextBox? recoveryText;
@@ -152,7 +152,7 @@ internal sealed partial class PreviewWindow
     }
     private void ResetReadiness()
     {
-        ready=false;settingsShortcutsActive=false;reflectionLoadError=null;
+        ready=false;settingsShortcutsActive=false;reflectionLoadError=null;startupTimedOut=false;
         reflectionReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
         interfaceReady=new(TaskCreationOptions.RunContinuationsAsynchronously);
     }
@@ -167,7 +167,7 @@ internal sealed partial class PreviewWindow
     private void FinishInterfaceRecovery()
     {
         if(IsDisposed||allowClose)return;
-        reflectionLoadError=null;recoveringInterface=false;
+        reflectionLoadError=null;recoveringInterface=false;startupTimedOut=false;
         if(recoveryPanel is not null){Controls.Remove(recoveryPanel);recoveryPanel.Dispose();recoveryPanel=null;recoveryText=null;retryInterface=null;}
         browser.Visible=true;browser.BringToFront();
         ScheduleAutoHide();
@@ -180,6 +180,16 @@ internal sealed partial class PreviewWindow
         if(View=="reflection")reflectionLoadError="The interface needs to be retried before this reflection can be sent or replaced.";
         retryRecovery=()=>app.RecoverBrowser(automatic:false);
         ShowRecoveryMessage("The interface could not be restored. Your timer continues and saved drafts are retained. Choose Retry interface to try again.",true);
+    }
+    private void ShowStartupTimeout()
+    {
+        if(IsDisposed||allowClose||recoveringInterface||interfaceReady.Task.IsCompleted)return;
+        // A deadline is not a failed settings load. Keep the handshake alive so
+        // a slow renderer can still finish, and offer a view-only retry.
+        startupTimedOut=true;
+        app.Services.Log.Record("webview.startupTimedOut",value:View=="main"?0:1);
+        retryRecovery=()=>RecoverRenderer(automatic:false);
+        ShowRecoveryMessage("The interface is taking longer than expected to open. Your saved data has not been reset. Wait for loading to finish, or choose Retry interface to reload this view.",true);
     }
     private void ShowRecoveryMessage(string text,bool retry)
     {
