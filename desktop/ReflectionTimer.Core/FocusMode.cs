@@ -3,7 +3,7 @@ using System.Text.Json.Serialization;
 
 namespace ReflectionTimer.Core;
 
-public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup, Site = 3 }
+public enum FocusTargetKind { Window, BrowserTab, BrowserTabGroup, Site = 3, App = 4 }
 public enum FocusCaptureScope { Focused, FocusedIncludingBackground, OpenIncludingBackground }
 public enum FocusGlowStyle { CrimsonHalo, Classic }
 
@@ -16,6 +16,7 @@ public record FocusTarget(Guid Id, FocusTargetKind Kind, string Name, string App
     public int TabPosition { get; init; }
     // Durable window hints stay in the encrypted profile, never in WebView data.
     public string ProcessPath { get; init; } = "";
+    public string ApplicationId { get; init; } = "";
     public string WindowClass { get; init; } = "";
     public string SiteHost { get; init; } = "";
     // This choice stays in the profile; its captured native target is session-only.
@@ -30,11 +31,12 @@ public record FocusTarget(Guid Id, FocusTargetKind Kind, string Name, string App
             : "Use focused "+(kind==FocusTargetKind.BrowserTab?"tabs":"tab groups")+" (including background)";
         return new(Guid.Empty,kind,name,"",0,0,0){UseFocused=true,CaptureScope=scope};
     }
-    public static bool ValidScope(FocusTargetKind kind,FocusCaptureScope scope)=>Enum.IsDefined(kind)&&Enum.IsDefined(scope)
+    public static bool ValidScope(FocusTargetKind kind,FocusCaptureScope scope)=>Enum.IsDefined(kind)&&kind!=FocusTargetKind.App&&Enum.IsDefined(scope)
         && (scope==FocusCaptureScope.Focused||kind!=FocusTargetKind.Site&&(scope==FocusCaptureScope.FocusedIncludingBackground&&kind!=FocusTargetKind.Window
             ||scope==FocusCaptureScope.OpenIncludingBackground&&kind!=FocusTargetKind.BrowserTab));
     [JsonIgnore] public string Key => UseFocused ? CaptureScope==FocusCaptureScope.Focused?$"focused:{(int)Kind}":$"captured:{(int)Kind}:{(int)CaptureScope}"
         : Kind==FocusTargetKind.Site ? "site:"+FocusSites.CanonicalHost(SiteHost)
+        : Kind==FocusTargetKind.App ? "app:"+FocusAppIdentity.Key(ProcessPath,ApplicationId)
         : $"{(int)Kind}:{ProcessId}:{ProcessStartedAt}:{WindowHandle}:{(Kind == FocusTargetKind.Window ? "" : TabRuntimeId)}";
 }
 

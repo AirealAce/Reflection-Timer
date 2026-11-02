@@ -43,7 +43,7 @@ internal sealed partial class PreviewWindow
                     if(folder.ShowDialog(this)==DialogResult.OK)Post(new {type="csvFolder",directory=folder.SelectedPath});
                 }break;
             case "focusTargets":
-                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,3);
+                var targetKind=(FocusTargetKind)ReadInt(data,"kind",0,4);
                 Post(new { type="focusTargets",kind=(int)targetKind,targets=await app.ListFocusTargetsAsync(targetKind,ReadFlag(data,"reset")),browserConnected=app.BrowserConnected,nativeSites=false });break;
             case "focusSite":
                 var site=app.AddFocusSite(ReadString(data,"website",2048));
@@ -68,7 +68,7 @@ internal sealed partial class PreviewWindow
             case "previewVoice": services.PreviewVoice();break;
             case "timeReached": engine.SetTimeReached(ReadFlag(data,"enabled"),ReadInt(data,"seconds",1,TimerEngine.MaxDuration));break;
             case "settingsSaveComplete":
-                _=services.Play(SoundEvent.Success);Reply(requestId);return true;
+                _=services.Play(SoundEvent.Success);app.Announce("Settings saved.",this);Reply(requestId);return true;
             case "settingsLoad": Post(new{type="shortcuts",shortcuts=app.ShortcutState});break;
             case "setupGuide": System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(Path.Combine(AppContext.BaseDirectory,"START-HERE.html")){UseShellExecute=true});break;
             case "connectionStore": services.SaveConnection(ReadConnection(data),ReadFlag(data,"enabled"));message="Settings saved.";break;

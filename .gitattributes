@@ -1,0 +1,5 @@
+# Preserve the exact upstream bytes verified by scripts/nvda-controller.cjs.
+/desktop/ThirdParty/NvdaController/2026.3/LICENSE.txt binary
+/desktop/ThirdParty/NvdaController/2026.3/nvdaController.h binary
+/desktop/ThirdParty/NvdaController/2026.3/*.dll binary
+/desktop/ThirdParty/NvdaController/2026.3/*.zip binary

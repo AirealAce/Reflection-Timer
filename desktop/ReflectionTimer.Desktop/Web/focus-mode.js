@@ -25,7 +25,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   let previousSiteReady=false,reconnectRefreshPending=false,preserveInventoryDraft=false,restoringRowFocus=false;
   const siteReady=()=>settings.browserCompanionEnabled===true&&companion.checked&&browserConnected===true;
   const canChoose=target=>target.kind!==3||siteReady()||picked.has(key(target));
-  const type=kind=>['Window','Tab','Tab Group','Site'][kind]??'Window';
+  const type=kind=>['Window','Tab','Tab Group','Site','App'][kind]??'Window';
   const key=target=>target.key??`${target.kind}:${target.id}`;
   const searchTerms=()=>targetSearch.value.toLowerCase().trim().split(/\s+/).filter(Boolean);
   function visibleTargets(){
@@ -36,14 +36,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     });
   }
   const selectedTargets=value=>value.targets?.length?value.targets:value.target?[{name:value.target,kind:value.targetKind??0,app:value.targetApp,windowName:value.targetWindowName,tabPosition:value.targetPosition}]:[];
-  const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.kind===3?target.siteHost||target.name:target.name;
+  const shortName=target=>target.useFocused?target.name:target.kind===0?target.app||target.name:target.kind===1?`${target.tabPosition??'?'} - ${target.name}`:target.kind===3?target.siteHost||target.name:target.name||target.app;
   const fullName=target=>target.useFocused?target.name:`${type(target.kind)}: ${shortName(target)}`+(target.kind===0?` — ${target.displayName??target.name}`:target.windowName?` — ${target.app}, ${target.windowName}`:target.app?` — ${target.app}`:'');
   const syncToggles=()=>toggles.forEach(control=>{control.setAttribute('aria-pressed',String(enabled));control.classList.toggle('primary',enabled);});
   function render(value){
     if(!value)return;settings=value;toggles.forEach(control=>control.disabled=false);
     if(!glowDirty){glowEnabled=value.screenEdgeGlow!==false;glowStyle=value.screenEdgeGlowStyle??0;syncGlow();}
     if(!dirty){enabled=!!value.enabled;syncToggles();delay.value=value.delaySeconds??5;}
-    const targets=selectedTargets(value),many=targets.length>1,heading=many?[0,1,2,3].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
+    const targets=selectedTargets(value),many=targets.length>1,heading=many?[4,0,1,2,3].filter(kind=>targets.some(t=>t.kind===kind)).map(type).join(', '):targets.length?type(targets[0].kind):'';
     const name=targets.length&&!many?shortName(targets[0]):'',label=targets.length?many?heading:targets[0].useFocused?name:`${heading}: ${name}`:'No focus target selected.';
     targetButtons.forEach(button=>{
       if(targets.length){
@@ -54,9 +54,9 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
         button.setAttribute('aria-label',label);
       }else {setText(button,'Choose Window / Tab…');button.removeAttribute('aria-label');}
       button.classList.toggle('primary',targets.length>0);button.classList.toggle('has-target',targets.length>0);
-      button.title=targets.length?targets.map(fullName).join('\n')+'\nChoose focus targets.':'Choose a window, browser tab, tab group, or site.';
+      button.title=targets.length?targets.map(fullName).join('\n')+'\nChoose focus targets.':'Choose an app, window, browser tab, tab group, or site.';
     });
-    setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose a window, browser tab, tab group, or site.');
+    setText($('focus-target-name'),targets.length?`${targets.length} selected. Choose focus targets.`:'Choose an app, window, browser tab, tab group, or site.');
     setText($('focus-settings-target'),label+(value.idleEnabled?` · Idle for ${value.idleSeconds??20} seconds`:''));
     syncSiteAvailability();
   }
@@ -75,7 +75,7 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
       node.dataset.helpAvailable=value;node.dispatchEvent(new Event('helpavailabilitychange',{bubbles:true}));
     };
     helpAvailability('focus-picker-tab-scope',backgroundTabs);
-    helpAvailability('focus-picker-target-overlap',backgroundTabs&&selected.some(t=>t.kind===2||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase()))));
+    helpAvailability('focus-picker-target-overlap',backgroundTabs&&selected.some(t=>t.kind===2||t.kind===4||t.kind===0&&(t.useFocused||['chrome','msedge','firefox','brave','vivaldi','opera'].includes(t.app?.toLowerCase()))));
     for(const row of list.querySelectorAll('tbody tr')){
       const checked=picked.has(row.dataset.key);row.classList.toggle('picked',checked);row.setAttribute('aria-current',checked&&!multiple.checked?'true':'false');
       const blocked=Number(row.dataset.kind)===3&&!siteReady()&&!checked;
@@ -121,8 +121,8 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
   }
   function status(){
     const available=rows.filter(t=>!t.unavailable&&!t.useFocused).length,matching=visibleTargets().length;
-    const inventory=searchTerms().length?(matching?`${matching} matching ${matching===1?'target':'targets'} of ${rows.length} listed.`:`No matching targets. ${rows.length} listed.`):`${available} ${Number(kindControl.value)===3?'sites':'open targets'}.`;
-    setText($('focus-picker-status'),`${inventory} ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?' Previously selected closed targets can be unchecked.':'')
+    const inventory=searchTerms().length?(matching?`${matching} matching ${matching===1?'target':'targets'} of ${rows.length} listed.`:`No matching targets. ${rows.length} listed.`):`${available} ${Number(kindControl.value)===3?'sites':Number(kindControl.value)===4?'running apps':'open targets'}.`;
+    setText($('focus-picker-status'),`${inventory} ${picked.size} selected across all categories.`+(rows.some(t=>t.unavailable)?Number(kindControl.value)===4?' Saved apps are included when opened again.':' Previously selected closed targets can be unchecked.':'')
       +(Number(kindControl.value)===3?(siteReady()
         ?' Open websites from connected browsers are listed. Saved sites remain available.'
         :' Site needs an enabled, connected browser companion. Saved choices are kept; select a saved site again to remove it.') :''));
@@ -164,10 +164,10 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     syncSelection();if(updateStatus)status();
   }
   function draw(){
-    const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:['Site','App'];
-    const widths=kind===0?['30%','']:kind===3?['','24%']:['64px','','24%'];
+    const kind=Number(kindControl.value),headers=kind===0?['App','Window Name']:kind===1?['Tab #','Tab Name','App']:kind===2?['Grp #','Group Name','App']:kind===4?['App']:['Site','App'];
+    const widths=kind===0?['30%','']:kind===3?['','24%']:kind===4?['']:['64px','','24%'];
     $('focus-site-controls').hidden=kind!==3;
-    setText(list.querySelector('caption'),kind===3?siteReady()?'Open sites':'Saved sites':'Open targets');
+    setText(list.querySelector('caption'),kind===3?siteReady()?'Open sites':'Saved sites':kind===4?'Apps':'Open targets');
     if(multiple.checked){headers.unshift('');widths.unshift('32px');}
     const group=document.createElement('colgroup');for(const width of widths){const col=document.createElement('col');if(width)col.style.width=width;group.append(col);}
     list.querySelector('colgroup').replaceWith(group);
@@ -182,14 +182,14 @@ export function mountFocusMode({send,run,announce,view,flushAudio,validateAudio}
     }list.querySelector('thead').replaceChildren(head);
     const body=list.querySelector('tbody');body.replaceChildren();
     for(const target of rows){
-      const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.dataset.kind=target.kind;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable);
-      const description=fullName(target)+(target.current?(kind===3?' (current site)':' (current tab)'):'')+(target.unavailable?' (closed or unavailable)':target.savedSite?' (saved site)':'');
+      const row=document.createElement('tr');row.dataset.key=key(target);row.dataset.id=target.id;row.dataset.kind=target.kind;row.tabIndex=-1;row.title=fullName(target);row.classList.toggle('unavailable',!!target.unavailable&&kind!==4);
+      const description=fullName(target)+(target.current?(kind===3?' (current site)':kind===4?' (current app)':' (current tab)'):'')+(target.unavailable?kind===4?' (not running; included when opened)':' (closed or unavailable)':target.savedSite?' (saved site)':'');
       row.setAttribute('aria-label',description);
       if(multiple.checked){
         const td=document.createElement('td'),checkbox=document.createElement('input');td.className='focus-selection-cell';checkbox.type='checkbox';checkbox.tabIndex=-1;checkbox.setAttribute('aria-label',description);checkbox.disabled=loading||selecting;
         checkbox.addEventListener('change',()=>{choose(target);});checkbox.addEventListener('click',event=>{if(event.detail>1)event.preventDefault();});td.append(checkbox);row.append(td);
       }
-      const values=kind===3?[(target.current?'(current site) ':'')+target.name,target.app||'']:target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.displayName??target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
+      const values=kind===4?[(target.current?'(current app) ':'')+(target.name||target.app)]:kind===3?[(target.current?'(current site) ':'')+target.name,target.app||'']:target.useFocused?(kind===0?[target.name,'']:['',target.name,'']):kind===0?[target.app,target.displayName??target.name]:[String(target.tabPosition??'?'),(target.current?'(current tab) ':'')+target.name,target.app];
       for(const [index,value] of values.entries()){const td=document.createElement('td'),text=document.createElement('span');if((kind===1||kind===2)&&index===0)td.className='focus-number-cell';text.className='focus-cell';text.textContent=value;td.append(text);row.append(td);}
       row.addEventListener('focusin',()=>{
         activeKey=key(target);for(const other of body.children){other.tabIndex=!multiple.checked&&other===row?0:-1;const checkbox=other.querySelector('input');if(checkbox)checkbox.tabIndex=other===row?0:-1;}

@@ -29,6 +29,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
             window.dispatchBridge({type:'settings',settings:window.settings});
           }
           if(m.action==='settingsLoad')window.dispatchBridge({type:'settings',settings:window.settings});
+          if(m.action==='settingsSaveComplete')window.dispatchBridge({type:'announcement',message:'Settings saved.',announce:false});
           if(m.action==='focusTargets'){
             if(window.failFocusTargets){window.dispatchBridge({type:'reply',requestId:m.requestId,error:'Synthetic target refresh failure'});return;}
             window.dispatchBridge({type:'focusTargets',kind:m.data.kind,targets:window.chooserTargets.filter(target=>target.kind===m.data.kind)});

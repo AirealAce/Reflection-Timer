@@ -1,0 +1,19 @@
+{
+  "name": "NVDA Controller Client",
+  "version": "2026.3",
+  "architecture": "win-x64",
+  "license": "LGPL-2.1-only",
+  "upstreamRelease": "https://github.com/nvaccess/nvda/releases/tag/release-2026.3",
+  "upstreamCommit": "7eb1738dd1556775145453fdd8b6b7ca6b397693",
+  "sdkUrl": "https://download.nvaccess.org/releases/2026.3/nvda_2026.3_controllerClient.zip",
+  "sdkSha256": "E38A00689EAB422F13AAED9AAAACDD3AE96411643B6F2F5FBF86222660AC7938",
+  "sourceUrl": "https://codeload.github.com/nvaccess/nvda/zip/7eb1738dd1556775145453fdd8b6b7ca6b397693",
+  "files": {
+    "nvdaControllerClient.dll": "7EF3AAA056C8B3B37DB9F8CD82DA94AD6254F1726184F5FC17D8C90510F54908",
+    "nvdaController.h": "749E6D40616F6AFD2409C5EE1A9260CB65014805C446A60327B1C7A276A41923",
+    "LICENSE.txt": "36B6D3FA47916943FD5FEC313C584784946047EC1337A78B440E5992CB595F89",
+    "nvda-2026.3-source.zip": "18C72C4D97BFFAED69704E6FA808992C56EDBBD106E91BF27529DD59F1265054"
+  },
+  "authenticodeSigner": "NV Access Limited",
+  "modified": false
+}

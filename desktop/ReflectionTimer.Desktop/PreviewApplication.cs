@@ -27,8 +27,11 @@ internal sealed partial class PreviewApplication : ApplicationContext
     private readonly PreviewShortcuts shortcuts;
     private readonly ConsecutiveShortcutPresses compactPresses=new();
     private readonly ReflectionPromptCoordinator promptCoordinator;
-    private readonly Func<Control?,string,bool,bool> notifyScreenReader;
+    private readonly Func<Control?,string,bool,bool,Task<bool>> notifyScreenReader;
     private readonly JawsScreenReaderOutput? jaws;
+    private readonly NvdaScreenReaderOutput? nvda;
+    private readonly Action<Action,bool> dispatchFeedback;
+    private readonly Action<Action> dispatchNotice;
     private readonly KeyboardReleasedFeedback? feedback;
     private readonly System.Windows.Forms.Timer feedbackPoll = new() { Interval = 40 };
     private Action? pendingFeedbackPoll;
@@ -38,16 +41,20 @@ internal sealed partial class PreviewApplication : ApplicationContext
         viewerSession=session.Engine.CurrentTimer;
         AppViewMayShow = !startInTray && session.Engine.SettingsSnapshot.ShowAppView != false;
         confirmReset=resetConfirmation??((owner,warning)=>owner.ConfirmResetAsync(warning));
-        if(screenReaderNotification is not null)notifyScreenReader=screenReaderNotification;
+        if(screenReaderNotification is not null)notifyScreenReader=(owner,message,extra,_)=>Task.FromResult(screenReaderNotification(owner,message,extra));
         else {
             // Ordinary isolated tests must not call the real reader API.
-            if(!session.IsolatedProfile)jaws=new();
-            var router=new ScreenReaderAnnouncementRouter((text,extra)=>jaws?.TryAnnounce(text,extra)==true,ScreenReaderAnnouncements.TryAnnounce);
-            notifyScreenReader=router.TryAnnounce;
+            if(!session.IsolatedProfile){jaws=new();nvda=new();}
+            var router=new ScreenReaderAnnouncementRouter((text,extra)=>jaws?.TryAnnounce(text,extra)==true,ScreenReaderAnnouncements.TryAnnounce,
+                nvda is null?null:nvda.TryAnnounceAsync,session.IsolatedProfile?null:NvdaScreenReaderOutput.IsCurrentInputDesktop,
+                nvda is null?null:nvda.TryAnnounceNoticeAsync);
+            notifyScreenReader=router.TryAnnounceAsync;
             feedback=new(callback=>{pendingFeedbackPoll=callback;feedbackPoll.Start();},KeyboardReleasedFeedback.ShortcutKeysPressed,()=>Environment.TickCount64);
             feedbackPoll.Tick+=(_,_)=>{feedbackPoll.Stop();var callback=pendingFeedbackPoll;pendingFeedbackPoll=null;callback?.Invoke();};
         }
-        Services = new(session.Engine, directory, speech:speech,feedbackDispatcher:feedbackDispatcher??(feedback is null?null:feedback.Publish)); Services.Announcement += Announce;
+        dispatchFeedback=feedbackDispatcher??(feedback is null?((action,_)=>action()):feedback.Publish);
+        dispatchNotice=feedbackDispatcher is not null?action=>feedbackDispatcher(action,true):feedback is not null?feedback.PublishNotice:action=>action();
+        Services = new(session.Engine, directory, speech:speech,feedbackDispatcher:DispatchFeedback); Services.Announcement += Announce;
         session.DeliveryFailure=Services.IsFailedDelivery;
         session.DeliveryRetryBusy=()=>Services.RetryAllBusy;
         focusTargets=new WindowsFocusTargets(browserIndex);
@@ -324,9 +331,18 @@ internal sealed partial class PreviewApplication : ApplicationContext
         Broadcast(new{type="appViewVisibility",visible});
     }
     internal void Announce(string message)
+        => AnnounceCore(message,null);
+    internal void Announce(string message,PreviewWindow source)
+        => AnnounceCore(message,source);
+    private void AnnounceCore(string message,PreviewWindow? source)
     {
-        if (message.Length == 0) return;
-        (active is { Visible: true } ? active : MainForm as PreviewWindow)?.Post(new { type = "announcement", message });
+        if(string.IsNullOrWhiteSpace(message))return;
+        // Render immediately, then use the same reader route as global status.
+        // Optional app voice remains independent of these general confirmations.
+        OnFeedbackThread(()=>{
+            PostFeedback(message,false,source);
+            DispatchGeneralFeedback(()=>_ = DeliverReaderFeedbackAsync(message,true,true,source));
+        });
     }
     internal void AnnounceTimerStatus() => Services.AnnounceFeedback(Session.StatusMessage());
     internal void Announce(CommandResult result)
@@ -337,9 +353,10 @@ internal sealed partial class PreviewApplication : ApplicationContext
     }
     private void AnnounceSession(string message,bool supplementary)
     {
-        var delivered=notifyScreenReader(MainForm,message,supplementary);
-        Broadcast(new{type="sessionStatus",message}); // Readable, but not a second live event.
-        if(!delivered)Announce(message);
+        OnFeedbackThread(()=>{
+            Broadcast(new{type="sessionStatus",message}); // Readable, but not a second live event.
+            _ = DeliverReaderFeedbackAsync(message,supplementary);
+        });
     }
     internal async Task<bool> CloseMainAsync(Action? beforeExit = null)
     {
@@ -361,5 +378,5 @@ internal sealed partial class PreviewApplication : ApplicationContext
         catch { Announce("Could not save timer or reflection changes. The app is staying open. Try again.");return false; }
         finally { closing = false; }
     }
-    protected override void Dispose(bool disposing) { if (disposing) { DisposeUpdates();feedback?.Dispose();feedbackPoll.Dispose();pendingFeedbackPoll=null;jaws?.Dispose();targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
+    protected override void Dispose(bool disposing) { if (disposing) { DisposeUpdates();feedback?.Dispose();feedbackPoll.Dispose();pendingFeedbackPoll=null;nvda?.Dispose();jaws?.Dispose();targetShortcutDialog?.Dispose();StopBrowserCompanion();focusPulse.Dispose();focusMonitor.Dispose();focusGlow.Dispose();shortcuts.Dispose();tray.Visible=false;tray.ContextMenuStrip?.Dispose();tray.Dispose();pulse.Dispose(); Services.Dispose(); } base.Dispose(disposing); }
 }

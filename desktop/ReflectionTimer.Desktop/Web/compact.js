@@ -1,12 +1,12 @@
-import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,bindReadStatusShortcut,focusTimerControl} from './ui.js';
+import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,bindReadStatusShortcut,focusTimerControl,mountFeedback} from './ui.js';
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
 let sequence=0,state,dirty=false,tiny=false,revealed=false,lastRunning=false,lastDeadline,repeatPending=false,compactRevision=0;
 function send(action,data={}){return new Promise((resolve,reject)=>{const requestId=`${requestPrefix}:${++sequence}`;if(!bridge)return reject(new Error('Open the compact timer through Reflection Timer.'));const timeout=['reset','resetAndReload'].includes(action)?undefined:setTimeout(()=>{requests.delete(requestId);reject(new Error('The app did not respond.'));},35000);requests.set(requestId,{resolve,reject,timeout});bridge.postMessage({requestId,action,data});});}
-function run(action){setText($('error'),'');Promise.resolve().then(action).catch(e=>setText($('error'),e.message));}
+const {error,announce}=mountFeedback();
+function run(action){error('');Promise.resolve().then(action).catch(e=>error(e.message));}
 function bind(id,action){$(id).addEventListener('click',()=>{if($(id).getAttribute('aria-disabled')!=='true')run(action);});}
-function announce(text){setText($('status'),'');setTimeout(()=>setText($('status'),text),50);}
 function duration(){return durationSeconds(['hours','minutes','seconds'].map(id=>$(id).value.trim()));}
 function repeatEnabled(){return $('repeat').getAttribute('aria-pressed')==='true';}
 function setRepeat(enabled){const value=String(Boolean(enabled));if($('repeat').getAttribute('aria-pressed')!==value)$('repeat').setAttribute('aria-pressed',value);}
@@ -23,7 +23,7 @@ function renderDuration(clock=state?.clock){
   try{setText($('visual-clock'),formatClock(displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),dirty).seconds));}
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
-function resize(){if(state)send('compactSize',{width:Math.ceil(document.body.getBoundingClientRect().width),height:Math.ceil(document.body.getBoundingClientRect().height),tiny,revision:compactRevision}).catch(e=>setText($('error'),e.message));}
+function resize(){if(state)send('compactSize',{width:Math.ceil(document.body.getBoundingClientRect().width),height:Math.ceil(document.body.getBoundingClientRect().height),tiny,revision:compactRevision}).catch(e=>error(e.message));}
 function mode(value){const entering=value&&!tiny;tiny=value;document.body.dataset.tiny=String(value);$('shrink').setAttribute('aria-label',value?'Hide compact timer':'Shrink to time-only view');$('expand').setAttribute('aria-label',value?'Expand compact view':'Open main timer page');['shrink','expand'].forEach(id=>$(id).title=$(id).getAttribute('aria-label'));if(entering)document.activeElement?.blur();}
 function expand(){revealed=true;mode(false);focusTimerControl(state?.timer.mode===1);}
 function shrink(){revealed=false;mode(true);resize();}
@@ -49,12 +49,12 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(stopwatch?state.clock.seconds:state.timer.durationSeconds).length*15+16)}px`);
 }
 bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply'){const p=requests.get(m.requestId);if(!p)return;clearTimeout(p.timeout);requests.delete(m.requestId);m.error?p.reject(new Error(m.error)):p.resolve(m);}
-  else if(m.type==='init'){compactRevision=m.compactRevision??0;render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>setText($('error'),e.message));}
+  else if(m.type==='init'){compactRevision=m.compactRevision??0;render(m.state);if(typeof m.timeOnly==='boolean'){mode(m.timeOnly);revealed=!m.timeOnly;}setAppVisibility(m.appViewVisible);if(m.state.durationDraft)sharedDuration(m.state.durationDraft);resize();restoreReloadView();send('interfaceReady').catch(e=>error(e.message));}
   else if(m.type==='appViewVisibility')setAppVisibility(m.visible);
   else if(m.type==='state')render(m.state,m.keepTimeOnly===true);
   else if(m.type==='clock'){if(state?.clock.status===m.clock.status&&Boolean(m.clock.stopwatch)===(state?.timer.mode===1)){renderDuration(m.clock);if(m.clock.stopwatch)document.body.style.setProperty('--tiny-width',`${Math.max(96,formatClock(m.clock.seconds).length*15+16)}px`);}}
   else if(m.type==='timeRead')snapshot(m.clock,true);
-  else if(m.type==='announcement')announce(m.message);
+  else if(m.type==='announcement')announce(m.message,{announce:m.announce});
   else if(m.type==='sessionStatus')setText($('session-status'),m.message);
   else if(m.type==='durationDraft')sharedDuration(m.parts);
   else if(m.type==='expandCompact')expand();

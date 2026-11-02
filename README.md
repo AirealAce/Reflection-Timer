@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.19
+# Reflection Timer 4.3.22
 
 An accessible Windows timer and stopwatch with reflection prompts, focus reminders, and local CSV or optional Google Sheets logging.
 
@@ -20,7 +20,7 @@ The timer starts at **15 minutes**. Use Timer or Stopwatch, then write your refl
 
 ## Focus mode
 
-Focus reminders can target a **Window**, **Browser Tab** or **Tab Group** without installing a browser extension. You can also enable an idle reminder and choose its audio.
+Focus reminders can target **Apps**, a **Window**, **Browser Tab** or **Tab Group** without installing a browser extension. An App target includes all its windows and tabs, including after you close and reopen it. You can also enable an idle reminder and choose its audio.
 
 The [optional Chrome/Edge companion](browser-companion/README.md) is needed for **Site** targets, listing all open websites, and following links to other websites from a selected target. Site selection stays disabled until the companion is configured, enabled and connected. The companion is unnecessary for ordinary timer, stopwatch, CSV and Sheets use.
 

@@ -24,7 +24,10 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
       window.chrome ||= {};
       window.chrome.webview={addEventListener:(name,fn)=>listeners.push(fn),postMessage:message=>{
         window.previewMessages.push(message);
-        queueMicrotask(()=>window.previewDispatch({type:'reply',requestId:message.requestId}));
+        queueMicrotask(()=>{
+          if(message.action==='settingsSaveComplete')window.previewDispatch({type:'announcement',message:'Settings saved.',announce:false});
+          window.previewDispatch({type:'reply',requestId:message.requestId});
+        });
       }};
     });
     const initial={clock:{seconds:900,text:'15 minutes',status:'Ready'},timer:{durationSeconds:900,autoRestart:false,enabled:true,threshold:15},prompts:[],
@@ -562,6 +565,7 @@ const web = path.resolve(__dirname, '../ReflectionTimer.Desktop/Web');
     await require('./compact-escape.cjs')(context,initial,check);
     await require('./app-escape.cjs')(context,initial,settings,check);
     await require('./select-announcements.cjs')(context,initial,settings,check);
+    await require('./feedback-announcements.cjs')(context,initial,settings,check);
     await require('./reset-reload.cjs')(context,initial,settings,check);
     await require('./status-shortcut.cjs')(context,initial,settings,check);
     await require('./reflection-focus.cjs')(context,initial,check);

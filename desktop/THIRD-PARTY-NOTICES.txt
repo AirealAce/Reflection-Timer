@@ -1,5 +1,15 @@
 Reflection Timer Desktop - third-party notices
 
+NVDA Controller Client 2026.3 (Windows x64, dynamically loaded)
+Copyright NV Access Limited and NVDA contributors
+https://github.com/nvaccess/nvda/releases/tag/release-2026.3
+Licensed under the GNU Lesser General Public License, version 2.1.
+The unmodified library, license, upstream notices and complete corresponding
+source are supplied in the nvda folder. See nvda/README.md for provenance and
+instructions for extracting the supplied source archive. The separate DLL may
+be replaced by an interface-compatible modified version. No NVDA installation
+or screen-reader settings are changed by Reflection Timer.
+
 Chromium display coordinate conversion
 https://chromium.googlesource.com/chromium/src/+/refs/heads/main/ui/display/win/screen_win.cc
 https://chromium.googlesource.com/chromium/src/+/refs/heads/main/ui/display/display_layout.cc

@@ -14,6 +14,7 @@ internal interface IFocusTargetSource : IDisposable
     Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind);
     Task<FocusPresence> CheckAsync(FocusTarget target);
     FocusTarget? CaptureForeground() => null;
+    FocusTarget? CaptureApp(FocusTarget window) => FocusApps.FromWindow(window);
     IReadOnlyList<FocusTarget> CaptureOpenWindows() => [];
     Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds) => Task.FromResult<IReadOnlyList<FocusTarget>>([]);
     Task<IReadOnlyList<FocusTarget>> CaptureSelectionsAsync(FocusTarget? foreground,IReadOnlyList<FocusTarget> windows,IReadOnlyList<FocusTarget> choices)
@@ -148,7 +149,7 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
     }
     public Task<IReadOnlyList<FocusTarget>> CaptureAsync(FocusTarget window, IReadOnlyList<FocusTargetKind> kinds)
     {
-        var selectedKinds = kinds.Where(kind=>kind!=FocusTargetKind.Site||BrowserConnected).Distinct().ToArray();
+        var selectedKinds = kinds.Where(kind=>kind!=FocusTargetKind.App&&(kind!=FocusTargetKind.Site||BrowserConnected)).Distinct().ToArray();
         var windows = selectedKinds.Contains(FocusTargetKind.Window) ? new[] { window } : [];
         if(!IsBrowser(window)||selectedKinds.All(k=>k==FocusTargetKind.Window))return Task.FromResult<IReadOnlyList<FocusTarget>>(windows);
         return Enqueue<IReadOnlyList<FocusTarget>>(() => {
@@ -179,7 +180,8 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
             }
         });
     }
-    public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.Site
+    public Task<IReadOnlyList<FocusTarget>> ListAsync(FocusTargetKind kind) => kind == FocusTargetKind.App
+        ? Task.Run<IReadOnlyList<FocusTarget>>(() => FocusApps.List(OpenWindows().Select(window => AppWindow(window, friendlyName: true)))) : kind == FocusTargetKind.Site
         ? Task.FromResult<IReadOnlyList<FocusTarget>>(BrowserConnected?browserSites!.ListSites():[]) : kind == FocusTargetKind.Window
         ? Task.Run<IReadOnlyList<FocusTarget>>(() => OpenWindows().OrderBy(w => w.Name == "Desktop" && w.WindowClass == "Progman" ? 0 : 1).ThenBy(w => w.App).ThenBy(w => w.Name).ToArray()) : Enqueue<IReadOnlyList<FocusTarget>>(() => {
         var windows = OpenWindows();
@@ -213,7 +215,8 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
         }
         return kind == FocusTargetKind.BrowserTab ? choices : choices.OrderBy(t => t.App).ThenBy(t => t.WindowName).ThenBy(t=>t.TabPosition).ToArray();
     });
-    public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.Site ? browserSites?.IsCurrentSite(target)==true
+    public bool IsCurrent(FocusTarget target) => target.Kind == FocusTargetKind.App ? CheckApp(target) == FocusPresence.Focused
+        : target.Kind == FocusTargetKind.Site ? browserSites?.IsCurrentSite(target)==true
         : target.Kind == FocusTargetKind.BrowserTab && BrowserTabListing.Identity(target) == Volatile.Read(ref currentTabKey);
     private static FocusPresence CheckWindow(FocusTarget target)
     {
@@ -227,18 +230,18 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
     }
     public Task<FocusPresence> CheckAsync(FocusTarget target) => target.Kind==FocusTargetKind.Site ? CheckAnyAsync([target],false)
         : target.CaptureUnknown?Task.FromResult(CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown)
-        : target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind == FocusTargetKind.Window
-        ? Task.FromResult(CheckWindow(target)) : Enqueue(() => CheckBrowser(target, []));
+        : target.UseFocused ? Task.FromResult(FocusPresence.Unknown) : target.Kind is FocusTargetKind.Window or FocusTargetKind.App
+        ? Task.FromResult(CheckNative(target)) : Enqueue(() => CheckBrowser(target, []));
     public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets)=>CheckAnyAsync(targets,false);
     private Task<FocusPresence> CheckNativeTargetsAsync(IReadOnlyList<FocusTarget> targets)
     {
         // Check ordinary windows first so an unrelated hung browser cannot
         // mask a selected window. Read each browser strip once per probe.
-        if (targets.Any(t => !t.UseFocused && !t.CaptureUnknown && t.Kind == FocusTargetKind.Window && CheckWindow(t) == FocusPresence.Focused))
+        if (targets.Any(t => !t.UseFocused && !t.CaptureUnknown && t.Kind is (FocusTargetKind.Window or FocusTargetKind.App) && CheckNative(t) == FocusPresence.Focused))
             return Task.FromResult(FocusPresence.Focused);
-        if (targets.All(t => t.Kind == FocusTargetKind.Window || t.UseFocused || t.CaptureUnknown)) {
+        if (targets.All(t => t.Kind is FocusTargetKind.Window or FocusTargetKind.App || t.UseFocused || t.CaptureUnknown)) {
             var native = targets.Select(t => t.UseFocused ? FocusPresence.Unknown : t.CaptureUnknown
-                ? CheckWindow(t) == FocusPresence.Unavailable ? FocusPresence.Unavailable : FocusPresence.Unknown : CheckWindow(t)).ToArray();
+                ? CheckWindow(t) == FocusPresence.Unavailable ? FocusPresence.Unavailable : FocusPresence.Unknown : CheckNative(t)).ToArray();
             return Task.FromResult(native.Contains(FocusPresence.Focused) ? FocusPresence.Focused
                 : native.Contains(FocusPresence.Unknown) ? FocusPresence.Unknown : native.Contains(FocusPresence.Away) ? FocusPresence.Away : FocusPresence.Unavailable);
         }
@@ -248,7 +251,7 @@ internal sealed partial class WindowsFocusTargets : IFocusTargetSource
             foreach (var target in targets) {
                 var presence = target.UseFocused ? FocusPresence.Unknown
                     : target.CaptureUnknown ? CheckWindow(target) == FocusPresence.Unavailable ? FocusPresence.Unavailable : FocusPresence.Unknown
-                    : target.Kind == FocusTargetKind.Window ? CheckWindow(target) : CheckBrowser(target, snapshots);
+                    : target.Kind is FocusTargetKind.Window or FocusTargetKind.App ? CheckNative(target) : CheckBrowser(target, snapshots);
                 if (presence == FocusPresence.Focused) return presence;
                 away |= presence == FocusPresence.Away; unknown |= presence == FocusPresence.Unknown;
             }

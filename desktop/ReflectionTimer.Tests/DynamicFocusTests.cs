@@ -7,7 +7,7 @@ internal static class DynamicFocusTests
 {
     internal static async Task Run(Action<bool, string> check, FocusTarget window)
     {
-        var kinds = Enum.GetValues<FocusTargetKind>();
+        var kinds = Enum.GetValues<FocusTargetKind>().Where(k=>k!=FocusTargetKind.App).ToArray();
         var dynamic = kinds.Select(k => PreviewApplication.FocusChoices(k, [])[0]).ToImmutableArray();
         check(dynamic.Select(t => t.Id).Distinct().Count() == 4 && dynamic.All(t => t.UseFocused && t.Id != Guid.Empty),
             "The four dynamic choices have separate stable identities even with no open targets");
@@ -94,7 +94,8 @@ internal static class DynamicFocusTests
             var source=new Source{Foreground=window,IdleMilliseconds=0};var alerts=new List<bool>();
             using var monitor=new FocusModeMonitor(engine,source,alerts.Add);
             engine.Start(900,false,50);monitor.Poll();
-            var selected=window with{Kind=kind,TabRuntimeId="midrun-"+kind,SiteHost=kind==FocusTargetKind.Site?"study.example":""};
+            var selected=window with{Kind=kind,TabRuntimeId="midrun-"+kind,SiteHost=kind==FocusTargetKind.Site?"study.example":"",
+                ProcessPath=kind==FocusTargetKind.App?@"C:\Apps\Test\test.exe":""};
             engine.SetFocusMode(engine.SettingsSnapshot.FocusMode with{Target=selected,Targets=[selected]});monitor.Poll();
             check(engine.SettingsSnapshot.FocusMode.Enabled&&source.Checked.Last()==selected&&monitor.Status=="A selected target is focused",
                 mode+": selecting an ordinary "+kind+" during idle-only running Focus starts monitoring it immediately");

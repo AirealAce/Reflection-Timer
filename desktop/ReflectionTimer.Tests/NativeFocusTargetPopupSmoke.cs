@@ -11,7 +11,7 @@ using ReflectionTimer.Desktop;
 // No browser discovery, personal profile, real registrations or delivery.
 static class NativeFocusTargetPopupSmoke
 {
-    internal static void RunInteractive()
+    internal static void RunInteractive(bool focusedTimeOnly = false)
     {
         Exception? failure = null;
         var thread = new Thread(() => {
@@ -19,13 +19,13 @@ static class NativeFocusTargetPopupSmoke
             using var launcher = new Form { Text = "Synthetic Focus target popup checks", Size = new(460, 150), StartPosition = FormStartPosition.CenterScreen };
             launcher.Shown += (_, _) => launcher.BeginInvoke(() => WindowActivation.Focus(launcher));
             var run = new Button { Text = "Run Focus target popup checks", Dock = DockStyle.Fill };
-            run.Click += (_, _) => { try { Run(); } catch (Exception error) { failure = error; } finally { launcher.Close(); } };
+            run.Click += (_, _) => { try { Run(focusedTimeOnly); } catch (Exception error) { failure = error; } finally { launcher.Close(); } };
             launcher.Controls.Add(run); Application.Run(launcher);
         });
         thread.SetApartmentState(ApartmentState.STA); thread.Start(); thread.Join();
         if (failure is not null) throw new Exception("Interactive Focus target popup checks failed", failure);
     }
-    internal static void Run()
+    internal static void Run(bool focusedTimeOnly = false)
     {
         Exception? failure = null; var passed = 0;
         void Check(bool value, string message) { if (!value) throw new Exception(message); passed++; Console.WriteLine("PASS " + message); }
@@ -45,15 +45,17 @@ static class NativeFocusTargetPopupSmoke
                 app.MainForm.BeginInvoke(async () => {
                     try {
                         await source.Ready;
-                        var window = new FocusTarget(Guid.NewGuid(), FocusTargetKind.Window, "Synthetic browser", "chrome", source.Handle.ToInt64(), Environment.ProcessId, 123) { WindowName = "Synthetic browser" };
-                        FocusTarget[] choices = [window,
+                        var window = new FocusTarget(Guid.NewGuid(), FocusTargetKind.Window, "Synthetic browser", "chrome", source.Handle.ToInt64(), Environment.ProcessId, 123) { WindowName = "Synthetic browser", ProcessPath = @"C:\Synthetic\browser.exe" };
+                        var appTarget = FocusApps.FromWindow(window)!;
+                        FocusTarget[] choices = [appTarget, window,
                             window with { Id = Guid.NewGuid(), Kind = FocusTargetKind.BrowserTab, Name = "Synthetic tab", TabRuntimeId = "tab" },
                             window with { Id = Guid.NewGuid(), Kind = FocusTargetKind.BrowserTabGroup, Name = "Synthetic group", TabRuntimeId = "group" },
                             window with { Id = Guid.NewGuid(), Kind = FocusTargetKind.Site, Name = "study.example", SiteHost = "study.example" }];
                         var activations = 0; var watched = new HashSet<PreviewWindow>();
-                        void WatchViews() { foreach (var view in Windows(app)) if (watched.Add(view)) view.Activated += (_, _) => activations++; }
+                        var activationEvents=new List<string>();var elapsed=System.Diagnostics.Stopwatch.StartNew();
+                        void WatchViews() { foreach (var view in Windows(app)) if (watched.Add(view)) view.Activated += (_, _) => {activations++;activationEvents.Add(elapsed.ElapsedMilliseconds+":"+view.View+(view.IsTimeOnly?"/time-only":""));}; }
                         WatchViews();
-                        foreach (var viewState in new[] { "cold tray", "hidden App", "minimized App", "App", "Compact", "Time-only", "reflection" }) {
+                        foreach (var viewState in focusedTimeOnly?new[]{"Time-only"}:new[] { "cold tray", "hidden App", "minimized App", "App", "Compact", "Time-only", "reflection" }) {
                             foreach (var reflection in Windows(app).Where(w => w.View == "reflection")) reflection.CloseAfterSave();
                             if (viewState != "cold tray") {
                                 app.Open("main"); await Ready((PreviewWindow)app.MainForm);
@@ -72,12 +74,12 @@ static class NativeFocusTargetPopupSmoke
                                 await Ready(Windows(app).Single(w => w.ReflectionOpen));
                             }
                             WatchViews();
-                            foreach (var initiallyChecked in new[] { false, true }) foreach (var selection in new[] { "Window", "Tab", "Tab Group", "Site", "Escape" }) {
+                            foreach (var initiallyChecked in focusedTimeOnly?Array.Empty<bool>():new[] { false, true }) foreach (var selection in new[] { "App", "Window", "Tab", "Tab Group", "Site", "Escape" }) {
                                 session.Engine.SetFocusMode(new() { IdleEnabled = true, MultipleTargets = true, Targets = initiallyChecked ? [.. choices] : [] });
                                 await source.FocusAsync(); await Until(source.FocusedAsync);
                                 var before = Visibility(app, session); var beforeTargets = session.Engine.SettingsSnapshot.FocusMode.SelectionKey; var beforeActivations = activations;
                                 var label = viewState + "/" + (initiallyChecked ? "checked" : "unchecked") + "/" + selection;
-                                var pending = app.ChooseBrowserFocusTargetAsync(source.Handle, choices, [window]);
+                                var pending = app.ChooseShortcutFocusTargetAsync(source.Handle, choices, [window]);
                                 await Until(() => Task.FromResult(Application.OpenForms.OfType<FocusTargetToggleDialog>().Any(d => d.Visible)));
                                 var dialog = Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d => d.Visible);
                                 await Until(() => Task.FromResult(WindowActivation.IsForeground(dialog) && dialog.Choices[0].Focused));
@@ -89,7 +91,7 @@ static class NativeFocusTargetPopupSmoke
                                     label + ": screen readers receive native named checkboxes and saved checked states");
                                 Check(Visibility(app, session) == before && activations == beforeActivations && Windows(app).All(w => w.Enabled),
                                     label + ": opening the popup neither shows, activates nor disables timer viewers");
-                                var index = selection == "Escape" ? 0 : Array.IndexOf(new[] { "Window", "Tab", "Tab Group", "Site" }, selection);
+                                var index = selection == "Escape" ? 0 : Array.IndexOf(new[] { "App", "Window", "Tab", "Tab Group", "Site" }, selection);
                                 for (var i = 0; i < index; i++) dialog.ChooseKey(Keys.Down);
                                 Check(dialog.Choices[index].Focused && dialog.Choices[index].AccessibilityObject.State.HasFlag(AccessibleStates.Focused),
                                     label + ": arrow navigation focuses the corresponding native checkbox");
@@ -107,14 +109,46 @@ static class NativeFocusTargetPopupSmoke
                                     && session.Engine.SettingsSnapshot.FocusMode.SelectionKey == beforeTargets,
                                     label + ": closing restores the initiating editor and its selection without raising App or changing unrelated targets");
                             }
+                            var ordinaryWindow=window with{App="Synthetic Editor",Name="Ordinary editor",ProcessPath=@"C:\Synthetic\editor.exe"};
+                            var ordinaryApp=FocusApps.FromWindow(ordinaryWindow)!;
+                            var ordinaryChoices=FocusTargetToggle.ShortcutChoices([ordinaryWindow,ordinaryApp]);
+                            foreach(var repeat in Enumerable.Range(0,focusedTimeOnly?3:1))foreach(var initiallyChecked in new[]{false,true})foreach(var selection in new[]{"App","Window","Escape"}){
+                                session.Engine.SetFocusMode(new(){IdleEnabled=true,MultipleTargets=true,Targets=initiallyChecked?[..ordinaryChoices]:[]});
+                                await source.FocusAsync();await Until(source.FocusedAsync);
+                                var before=Visibility(app,session);var beforeTargets=session.Engine.SettingsSnapshot.FocusMode.SelectionKey;var beforeActivations=activations;
+                                var beforeInput=InputTick();
+                                var label=viewState+"/ordinary/"+(initiallyChecked?"checked":"unchecked")+"/"+selection+(focusedTimeOnly?"/repeat"+repeat:"");
+                                var pending=app.ChooseShortcutFocusTargetAsync(source.Handle,ordinaryChoices,[ordinaryWindow]);
+                                var dialog=Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d=>d.Visible);
+                                await Until(()=>Task.FromResult(WindowActivation.IsForeground(dialog)&&dialog.Choices[0].Focused));
+                                Check(dialog.Choices.Count==2&&dialog.Choices[0].AccessibleName!.StartsWith("1. App:")
+                                    &&dialog.Choices[1].AccessibleName!.StartsWith("2. Window:")
+                                    &&dialog.Choices.All(c=>c.AccessibilityObject.Role==AccessibleRole.CheckButton&&c.Checked==initiallyChecked),
+                                    label+": ordinary apps expose independent native App and Window choices with current checked states");
+                                if(selection=="Window")dialog.ChooseKey(Keys.Down);
+                                if(selection=="Escape")DialogKey(dialog,Keys.Escape);else dialog.ChooseKey(Keys.Enter);
+                                var result=await pending.WaitAsync(TimeSpan.FromSeconds(8));
+                                Check(selection=="Escape"?result is null:result?.Kind==(selection=="App"?FocusTargetKind.App:FocusTargetKind.Window),
+                                    label+": Enter confirms the selected ordinary App or Window while Escape cancels");
+                                await Until(source.FocusedAsync);await Task.Delay(100);
+                                var afterFocused=await source.FocusedAsync();var afterVisibility=Visibility(app,session);var afterTargets=session.Engine.SettingsSnapshot.FocusMode.SelectionKey;
+                                if(!afterFocused||afterVisibility!=before||activations!=beforeActivations||afterTargets!=beforeTargets)
+                                    Console.WriteLine("FAILDETAIL "+JsonSerializer.Serialize(new{label,Focused=afterFocused,VisibilitySame=afterVisibility==before,
+                                        ActivationsSame=activations==beforeActivations,TargetsSame=afterTargets==beforeTargets,BeforeVisibility=before,AfterVisibility=afterVisibility,
+                                        BeforeActivations=beforeActivations,AfterActivations=activations,ActivationEvents=activationEvents.Skip(beforeActivations).ToArray(),
+                                        BeforeInput=beforeInput,AfterInput=InputTick(),Source=await source.DiagnosticAsync(),Foreground=ForegroundKind()}));
+                                Check(afterFocused&&afterVisibility==before&&activations==beforeActivations&&afterTargets==beforeTargets,
+                                    label+": ordinary-app confirmation restores external focus and keeps all timer viewer states unchanged");
+                            }
                         }
-                        foreach (var key in new[] { Keys.Enter, Keys.D4, Keys.NumPad4 }) {
+                        if(focusedTimeOnly){await app.CloseMainAsync();return;}
+                        foreach (var key in new[] { Keys.Enter, Keys.D5, Keys.NumPad5 }) {
                             await source.FocusAsync(); await Until(source.FocusedAsync);
                             var before = Visibility(app, session); var priorActivations = activations;
-                            var pending = app.ChooseBrowserFocusTargetAsync(source.Handle, choices, [window]);
+                            var pending = app.ChooseShortcutFocusTargetAsync(source.Handle, choices, [window]);
                             var dialog = Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d => d.Visible);
                             await Until(() => Task.FromResult(WindowActivation.IsForeground(dialog) && dialog.Choices[0].Focused));
-                            if (key == Keys.Enter) for (var i = 0; i < 3; i++) dialog.ChooseKey(Keys.Down);
+                            if (key == Keys.Enter) for (var i = 0; i < 4; i++) dialog.ChooseKey(Keys.Down);
                             dialog.ChooseKey(key);
                             Check((await pending.WaitAsync(TimeSpan.FromSeconds(8)))?.Kind == FocusTargetKind.Site,
                                 key + ": alternative native confirmation returns Site exactly once");
@@ -125,28 +159,28 @@ static class NativeFocusTargetPopupSmoke
                         using (var destination = new ExternalEditor()) {
                             await destination.Ready; await source.FocusAsync(); await Until(source.FocusedAsync);
                             var before = Visibility(app, session); var priorActivations = activations;
-                            var pending = app.ChooseBrowserFocusTargetAsync(source.Handle, choices, [window]);
+                            var pending = app.ChooseShortcutFocusTargetAsync(source.Handle, choices, [window]);
                             var dialog = Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d => d.Visible);
                             await Until(() => Task.FromResult(WindowActivation.IsForeground(dialog) && dialog.Choices[0].Focused));
                             await destination.FocusAsync(); await Until(destination.FocusedAsync);
-                            dialog.ChooseKey(Keys.D4); await pending.WaitAsync(TimeSpan.FromSeconds(8)); await Task.Delay(150);
+                            dialog.ChooseKey(Keys.D5); await pending.WaitAsync(TimeSpan.FromSeconds(8)); await Task.Delay(150);
                             Check(await destination.FocusedAsync() && Visibility(app, session) == before && activations == priorActivations,
                                 "Switching away while the popup is open keeps focus in the new external editor after confirmation");
                         }
                         using (var closedSource = new ExternalEditor()) {
                             await closedSource.Ready; await closedSource.FocusAsync(); await Until(closedSource.FocusedAsync);
                             var before = Visibility(app, session); var priorActivations = activations;
-                            var pending = app.ChooseBrowserFocusTargetAsync(closedSource.Handle, choices, [window]);
+                            var pending = app.ChooseShortcutFocusTargetAsync(closedSource.Handle, choices, [window]);
                             var dialog = Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d => d.Visible);
                             await Until(() => Task.FromResult(WindowActivation.IsForeground(dialog) && dialog.Choices[0].Focused));
-                            closedSource.Dispose(); dialog.ChooseKey(Keys.D4); await pending.WaitAsync(TimeSpan.FromSeconds(8)); await Task.Delay(150);
+                            closedSource.Dispose(); dialog.ChooseKey(Keys.D5); await pending.WaitAsync(TimeSpan.FromSeconds(8)); await Task.Delay(150);
                             Check(Visibility(app, session) == before && activations == priorActivations,
                                 "A source that closed while choosing does not cause timer viewers to be restored or activated");
                         }
                         Check(!store.State.Csv.Enabled && store.State.Outbox.Count == 0 && store.State.Connection.WebAppUrl.Length == 0,
                             "Popup checks never export, submit or connect to personal data");
                         await source.FocusAsync(); await Until(source.FocusedAsync);
-                        var shutdown = app.ChooseBrowserFocusTargetAsync(source.Handle, choices, [window]);
+                        var shutdown = app.ChooseShortcutFocusTargetAsync(source.Handle, choices, [window]);
                         var shutdownDialog = Application.OpenForms.OfType<FocusTargetToggleDialog>().Single(d => d.Visible);
                         await Until(() => Task.FromResult(WindowActivation.IsForeground(shutdownDialog) && shutdownDialog.Choices[0].Focused));
                         var closing = app.CloseMainAsync();
@@ -204,9 +238,18 @@ static class NativeFocusTargetPopupSmoke
         internal Task FocusAsync() => OnThread(() => { WindowActivation.Focus(window); editor.Focus(); editor.Select(9, 5); return true; });
         internal Task<bool> FocusedAsync() => OnThread(() => GetForegroundWindow() == window.Handle && GetFocus() == editor.Handle
             && editor.Focused && editor.SelectionStart == 9 && editor.SelectionLength == 5);
+        internal Task<string> DiagnosticAsync()=>OnThread(()=>JsonSerializer.Serialize(new{SourceHandle=window.Handle.ToInt64(),Foreground=GetForegroundWindow().ToInt64(),
+            Focus=GetFocus().ToInt64(),editor.Focused,editor.SelectionStart,editor.SelectionLength}));
         public void Dispose() { if (window is not null && !window.IsDisposed) window.BeginInvoke(window.Close); thread.Join(TimeSpan.FromSeconds(10)); }
     }
     [DllImport("user32.dll")] private static extern nint GetForegroundWindow();
+    [DllImport("user32.dll")] private static extern uint GetWindowThreadProcessId(nint window,out uint process);
+    [StructLayout(LayoutKind.Sequential)] private struct LastInputInfo{internal uint Size,Time;}
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LastInputInfo input);
+    private static uint? InputTick(){var input=new LastInputInfo{Size=(uint)Marshal.SizeOf<LastInputInfo>()};return GetLastInputInfo(ref input)?input.Time:null;}
+    private static object ForegroundKind(){var handle=GetForegroundWindow();GetWindowThreadProcessId(handle,out var pid);string kind;
+        try{using var process=System.Diagnostics.Process.GetProcessById((int)pid);kind=pid==Environment.ProcessId?"synthetic":process.ProcessName;}catch{kind="unknown";}
+        return new{Handle=handle.ToInt64(),Kind=kind};}
     [DllImport("user32.dll")] private static extern nint GetFocus();
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")] private static extern nint GetWindowLongPtr(nint window, int index);
 }

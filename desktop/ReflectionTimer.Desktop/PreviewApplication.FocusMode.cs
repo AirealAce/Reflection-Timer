@@ -35,7 +35,7 @@ internal sealed partial class PreviewApplication
             Open("main",timerPage:true);
             if(WindowActivation.CanReceiveFocus(MainForm!)){
                 ((PreviewWindow)MainForm!).ChooseFocusTarget();
-                Services.AnnounceFeedback("Choose a window, browser tab or group, or enable idle detection to turn Focus mode on.");
+                Services.AnnounceFeedback("Choose an app, window, browser tab or group, or enable idle detection to turn Focus mode on.");
             } else Services.AnnounceFeedback("Finish or close the open dialog before choosing a Focus target.");
             return;
         }
@@ -45,10 +45,11 @@ internal sealed partial class PreviewApplication
     }
     internal async Task<object> ListFocusTargetsAsync(FocusTargetKind kind, bool reset = false)
     {
-        if (listingBrowserTargets is { IsCompleted:false } && kind!=FocusTargetKind.Window) throw new ArgumentException("The browser target list is still loading. Try choosing a window instead.");
+        var browserKind=kind is FocusTargetKind.BrowserTab or FocusTargetKind.BrowserTabGroup or FocusTargetKind.Site;
+        if (listingBrowserTargets is { IsCompleted:false } && browserKind) throw new ArgumentException("The browser target list is still loading. Try choosing an app or window instead.");
         var revision = ++focusListRevision;
         var listingTargets = focusTargets.ListAsync(kind);
-        if (kind!=FocusTargetKind.Window) listingBrowserTargets = listingTargets;
+        if (browserKind) listingBrowserTargets = listingTargets;
         IReadOnlyList<FocusTarget> list;
         try { list = await listingTargets.WaitAsync(TimeSpan.FromSeconds(6)); }
         catch { throw new ArgumentException("The target list could not finish loading. Try choosing a window, or reopen the app if its browser tab list remains unavailable."); }
@@ -81,7 +82,7 @@ internal sealed partial class PreviewApplication
     internal static string FocusTargetKey(FocusTarget target) => HashFocusKey(target.Key);
     private static string HashFocusKey(string key)=>Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(key)));
     internal static bool MatchesSavedFocusTarget(FocusTarget listed, FocusTarget? saved) => saved is not null
-        && listed.Kind==saved.Kind && listed.UseFocused==saved.UseFocused && (listed.UseFocused ? listed.CaptureScope==saved.CaptureScope : listed.Kind==FocusTargetKind.Site?listed.Key==saved.Key:(listed.WindowHandle==saved.WindowHandle
+        && listed.Kind==saved.Kind && listed.UseFocused==saved.UseFocused && (listed.UseFocused ? listed.CaptureScope==saved.CaptureScope : listed.Kind is FocusTargetKind.Site or FocusTargetKind.App?listed.Key==saved.Key:(listed.WindowHandle==saved.WindowHandle
         && listed.ProcessId==saved.ProcessId && listed.ProcessStartedAt==saved.ProcessStartedAt
         && (listed.Kind==FocusTargetKind.Window || listed.TabRuntimeId==saved.TabRuntimeId)));
     internal void SelectFocusTarget(Guid id, bool enable)

@@ -76,7 +76,7 @@ internal static class FocusModeTests
         foreach(var kind in Enum.GetValues<FocusTargetKind>())
             check(PreviewWindow.ReadFocusPickerKind(JsonSerializer.SerializeToElement(new{pickerKind=(int)kind}))==kind,
                 "The chooser command accepts the defined "+kind+" category");
-        foreach(var json in new[]{"-1","4","999","null","true","1.5","\"1\"","[]","{}"}) {
+        foreach(var json in new[]{"-1","5","999","null","true","1.5","\"1\"","[]","{}"}) {
             using var data=JsonDocument.Parse("{\"pickerKind\":"+json+"}");
             var rejected=false;try{PreviewWindow.ReadFocusPickerKind(data.RootElement);}catch(ArgumentException){rejected=true;}
             check(rejected,"The chooser command rejects invalid category value "+json);
@@ -99,7 +99,7 @@ internal static class FocusModeTests
             check(changed==beforeChanged+1,"Saving the same "+kind+" chooser category and options remains a no-op");
         }
         var before=engine.Snapshot.FocusMode;
-        foreach(var kind in new[]{(FocusTargetKind)(-1),(FocusTargetKind)4,(FocusTargetKind)999}) {
+        foreach(var kind in new[]{(FocusTargetKind)(-1),(FocusTargetKind)5,(FocusTargetKind)999}) {
             var rejected=false;try{engine.SetFocusMode(before with{PickerKind=kind});}catch(ArgumentException){rejected=true;}
             check(rejected&&engine.Snapshot.FocusMode==before&&new TimerEngine(store).Snapshot.FocusMode.PickerKind==before.PickerKind,
                 "Invalid chooser category "+(int)kind+" cannot replace the saved preference or selection");
@@ -110,9 +110,9 @@ internal static class FocusModeTests
             "A failed chooser category save leaves live and durable preferences unchanged");
         store.Fail=false;
         engine.SetFocusMode(before with{DelaySeconds=9,Enabled=true});
-        check(engine.SettingsSnapshot.FocusMode.PickerKind==FocusTargetKind.Site,
+        check(engine.SettingsSnapshot.FocusMode.PickerKind==FocusTargetKind.App,
             "Editing Focus delay or toggling Focus preserves the saved chooser category");
-        var withoutTargets=engine.SettingsSnapshot.FocusMode with{Target=null,Targets=[],BrowserCompanionEnabled=false};
+        var withoutTargets=engine.SettingsSnapshot.FocusMode with{Target=null,Targets=[],BrowserCompanionEnabled=false,PickerKind=FocusTargetKind.Site};
         FocusSitePolicy.ValidateSelection(engine.SettingsSnapshot.FocusMode,withoutTargets,false);
         engine.SetFocusMode(withoutTargets);
         check(new TimerEngine(store).Snapshot.FocusMode is{PickerKind:FocusTargetKind.Site,BrowserCompanionEnabled:false}
@@ -286,7 +286,7 @@ internal static class FocusModeTests
             using var services=new PreviewServices(session.Engine,directory,audio:new HoldingAudio(),speech:new SilentVoice());
             foreach(var kind in Enum.GetValues<FocusTargetKind>()) {
                 var selected=target with{Kind=kind,WindowName=kind==FocusTargetKind.Window?"":"Browser window",TabPosition=kind==FocusTargetKind.Window?0:2,
-                    SiteHost=kind==FocusTargetKind.Site?"study.example":""};
+                    SiteHost=kind==FocusTargetKind.Site?"study.example":"",ProcessPath=kind==FocusTargetKind.App?@"C:\Apps\Test\test.exe":""};
                 session.Engine.SetFocusMode(false,5,selected);
                 foreach(var (name,view) in new[]{("Timer state",session.View()),("Settings",services.Settings())}) {
                     var focus=JsonSerializer.SerializeToElement(view,PreviewSession.Json).GetProperty("focusMode");

@@ -64,15 +64,27 @@ internal sealed class JawsScreenReaderOutput : IDisposable
     }
 }
 
-// UIA returning true means Windows accepted the event, not that JAWS spoke it.
-// Select one reader route per message so successful JAWS output is not doubled.
+// A reader accepting a message is not proof of audible speech. Prefer the
+// running NVDA API, then JAWS, then standard Windows notifications. Never send
+// the same accepted message through a second route.
 internal sealed class ScreenReaderAnnouncementRouter(
     Func<string, bool, bool> jaws,
-    Func<Control?, string, bool, bool> native)
+    Func<Control?, string, bool, bool> native,
+    Func<string, bool, Task<bool>>? nvda = null,
+    Func<bool>? canNotify = null,
+    Func<string, Task<bool>>? nvdaNotice = null)
 {
-    internal bool TryAnnounce(Control? owner, string message, bool supplementary)
+    internal async Task<bool> TryAnnounceAsync(Control? owner, string message, bool supplementary,bool notice=false)
     {
         if (owner is null || owner.IsDisposed || owner.Disposing || string.IsNullOrWhiteSpace(message)) return false;
+        if (canNotify?.Invoke() == false) return true; // Intentionally quiet on a locked/secure desktop.
+        if(nvda is not null) {
+            try { if(await (notice&&nvdaNotice is not null?nvdaNotice(message):nvda(message,supplementary)))return true; }
+            catch(OperationCanceledException) { return true; } // Superseded or disposed; don't speak obsolete feedback through another reader.
+            catch { /* An unavailable NVDA bridge permits other readers. */ }
+        }
+        if(owner.IsDisposed||owner.Disposing)return false;
+        if(canNotify?.Invoke()==false)return true;
         try { if (jaws(message, supplementary)) return true; } catch { }
         try { return native(owner, message, supplementary); } catch { return false; }
     }

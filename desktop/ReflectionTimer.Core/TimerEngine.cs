@@ -573,6 +573,8 @@ public sealed partial class TimerEngine
         if (settings.DelaySeconds is < 0 or > MaxDuration) throw new ArgumentException($"Focus delay must be between 0 and {MaxDuration} seconds.");
         if (settings.IdleSeconds is < 1 or > MaxDuration) throw new ArgumentException($"Idle time must be between 1 and {MaxDuration} seconds.");
         if(settings.SelectedTargets.Any(t=>!Enum.IsDefined(t.Kind)))throw new ArgumentException("Choose a supported Focus target type.");
+        if(settings.SelectedTargets.Any(t=>t.Kind==FocusTargetKind.App&&!FocusAppIdentity.IsValid(t.ProcessPath,t.ApplicationId)))
+            throw new ArgumentException("Choose an app with a valid application identity. Refresh the target list and choose again.");
         var targets = settings.SelectedTargets.Select(t=>t.Kind==FocusTargetKind.Site&&!t.UseFocused
             ?t with{SiteHost=FocusSites.CanonicalHost(t.SiteHost)}:t).DistinctBy(t => t.Key).ToArray();
         if(targets.Any(t=>t.UseFocused&&!FocusTarget.ValidScope(t.Kind,t.CaptureScope)))throw new ArgumentException("Choose a supported dynamic target.");

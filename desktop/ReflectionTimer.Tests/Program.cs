@@ -3,6 +3,12 @@ using ReflectionTimer.Accessible;
 using ReflectionTimer.Core;
 using ReflectionTimer.Desktop;
 
+if(args.Contains("--nvda-announcements")){var checks=0;await NvdaAnnouncementTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} NVDA output checks passed; native reader replaced.");return;}
+if(args.Contains("--nvda-announcement-smoke")){NativeNvdaAnnouncementSmoke.Run();return;}
+if(args.Contains("--nvda-playback-smoke")){NativeNvdaPlaybackSmoke.Run();return;}
+if(args.Contains("--native-feedback-routing")){var checks=0;NativeFeedbackRoutingTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} native cross-feature feedback routing checks passed; real screen-reader speech not automated.");return;}
+if(args.Contains("--app-target-scan")){await AppFocusTests.Scan();return;}
+if(args.Contains("--app-focus")){var checks=0;AppFocusTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} App focus checks passed.");return;}
 if(args.Contains("--focus-mode")){var checks=0;await FocusModeTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} focus mode checks passed.");return;}
 if(args.Contains("--desktop-update-installer")){var checks=0;DesktopUpdateInstallerTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} desktop update installer checks passed.");return;}
 if(args.Contains("--desktop-updates")){var checks=0;await DesktopUpdateClientTests.Run((ok,name)=>{if(!ok)throw new Exception(name);checks++;Console.WriteLine("PASS "+name);});Console.WriteLine($"{checks} desktop update client checks passed.");return;}
@@ -38,6 +44,8 @@ if(args.Contains("--native-global-playback-focus")){NativeGlobalPlaybackFocusSmo
 if(args.Contains("--native-global-playback-focus-interactive")){NativeGlobalPlaybackFocusSmoke.RunInteractive();return;}
 if(args.Contains("--native-focus-target-popup")){NativeFocusTargetPopupSmoke.Run();return;}
 if(args.Contains("--native-focus-target-popup-interactive")){NativeFocusTargetPopupSmoke.RunInteractive();return;}
+if(args.Contains("--native-focus-target-popup-time-only")){NativeFocusTargetPopupSmoke.Run(focusedTimeOnly:true);return;}
+if(args.Contains("--native-focus-target-popup-time-only-interactive")){NativeFocusTargetPopupSmoke.RunInteractive(focusedTimeOnly:true);return;}
 if(args.Contains("--native-reset-reload")){NativeResetReloadSmoke.Run();return;}
 if(args.Contains("--native-startup")){NativeStartupSmoke.Run();return;}
 if(args.Contains("--native-interface-loading")){NativeInterfaceLoadingSmoke.Run();return;}
@@ -100,6 +108,7 @@ PerformanceTests.Run(Check);
 ViewPreferenceTests.Run(Check);
 ViewerAutoHideTests.Run(Check);
 HelpPreferenceTests.Run(Check);
+AppFocusTests.Run(Check);
 await FocusModeTests.Run(Check);
 SiteFocusTests.Run(Check);
 NativeSiteTests.Run(Check);
@@ -109,7 +118,10 @@ BrowserWindowBoundsTests.Run(Check);
 await BrowserCompanionHostTests.Run(Check);
 await VoiceAnnouncementTests.Run(Check);
 ScreenReaderFeedbackTests.Run(Check);
+NativeFeedbackRoutingTests.Run(Check);
+await NvdaAnnouncementTests.Run(Check);
 KeyboardFeedbackDeliveryTests.Run(Check);
+ScreenReaderRouterTests.Run(Check);
 SessionDraftTests.Run(Check);
 ReflectionSeparatorTests.Run(Check);
 ProfileStorageTests.Run(Check);

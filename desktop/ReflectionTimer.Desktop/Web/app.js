@@ -1,4 +1,4 @@
-import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, bindReadStatusShortcut, focusTimerControl} from './ui.js';
+import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, bindReadStatusShortcut, focusTimerControl, mountFeedback} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
 import {mountReflectionHelp} from './help.js';
@@ -43,8 +43,7 @@ function send(action, data = {}) {
     bridge.postMessage({requestId, action, data});
   });
 }
-function error(message) { setText($('error'), message); }
-function announce(message) { setText($('status'), ''); setTimeout(() => setText($('status'), message), 60); }
+const {error,announce}=mountFeedback();
 function run(action) { error(''); Promise.resolve().then(action).catch(e => error(e.message)); }
 function available(button, yes) { button.setAttribute('aria-disabled', String(!yes)); }
 function bind(id, action) { $(id).addEventListener('click', () => { if ($(id).getAttribute('aria-disabled') !== 'true') run(action); }); }
@@ -369,7 +368,7 @@ bridge?.addEventListener('message', event => {
   else if (message.type === 'state') render(message.state);
   else if (message.type === 'clock') {if(state?.clock.status===message.clock.status&&Boolean(message.clock.stopwatch)===(state?.timer.mode===1))renderDuration(message.clock);}
   else if (message.type === 'timeRead') snapshot(message.clock,true);
-  else if (message.type === 'announcement') announce(message.message);
+  else if (message.type === 'announcement') announce(message.message,{announce:message.announce});
   else if (message.type === 'sessionStatus') setText($('session-status'),message.message);
   else if (message.type === 'durationDraft'&&view!=='reflection')sharedDuration(message.parts);
   else if (message.type === 'prepareReflectionFocus') prepareReflectionInputFocus(message.focusRequestId);

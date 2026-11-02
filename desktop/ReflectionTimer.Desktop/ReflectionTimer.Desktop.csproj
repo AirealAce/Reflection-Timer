@@ -10,6 +10,9 @@
     <ApplicationIcon>../../favicon.ico</ApplicationIcon>
   </PropertyGroup>
   <ItemGroup>
+    <Content Include="../ThirdParty/NvdaController/2026.3/*" Exclude="../ThirdParty/NvdaController/2026.3/*.zip;../ThirdParty/NvdaController/2026.3/*.h" Link="nvda/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <!-- Keep distribution extensions compatible with already-installed updaters. -->
+    <Content Include="../ThirdParty/NvdaController/2026.3/*.zip;../ThirdParty/NvdaController/2026.3/*.h" Link="nvda/%(Filename)%(Extension).txt" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
     <FrameworkReference Include="Microsoft.WindowsDesktop.App.WPF" />
     <ProjectReference Include="../ReflectionTimer.Core/ReflectionTimer.Core.csproj" />
     <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4191.47" GeneratePathProperty="true" />

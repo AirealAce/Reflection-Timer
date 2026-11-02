@@ -35,6 +35,8 @@ foreach ($file in $files) {
 # Accept only catalogued, byte-for-byte verified recordings, never additional user audio.
 & $Node (Join-Path $repoRoot 'scripts\bundled-audio.cjs') $payloadRoot
 if ($LASTEXITCODE -ne 0) { throw 'Bundled audio verification failed; no ZIP produced.' }
+& $Node (Join-Path $repoRoot 'scripts\nvda-controller.cjs') $payloadRoot
+if ($LASTEXITCODE -ne 0) { throw 'NVDA controller verification failed; no ZIP produced.' }
 # User audio and state are never copied. Check text and
 # managed binaries for personalized config as a second safety net (UTF-8/UTF-16).
 $privacyPatterns = @('https://docs\.google\.com/spreadsheets/d/[A-Za-z0-9_-]{20,}', 'https://script\.google\.com/macros/s/[A-Za-z0-9_-]{20,}/exec',

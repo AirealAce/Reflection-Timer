@@ -42,7 +42,7 @@ internal sealed partial class WindowsFocusTargets
     private void WarmSiteTargetsNow(IReadOnlyList<FocusTarget> targets,long token)
     {
         var probes=new Dictionary<(long,int,long),BrowserProbe>();
-        foreach(var target in targets.Where(t=>!t.UseFocused&&!t.CaptureUnknown&&t.Kind!=FocusTargetKind.Site&&IsBrowser(t))){
+        foreach(var target in targets.Where(t=>!t.UseFocused&&!t.CaptureUnknown&&t.Kind is not (FocusTargetKind.Site or FocusTargetKind.App)&&IsBrowser(t))){
             try{
                 if(browserSites?.Connected!=true&&!siteAnchors.CanRead(token,target.Key))continue;
                 if(CheckWindow(target)==FocusPresence.Unavailable)continue;
@@ -93,16 +93,16 @@ internal sealed partial class WindowsFocusTargets
     public Task<FocusPresence> CheckAnyAsync(IReadOnlyList<FocusTarget> targets,bool targetOnSiteLinks)
     {
         var token=siteAnchors.Generation;
-        if(targets.Any(t=>!t.UseFocused&&!t.CaptureUnknown&&t.Kind==FocusTargetKind.Window&&CheckWindow(t)==FocusPresence.Focused)){
+        if(targets.Any(t=>!t.UseFocused&&!t.CaptureUnknown&&t.Kind is (FocusTargetKind.Window or FocusTargetKind.App)&&CheckNative(t)==FocusPresence.Focused)){
             WarmSiteTargets(targets,targetOnSiteLinks,token);return Task.FromResult(FocusPresence.Focused);
         }
-        if(!targets.Any(t=>t.Kind==FocusTargetKind.Site)&&(!targetOnSiteLinks||!targets.Any(IsBrowser)))return CheckNativeTargetsAsync(targets);
+        if(!targets.Any(t=>t.Kind==FocusTargetKind.Site)&&(!targetOnSiteLinks||!targets.Any(t=>t.Kind!=FocusTargetKind.App&&IsBrowser(t))))return CheckNativeTargetsAsync(targets);
         return Enqueue(()=>{
             var probes=new Dictionary<(long,int,long),BrowserProbe>();var away=false;var unknown=false;
             foreach(var target in targets.Where(t=>t.Kind!=FocusTargetKind.Site)){
                 var presence=target.UseFocused?FocusPresence.Unknown:target.CaptureUnknown
                     ?CheckWindow(target)==FocusPresence.Unavailable?FocusPresence.Unavailable:FocusPresence.Unknown
-                    :target.Kind==FocusTargetKind.Window?CheckWindow(target):CheckBrowser(target,probes);
+                    :target.Kind is FocusTargetKind.Window or FocusTargetKind.App?CheckNative(target):CheckBrowser(target,probes);
                 if(presence==FocusPresence.Focused){WarmSiteTargets(targets,targetOnSiteLinks,token);return presence;}
                 away|=presence==FocusPresence.Away;unknown|=presence==FocusPresence.Unknown;
             }

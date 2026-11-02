@@ -17,7 +17,7 @@ internal sealed class FocusTargetToggleDialog : Form
     internal FocusTarget? SelectedTarget=>targets[selectedIndex];
     internal FocusTargetToggleDialog(IReadOnlyList<FocusTarget> targets,AppColorTheme theme,Func<FocusTarget,bool> isChecked,Action<string> speak)
     {
-        if(targets.Count==0||targets.Count>4)throw new ArgumentException("Choose an available browser target.");
+        if(targets.Count==0||targets.Count>5)throw new ArgumentException("Choose an available Focus target.");
         this.targets=targets;
         Text="Toggle a Focus target";AccessibleName=Text;AccessibleRole=AccessibleRole.Dialog;
         AccessibleDescription="Use Up and Down to focus a checkbox, then Enter or Space to toggle that target. Number keys toggle the corresponding numbered target. Escape cancels.";
@@ -35,7 +35,7 @@ internal sealed class FocusTargetToggleDialog : Form
         var choices=new List<CheckBox>();
         for(var i=0;i<targets.Count;i++){
             var index=i;var target=targets[i];
-            var kind=target.Kind switch{FocusTargetKind.Window=>"Window",FocusTargetKind.BrowserTab=>"Tab",FocusTargetKind.BrowserTabGroup=>"Tab Group",_=>"Site"};
+            var kind=target.Kind switch{FocusTargetKind.App=>"App",FocusTargetKind.Window=>"Window",FocusTargetKind.BrowserTab=>"Tab",FocusTargetKind.BrowserTabGroup=>"Tab Group",_=>"Site"};
             var detail=target.Kind switch{FocusTargetKind.Window=>target.App+" — "+target.Name,FocusTargetKind.Site=>FocusSites.CanonicalHost(target.SiteHost),_=>target.Name};
             var choice=new CheckBox{Name="focus-shortcut-choice-"+Number(target),Text=$"{Number(target)}. {kind}\n{detail}",
                 AccessibleName=$"{Number(target)}. {FocusTargetToggle.Label(target)}",AccessibleDescription=AccessibleDescription,
@@ -115,13 +115,13 @@ internal sealed class FocusTargetToggleDialog : Form
     {
         if((key&Keys.Modifiers)!=Keys.None)return false;
         if(key is Keys.Up or Keys.Down){selectedIndex=Math.Clamp(selectedIndex+(key==Keys.Up?-1:1),0,targets.Count-1);ActiveControl=Choices[selectedIndex];Choices[selectedIndex].Focus();return true;}
-        var number=key>=Keys.D1&&key<=Keys.D4?(int)key-(int)Keys.D1+1:key>=Keys.NumPad1&&key<=Keys.NumPad4?(int)key-(int)Keys.NumPad1+1:-1;
+        var number=key>=Keys.D1&&key<=Keys.D5?(int)key-(int)Keys.D1+1:key>=Keys.NumPad1&&key<=Keys.NumPad5?(int)key-(int)Keys.NumPad1+1:-1;
         var index=Enumerable.Range(0,targets.Count).FirstOrDefault(i=>Number(targets[i])==number,-1);
         if(index>=0){ToggleChoice(index);return true;}
         if(key is Keys.Enter or Keys.Space){ToggleChoice(selectedIndex);return true;}
         return false;
     }
-    private static int Number(FocusTarget target)=>target.Kind switch{FocusTargetKind.Window=>1,FocusTargetKind.BrowserTab=>2,FocusTargetKind.BrowserTabGroup=>3,_=>4};
+    internal static int Number(FocusTarget target)=>target.Kind switch{FocusTargetKind.App=>1,FocusTargetKind.Window=>2,FocusTargetKind.BrowserTab=>3,FocusTargetKind.BrowserTabGroup=>4,_=>5};
     protected override bool ProcessCmdKey(ref Message msg,Keys keyData)
     {
         if((keyData is Keys.Enter or Keys.Space)&&ActiveControl is Button)return base.ProcessCmdKey(ref msg,keyData);

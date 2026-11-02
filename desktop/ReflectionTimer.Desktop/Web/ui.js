@@ -50,6 +50,59 @@ export function setText(element, value) {
 export function setValue(element, value) {
   if (element.value !== String(value)) element.value = String(value);
 }
+// A modal makes body-level live regions inert. Share one active feedback route
+// between all views, keeping existing visible messages as readable mirrors.
+// Native reader output sets announce=false so the DOM never repeats its speech.
+export function mountFeedback(doc=document) {
+  const channels=new Map(['status','error'].map(id=>[id,{base:doc.getElementById(id),regions:new Map(),timer:undefined,scope:undefined}]));
+  function modal(){
+    const focused=doc.activeElement?.closest('dialog:modal');
+    return focused??[...doc.querySelectorAll('dialog:modal')].at(-1);
+  }
+  function regionFor(channel,scope,kind){
+    if(!scope)return channel.base;
+    if(!channel.regions.has(scope)){
+      const region=doc.createElement('span');region.className='sr-only';region.dataset.feedback=kind;
+      region.setAttribute('role',kind==='error'?'alert':'status');region.setAttribute('aria-live','off');region.setAttribute('aria-atomic','true');
+      scope.append(region);channel.regions.set(scope,region);
+    }
+    return channel.regions.get(scope);
+  }
+  function publish(kind,message,announce=true){
+    const channel=channels.get(kind),text=String(message??'');if(!channel?.base)return;
+    clearTimeout(channel.timer);channel.timer=undefined;
+    for(const region of [channel.base,...channel.regions.values()]){region.setAttribute('aria-live','off');setText(region,'');}
+    if(!text)return;
+    const scope=announce?modal():undefined,region=regionFor(channel,scope,kind);
+    channel.scope=scope;
+    // Preserve the old visible message location, without a second live event.
+    if(!announce||scope)setText(channel.base,text);
+    if(!announce)return;
+    const live=kind==='error'?'assertive':'polite';region.setAttribute('aria-live',live);
+    // Existing errors are ready-made alerts. Newly scoped regions and status
+    // repeats need a blank frame before their new text is exposed to readers.
+    if(kind==='error'&&!scope){setText(region,text);return;}
+    channel.timer=setTimeout(()=>{
+      channel.timer=undefined;
+      // A closed modal must not retain a live message that replays next time.
+      const current=modal();
+      if(current!==scope){
+        region.setAttribute('aria-live','off');setText(region,'');
+        return;
+      }
+      setText(region,text);
+    },60);
+  }
+  doc.addEventListener('close',event=>{
+    if(event.target?.tagName!=='DIALOG')return;
+    for(const channel of channels.values()){
+      const region=channel.regions.get(event.target);
+      if(region){region.setAttribute('aria-live','off');setText(region,'');}
+      if(channel.scope===event.target){clearTimeout(channel.timer);channel.timer=undefined;channel.scope=undefined;}
+    }
+  },true);
+  return {announce:(message,options={})=>publish('status',message,options.announce!==false),error:message=>publish('error',message)};
+}
 // Delegate once: dropdowns added by audio editors, scheduling, or dialogs get
 // the same WebView2 selection feedback without changing native keyboard behavior.
 export function announceSelectChanges(doc = document) {

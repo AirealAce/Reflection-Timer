@@ -22,6 +22,7 @@ static class KeyboardFeedbackDeliveryTests
         JawsLifecycle(check);
         ReleaseSettling(check);
         PendingSelection(check);
+        NoticePriority(check);
         LongHeldShortcut(check);
         DispatchAndDisposal(check);
         DeferredSessionVoice(check);
@@ -105,39 +106,40 @@ static class KeyboardFeedbackDeliveryTests
             if (nativeThrows) throw new IOException("Synthetic native reader failure");
             return nativeAccepts;
         });
-        check(router.TryAnnounce(owner, "Timer paused, 2 minutes remaining.", false)
+        bool Notify(Control? provider,string text,bool extra)=>router.TryAnnounceAsync(provider,text,extra).GetAwaiter().GetResult();
+        check(Notify(owner, "Timer paused, 2 minutes remaining.", false)
             && calls.SequenceEqual(new[] { ("JAWS", (Control?)null, "Timer paused, 2 minutes remaining.", false) }),
             "Accepted JAWS status bypasses UIA so one request does not speak twice");
         calls.Clear();
-        check(router.TryAnnounce(owner, "Time-only view.", true)
+        check(Notify(owner, "Time-only view.", true)
             && calls.Single() == ("JAWS", null, "Time-only view.", true),
             "JAWS routing retains supplementary queue policy and exact view text");
         jawsAccepts = false; calls.Clear();
-        check(router.TryAnnounce(owner, "Stopwatch ready, 0 seconds elapsed.", false)
+        check(Notify(owner, "Stopwatch ready, 0 seconds elapsed.", false)
             && calls.Select(c => c.Route).SequenceEqual(new[] { "JAWS", "UIA" })
             && calls.Last().Owner == owner && calls.Last().Message == calls.First().Message,
             "Absent or declining JAWS falls back to the supplied native owner");
         calls.Clear(); jawsThrows = true;
-        check(router.TryAnnounce(owner, "App view hidden.", true)
+        check(Notify(owner, "App view hidden.", true)
             && calls.Select(c => c.Route).SequenceEqual(new[] { "JAWS", "UIA" }) && calls.Last().Supplementary,
             "A failed JAWS bridge cannot suppress native supplementary feedback");
         jawsThrows = false; nativeAccepts = false; calls.Clear();
-        check(!router.TryAnnounce(owner, "Synthetic unavailable feedback.", false) && calls.Count == 2,
+        check(!Notify(owner, "Synthetic unavailable feedback.", false) && calls.Count == 2,
             "Both channels declining returns false for existing live-region fallback");
         nativeThrows = true; calls.Clear();
-        check(!router.TryAnnounce(owner, "Synthetic unavailable feedback.", false) && calls.Count == 2,
+        check(!Notify(owner, "Synthetic unavailable feedback.", false) && calls.Count == 2,
             "Native reader failures are contained when JAWS is unavailable");
         calls.Clear(); nativeThrows = false; nativeAccepts = true; jawsAccepts = true;
         foreach (var message in new[] { "", " ", "\r\n\t" })
-            check(!router.TryAnnounce(owner, message, false), "Blank reader feedback is rejected before any channel: " + message.Length);
-        check(!router.TryAnnounce(null, "Synthetic message.", false) && calls.Count == 0,
+            check(!Notify(owner, message, false), "Blank reader feedback is rejected before any channel: " + message.Length);
+        check(!Notify(null, "Synthetic message.", false) && calls.Count == 0,
             "Unavailable owners cannot invoke either screen-reader channel");
-        router.TryAnnounce(owner, "Timer paused, 2 minutes remaining.", false);
-        router.TryAnnounce(owner, "Timer paused, 2 minutes remaining.", false);
+        Notify(owner, "Timer paused, 2 minutes remaining.", false);
+        Notify(owner, "Timer paused, 2 minutes remaining.", false);
         check(calls.Count == 2 && calls.All(c => c.Route == "JAWS"),
             "Separate requests for unchanged status are both delivered without text deduplication");
         owner.Dispose(); calls.Clear();
-        check(!router.TryAnnounce(owner, "After owner disposal.", false) && calls.Count == 0,
+        check(!Notify(owner, "After owner disposal.", false) && calls.Count == 0,
             "Disposed owners cannot invoke JAWS or native feedback");
     }
 
@@ -198,6 +200,21 @@ static class KeyboardFeedbackDeliveryTests
         onlyView.Send("App view hidden.", true); onlyView.Pulse(0); onlyView.Pulse(80);
         check(onlyView.Messages.SequenceEqual(new[] { "App view hidden." }),
             "Standalone supplementary feedback does not require an accompanying primary action");
+    }
+
+    private static void NoticePriority(Action<bool,string> check)
+    {
+        using var fixture=new QueueFixture{Pressed=true};
+        fixture.Send("Timer paused.");fixture.Notice("Older settings result.");
+        fixture.Send("Time-only view.",true);fixture.Notice("Settings saved.");
+        fixture.Pulse(0);fixture.Pressed=false;fixture.Pulse(20);fixture.Pulse(100);
+        check(fixture.Messages.SequenceEqual(new[]{"Timer paused.","Settings saved.","Time-only view."}),
+            "Settings and delivery notices cannot replace the committed playback action or its view feedback");
+        using var noticeOnly=new QueueFixture();
+        noticeOnly.Notice("Response saved.");noticeOnly.Pulse(0);noticeOnly.Pulse(80);
+        check(noticeOnly.Messages.SequenceEqual(new[]{"Response saved."}),"A standalone confirmation uses the same keyboard-release settling without needing a timer action");
+        noticeOnly.Notice("After shutdown.");noticeOnly.Dispose();noticeOnly.Pulse(200);
+        check(noticeOnly.Messages.Count==1,"Shutdown cancels pending general confirmations alongside playback feedback");
     }
 
     private static void LongHeldShortcut(Action<bool, string> check)
@@ -303,6 +320,7 @@ static class KeyboardFeedbackDeliveryTests
         private readonly KeyboardReleasedFeedback feedback;
         internal QueueFixture() => feedback = new KeyboardReleasedFeedback(Scheduled.Enqueue, () => Pressed, () => Now);
         internal void Send(string message, bool supplementary = false) => feedback.Publish(() => Messages.Add(message), supplementary);
+        internal void Notice(string message)=>feedback.PublishNotice(()=>Messages.Add(message));
         internal void Pulse(long now)
         {
             Now = now;

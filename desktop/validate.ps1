@@ -8,6 +8,8 @@ try {
     if ($LASTEXITCODE -ne 0) { throw 'Version validation failed.' }
     & $Node scripts/check-public-source.cjs
     if ($LASTEXITCODE -ne 0) { throw 'Public-source privacy scan failed.' }
+    & $Node scripts/nvda-controller.cjs
+    if ($LASTEXITCODE -ne 0) { throw 'NVDA controller verification failed.' }
     & $DotNet run --project desktop/ReflectionTimer.Tests/ReflectionTimer.Tests.csproj -c Release
     if ($LASTEXITCODE -ne 0) { throw 'Desktop tests failed.' }
     & $Node desktop/ReflectionTimer.Tests/ui.cjs

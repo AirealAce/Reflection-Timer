@@ -18,12 +18,12 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
           if(m.action==='focusTargets'){
             if(m.data.reset){window.choices.clear();for(const t of window.settings.focusMode.targets)window.choices.set(t.id,t);}
             const kind=m.data.kind;
-            let targets=window.emptyTargets?[]:['a','b'].map((suffix,index)=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,name:window.longNames?'A long target name '.repeat(25):kind===2?'Work group':kind===1?'Same tab title':suffix==='a'?'Work window':'Other window',app:suffix==='a'&&kind===0?'EXCEL':'chrome',windowName:'Browser window',tabPosition:index+1,current:kind===1&&`${kind}-${suffix}`===window.currentTabId,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)}));
+            let targets=window.emptyTargets?[]:['a','b'].map((suffix,index)=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,name:window.longNames?'A long target name '.repeat(25):kind===4?suffix==='a'?'Google Chrome':'Notepad':kind===2?'Work group':kind===1?'Same tab title':suffix==='a'?'Work window':'Other window',app:kind===4?suffix==='a'?'chrome':'notepad':suffix==='a'&&kind===0?'EXCEL':'chrome',windowName:kind===4?'':'Browser window',tabPosition:kind===4?0:index+1,current:kind===1&&`${kind}-${suffix}`===window.currentTabId,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)}));
             if(kind===0&&window.windowListing)targets=window.windowListing.map(t=>({...t,selected:window.settings.focusMode.targets.some(s=>s.key===t.key)}));
             const dynamic=[{suffix:'focused',scope:0,name:'Use focused '+['window','tab','tab group'][kind]},
               {suffix:'background',scope:kind===0?2:1,name:kind===0?'Use open windows (including background)':kind===1?'Use focused tabs (including background)':'Use focused tab groups (including background)'}];
             if(kind===2)dynamic.push({suffix:'open',scope:2,name:'Use open tab groups (including background)'});
-            targets.unshift(...dynamic.map(({suffix,scope,name})=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,useFocused:true,captureScope:scope,name,app:'',tabPosition:0,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)})));
+            if(kind!==4)targets.unshift(...dynamic.map(({suffix,scope,name})=>({id:`${kind}-${suffix}`,key:`${kind}-${suffix}`,kind,useFocused:true,captureScope:scope,name,app:'',tabPosition:0,selected:window.settings.focusMode.targets.some(t=>t.key===`${kind}-${suffix}`)})));
             if(kind===0&&window.windowReplacements)targets=targets.filter(t=>t.useFocused).concat(window.windowReplacements);
             for(const t of targets)window.choices.set(t.id,t);
             if(window.repeatTarget&&targets.length)targets.push({...targets[0],id:'repeated-native-id'});
@@ -103,7 +103,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await open();
     check(!await page.locator('#focus-multiple-targets').isChecked()&&!await page.locator('#focus-idle-enabled').isChecked()&&await page.locator('#focus-idle-seconds').inputValue()==='20','Both new options default unchecked; Idle for defaults to 20 seconds');
     check(await page.evaluate(()=>{const idle=document.querySelector('.focus-idle-row').getBoundingClientRect(),multi=document.querySelector('.focus-multiple-row').getBoundingClientRect(),kind=document.querySelector('.focus-target-type-row').getBoundingClientRect();return idle.bottom<=multi.top&&multi.bottom<=kind.top;}),'Idle for is above Multiple Targets, which is above Target type');
-    check(await page.getByRole('combobox',{name:'Target type',exact:true}).count()===1&&await page.locator('#focus-target-kind option').allTextContents().then(x=>x.join('|')==='Window|Browser Tab|Browser Tab Groups|Site'),'Target type retains its accessible label and requested casing, adding Site');
+    check(await page.getByRole('combobox',{name:'Target type',exact:true}).count()===1&&await page.locator('#focus-target-kind option').allTextContents().then(x=>x.join('|')==='Apps|Window|Browser Tab|Browser Tab Groups|Site'),'Target type retains its accessible label and requested casing, with Apps first');
     check(await page.locator('#focus-target-list th').allTextContents().then(x=>x.join('|')==='App|Window Name'),'Windows use App and Window Name headers');
     check(await table.getByRole('checkbox').count()===0,'Single-target lists have no checkboxes');
     check(await row(0,'a').locator('td').allTextContents().then(x=>x.join('|')==='EXCEL|Work window'),'Windows put app names before window titles');
@@ -445,6 +445,7 @@ const web=path.resolve(__dirname,'../ReflectionTimer.Desktop/Web');
     await require('./focus-picker-preference.cjs')(page,check);
     await require('./focus-target-select-all.cjs')(page,check);
     await require('./focus-target-search.cjs')(page,check);
+    await require('./app-focus.cjs')(page,check);
     check(errors.length===0,'Focus controls have no browser script errors');
     console.log(`${passed} focus browser checks passed.`);
   }finally{await browser.close();}
