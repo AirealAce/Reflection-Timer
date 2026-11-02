@@ -41,7 +41,7 @@ static class NativeResetDialogSmoke
                 Application.SetHighDpiMode(HighDpiMode.PerMonitorV2);
                 Application.EnableVisualStyles();
                 foreach(var source in new[]{"hidden App", "App", "Compact", "Time-only", "reflection"})
-                foreach(var action in new[]{"OK", "Cancel", "Escape", "Close"}) {
+                foreach(var action in new[]{"OK", "Cancel", "Escape", "Close", "Ctrl+Alt+R"}) {
                     var tool = source is "Compact" or "Time-only" or "reflection";
                     using var owner = new Form {
                         Text = "Synthetic " + source, ShowInTaskbar = !tool, TopMost = tool,
@@ -51,7 +51,8 @@ static class NativeResetDialogSmoke
                     if(source != "hidden App")owner.Show();
                     var mode = source == "Time-only" ? SessionMode.Stopwatch : SessionMode.Timer;
                     var warning = new ResetWarning(mode, true, true);
-                    using var dialog = new ResetConfirmationDialog(warning, (AppColorTheme)(Array.IndexOf(new[]{"OK","Cancel","Escape","Close"}, action)));
+                    using var dialog = new ResetConfirmationDialog(warning, (AppColorTheme)(Array.IndexOf(new[]{"OK","Cancel","Escape","Close","Ctrl+Alt+R"}, action)%Enum.GetValues<AppColorTheme>().Length));
+                    Check(!dialog.ConfirmFromShortcut(),source+": an undisplayed reset warning cannot be approved by the shortcut");
                     var ok = (Button)dialog.Controls.Find("reset-ok", true).Single();
                     var cancel = (Button)dialog.Controls.Find("reset-cancel", true).Single();
                     var details = (TextBox)dialog.Controls.Find("reset-message", true).Single();
@@ -88,6 +89,7 @@ static class NativeResetDialogSmoke
                             if(action == "OK") { Key(dialog, Keys.Shift | Keys.Tab); Check(ok.Focused, label + "Shift+Tab returns to OK"); Key(dialog, Keys.Enter); }
                             else if(action == "Cancel")Key(dialog, Keys.Enter);
                             else if(action == "Escape") { details.Focus(); Key(dialog, Keys.Escape); }
+                            else if(action == "Ctrl+Alt+R")Check(dialog.ConfirmFromShortcut(),label+"the repeated reset shortcut accepts the visible warning");
                             else dialog.Close();
                         } catch(Exception error) { failure = error; dialog.Close(); }
                     });
@@ -95,7 +97,8 @@ static class NativeResetDialogSmoke
                     var result = dialog.ShowDialog(owner);
                     watchdog.Stop();
                     if(failure is not null)throw failure;
-                    Check(result == (action == "OK" ? DialogResult.OK : DialogResult.Cancel), source + ", " + action + ": correct reset decision returned");
+                    Check(result == (action is "OK" or "Ctrl+Alt+R" ? DialogResult.OK : DialogResult.Cancel), source + ", " + action + ": correct reset decision returned");
+                    Check(!dialog.ConfirmFromShortcut(),source+", "+action+": a closed warning cannot accept a duplicate reset shortcut");
                     Check(IsWindowEnabled(owner.Handle) && owner.Visible == (source != "hidden App"), source + ", " + action + ": owner re-enabled with visibility preserved");
                 }
             } catch(Exception error) { failure = error; }

@@ -178,6 +178,35 @@ export function focusTimerControl(stopwatch, doc=document) {
   const field=fields.find(input=>Number(input.value)>0)??fields[0];
   field.focus();field.select();
 }
+const clockFocusRequests=new WeakMap();
+// Reset confirmation returns to the displayed time, not an editable duration
+// or transport action. Its accessible name is a focus-time snapshot: ticks must
+// not change a focused control's name and repeatedly interrupt the reader.
+export function focusDisplayedTime(clock,doc=document) {
+  if(!clock||!doc.hasFocus()||doc.body.inert||doc.querySelector('dialog[open]'))return false;
+  const target=doc.getElementById(doc.body.dataset.view==='main'?'visual-clock':'read-time');
+  const visible=doc.getElementById('visual-clock');
+  if(!target||!visible||!target.getClientRects().length||target.closest('[hidden],[inert]'))return false;
+  let requests=clockFocusRequests.get(doc);
+  if(!requests){
+    requests={sequence:0};clockFocusRequests.set(doc,requests);
+    doc.addEventListener('pointerdown',()=>requests.sequence++);
+    doc.defaultView.addEventListener('blur',()=>requests.sequence++);
+  }
+  const sequence=++requests.sequence;
+  const focus=()=>{
+    if(sequence!==requests.sequence||!doc.hasFocus()||doc.body.inert||doc.querySelector('dialog[open]')||!target.getClientRects().length||target.closest('[hidden],[inert]'))return;
+    const meaning=clock.stopwatch?'elapsed':clock.status==='Finished'?'set':'remaining';
+    target.dataset.timeFocus='true';
+    target.setAttribute('aria-label',`${clock.stopwatch?'Stopwatch':'Timer'}, ${visible.textContent} ${meaning}. ${clock.status}.`);
+    target.focus();
+  };
+  if(doc.activeElement===target){
+    target.blur();
+    doc.defaultView.requestAnimationFrame(()=>{if(doc.activeElement===doc.body)focus();});
+  }else focus();
+  return true;
+}
 // Completed sessions preview the duration in the controls. The engine's zero
 // remaining time (or a late countdown frame) must not become the idle display.
 export function displayClock(clock, values, edited=false) {

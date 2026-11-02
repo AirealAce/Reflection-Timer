@@ -97,7 +97,7 @@ internal sealed partial class PreviewApplication : ApplicationContext
             Shortcut(5, ToggleTimerFromGlobalShortcut),
             Shortcut(6, _=>AnnounceTimerStatus()),
             Shortcut(7, ToggleModeFromGlobalShortcut),
-            Shortcut(8, _=>ResetFromGlobalShortcut()),
+            Shortcut(8, at=>ResetFromGlobalShortcut(at)),
             Shortcut(9, _=>CycleCompact(true)),
             Shortcut(10, _=>ToggleFocusModeFromGlobalShortcut()),
             Shortcut(11, _=>ToggleTargetFromGlobalShortcut())

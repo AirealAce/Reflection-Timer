@@ -12,7 +12,7 @@
 <body>
   <a class="skip" href="#main">Skip to main content</a>
   <header class="page-header">
-    <p class="eyebrow">Reflection Timer 4.3.22</p>
+    <p class="eyebrow">Reflection Timer 4.3.23</p>
     <div class="page-title-row"><h1 id="page-title" tabindex="-1">Reflection Timer</h1><div id="reflection-title-actions" hidden><button id="reflection-failed" class="help-button delivery-warning" type="button" aria-label="Edit most recent unsent message" title="Edit most recent unsent message" hidden><span aria-hidden="true">!</span></button><button id="reflection-help-toggle" class="help-button" type="button" aria-label="Keyboard shortcuts for the session-end window" title="Keyboard shortcuts for the session-end window" popovertarget="reflection-shortcuts" aria-expanded="false" aria-controls="reflection-shortcuts"><span aria-hidden="true">?</span></button></div></div>
     <section id="reflection-shortcuts" popover="auto" role="region" aria-labelledby="reflection-shortcuts-title" tabindex="0">
       <h2 id="reflection-shortcuts-title">Session-end shortcuts</h2>
@@ -37,7 +37,7 @@
     <section id="timer" class="timer-view" aria-labelledby="timer-heading">
       <h2 id="timer-heading">Focus timer</h2>
       <p id="timer-state">Ready</p>
-      <div id="visual-clock" class="clock" aria-hidden="true">15:00</div>
+      <div id="visual-clock" class="clock" role="timer" aria-live="off" tabindex="-1">15:00</div>
       <p id="time-snapshot">Time checked: 15 minutes remaining. Ready.</p>
       <p class="hint" data-help="timer">The visual countdown stays quiet. Read the current time whenever you need it.</p>
       <div class="actions"><button id="read-time" type="button">Read remaining time</button><button id="compact-mode" class="compact-only" type="button" aria-expanded="true" aria-controls="timer-editor">Time-only view</button></div>
@@ -111,7 +111,7 @@
         <p id="focus-glow-help" data-help="animations">On by default, using Crimson halo: a dark, translucent blood-red glow reaching farther inward and fading to transparent, with gently rounded corners. Classic glow retains the original narrower animation. During a running Timer or Stopwatch Focus session, the screen perimeter glows immediately when you leave all selected targets. Returning, pausing, or turning Focus off removes it. With no targets selected, Idle for triggers the glow at its inactivity threshold; fresh input removes it. It does not block clicks or take keyboard focus. Windows reduced-motion settings use a steady glow. These settings are also available in Choose Window / Tab.</p>
         <h2 data-help-heading="reset">Timer and stopwatch</h2>
         <label class="check"><input id="confirmBeforeReset" type="checkbox" checked aria-describedby="reset-confirmation-help">Confirm before resetting</label>
-        <p id="reset-confirmation-help" data-help="reset">On by default. Reset, <kbd>Ctrl+R</kbd>, and <kbd>Ctrl+Alt+R</kbd> ask for confirmation when a timer or stopwatch is running, or an unsent reflection contains text in either box. Cancel keeps the session and page open. Reflection text stays saved after a reset. Saves immediately.</p>
+        <p id="reset-confirmation-help" data-help="reset">On by default. Reset, <kbd>Ctrl+R</kbd>, and <kbd>Ctrl+Alt+R</kbd> ask for confirmation when a timer or stopwatch is running, or an unsent reflection contains text in either box. A paused session resets without asking. Press <kbd>Ctrl+Alt+R</kbd> again while the confirmation is open to choose OK. Confirming focuses the displayed timer or stopwatch time. Cancel keeps the session and page open. Reflection text stays saved after a reset. Saves immediately.</p>
         <h2 data-help-heading="reflections">Reflection prompts</h2>
         <label class="check"><input id="sessionEndPopups" type="checkbox" checked aria-describedby="session-end-popups-help">Show session-end popups</label>
         <p id="session-end-popups-help" data-help="reflections">On by default. Turn off to keep automatic session completions from opening a reflection window. Reflections remain available in Pending reflections; sounds, auto-start, and the separate auto-send setting are unchanged. Manually opening a reflection, ending early, and test prompts still work. Saves immediately.</p>
@@ -122,7 +122,7 @@
         <label>Compact timer position<select id="placement"><option value="0">Remember dragged position</option><option value="1">Center</option><option value="2">Top left</option><option value="3">Top right</option><option value="4" selected>Bottom left</option><option value="5">Bottom right</option><option value="6">Top center</option><option value="7">Bottom center</option></select></label>
         <p data-help="display">Dragging saves a custom position, including across app and PC restarts. Presets use that screen; if it is disconnected, the timer stays on an available screen. Duration fields are shared with the main timer and editable while stopped or paused.</p><section id="help-shortcuts" aria-labelledby="help-shortcuts-heading"><h2 id="help-shortcuts-heading" tabindex="-1">Keyboard shortcuts</h2><div id="shortcut-notices"></div><p><kbd>Ctrl+Tab</kbd> switches to the next App tab. <kbd>Ctrl+Shift+Tab</kbd> switches to the previous tab. Both wrap around and work from inputs; an open dialog keeps focus.</p>
         <p><kbd>Space</kbd> or <kbd>Ctrl+Enter</kbd> starts, resumes, or pauses the timer anywhere in Compact or Time-only view, like <kbd>Enter</kbd> in a duration field. In Settings, <kbd>Ctrl+Enter</kbd> or <kbd>Ctrl+S</kbd> saves all pending settings from any focused control or page text. In a reflection prompt, <kbd>Ctrl+Enter</kbd> or <kbd>Alt+S</kbd> sends the response and ends its own session early if it is still running or paused. Both skip when all reflection and reason fields are completely empty. <kbd>Ctrl+S</kbd> saves the draft locally and closes. <kbd>Alt+Enter</kbd> sends a check-in without ending the timer.</p>
-        <p><kbd>Ctrl+R</kbd> resets the timer to the duration inputs and refreshes the focused view, including session-end prompts. The timer becomes ready to start. Your App tab, Compact or Time-only mode, and reflection drafts are retained. Save unfinished settings before refreshing.</p></section>
+        <p><kbd>Ctrl+R</kbd> resets the timer to the duration inputs and refreshes the focused view, including session-end prompts. The timer becomes ready to start. A paused session resets without a warning and retains your App tab and focused control. Confirming a reset warning returns focus to the displayed timer or stopwatch time. Compact or Time-only mode and reflection drafts are retained. Save unfinished settings before refreshing.</p></section>
         <label>Reflection popup position<select id="popup"><option value="0">Center</option><option value="1">Top left</option><option value="2">Top right</option><option value="3">Bottom left</option><option value="4" selected>Bottom right</option></select></label><p data-help="reflections">Saves immediately for regular, scheduled, and test reflections. Uses the screen containing your mouse pointer when the popup opens, leaving space for the taskbar. An already-open reflection stays where it is.</p>
 
 
@@ -233,7 +233,7 @@
   <dialog id="entry-dialog" aria-labelledby="entry-title"><h2 id="entry-title" tabindex="-1">Saved reflection</h2><p id="entry-meta"></p><p id="entry-text" class="preserve-lines"></p><form method="dialog"><button>Close details</button></form></dialog>
   <dialog id="delivery-dialog" aria-labelledby="delivery-title"><h2 id="delivery-title" tabindex="-1">Review delivery</h2><p id="delivery-explanation"></p><div class="actions"><button id="delivery-confirm" type="button">Confirm</button><form method="dialog"><button>Cancel</button></form></div></dialog>
   <dialog id="clear-log-dialog" aria-labelledby="clear-log-title"><h2 id="clear-log-title" tabindex="-1">Clear diagnostics?</h2><p>Clear the local diagnostic log? Your timer, schedules, and reflections are unchanged.</p><div class="actions"><button id="clear-log-confirm" type="button">Clear log</button><form method="dialog"><button>Cancel</button></form></div></dialog>
-  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.22</span></footer>
+  <footer class="main-only" hidden><button id="save-settings" type="button" aria-keyshortcuts="Control+Enter Control+S">Save settings</button><span class="sr-only">Reflection Timer · 4.3.23</span></footer>
   <dialog id="focus-target-dialog" aria-labelledby="focus-picker-title" aria-describedby="focus-picker-help">
     <h2 id="focus-picker-title" data-help-heading="focus-picker">Choose a focus target</h2>
     <div class="focus-picker-body">

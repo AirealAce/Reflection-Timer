@@ -1,4 +1,4 @@
-# Reflection Timer 4.3.22
+# Reflection Timer 4.3.23
 
 If the interface takes more than 20 seconds to open, the loading screen offers **Retry interface** without resetting the timer or saved data. A late startup can still finish and dismiss that screen automatically. Retry reloads only the affected view. Actual initialization errors keep their specific message instead of being replaced by a generic settings error.
 

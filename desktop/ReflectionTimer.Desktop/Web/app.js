@@ -1,4 +1,4 @@
-import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, bindReadStatusShortcut, focusTimerControl, mountFeedback} from './ui.js';
+import {setText, formatClock, displayClock, durationSeconds, normalizeEmptyDuration, bindTimerEditor, reconcileRows, announceSelectChanges, bindResetAndReload, bindReadStatusShortcut, focusTimerControl, focusDisplayedTime, mountFeedback} from './ui.js';
 import {settingsUI, localDateTime} from './settings.js';
 import {arrangeApp} from './layout.js';
 import {mountReflectionHelp} from './help.js';
@@ -76,6 +76,7 @@ function renderDuration(clock=state?.clock){
   try{setText($('visual-clock'),formatClock(displayClock(clock,['hours','minutes','seconds'].map(id=>$(id).value),durationDirty).seconds));}
   catch{ /* Keep the last valid time while an invalid value is being edited. */ }
 }
+$('visual-clock').addEventListener('blur',()=>{$('visual-clock').removeAttribute('aria-label');delete $('visual-clock').dataset.timeFocus;});
 function reflectionInputs(){return [$('reflection-text'),$('early-reason'),...document.querySelectorAll('#pause-reasons textarea')];}
 function focusReflectionEditor(refreshFocus=false){
   const sequence=++reflectionFocusSequence,expected=promptId,input=$('reflection-text');
@@ -380,6 +381,7 @@ bridge?.addEventListener('message', event => {
   }
   else if (message.type === 'reflectionCloseFailed') {savingAndClosing=false;setReflectionBusy(reflectionBusy);error(message.message);}
   else if (message.type === 'focusTimer') {if(document.querySelector('dialog[open]'))return;if(message.selectTimer)layout.select('timer');if(document.body.dataset.tab!=='timer')return;focusTimerControl(state?.timer.mode===1);}
+  else if (message.type === 'focusTime') {if(view!=='main'||!state||document.body.inert||document.querySelector('dialog[open]')||!document.hasFocus())return;layout.select('timer');focusDisplayedTime(state.clock);}
   else if (message.type === 'cycleAppTab') layout.cycle(message.backward);
   else if (message.type === 'flushSettings') {
     const wasInert=document.body.inert;document.body.inert=true;

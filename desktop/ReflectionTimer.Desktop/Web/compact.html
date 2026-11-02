@@ -6,7 +6,7 @@
 <header id="caption"><h1>Reflection Timer</h1><div class="window-actions"><button id="session-mode" type="button" aria-label="Switch to Stopwatch" title="Switch to Stopwatch">S</button><button id="shrink" type="button" aria-keyshortcuts="Escape" aria-label="Shrink to time-only view" title="Shrink to time-only view">−</button><button id="expand" type="button" aria-label="Open main timer page" title="Open main timer page">+</button><button id="close" type="button" aria-label="Close compact view" title="Close compact view">×</button></div></header>
 <main aria-label="Compact timer" aria-describedby="compact-shortcut-help">
   <p id="compact-shortcut-help" class="sr-only">Space or Ctrl+Enter starts, resumes, or pauses the timer from anywhere in Compact or Time-only view, like Enter in a duration field.</p>
-  <button id="read-time" type="button" class="clock" aria-label="Read remaining time" title="Read remaining time"><span id="visual-clock" aria-hidden="true">15:00</span></button>
+  <button id="read-time" type="button" class="clock" aria-live="off" aria-label="Read remaining time" title="Read remaining time"><span id="visual-clock" aria-hidden="true">15:00</span></button>
   <p id="time-snapshot" class="sr-only">Time checked: 15 minutes remaining. Ready.</p>
   <form id="timer-editor" novalidate><div class="duration">
     <label>Hours<input id="hours" type="number" min="0" step="1" inputmode="numeric" maxlength="6" value="0"></label>

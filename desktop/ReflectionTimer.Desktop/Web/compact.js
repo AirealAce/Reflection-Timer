@@ -1,4 +1,4 @@
-import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,bindReadStatusShortcut,focusTimerControl,mountFeedback} from './ui.js';
+import {setText,formatClock,displayClock,durationSeconds,normalizeEmptyDuration,bindTimerEditor,announceSelectChanges,bindResetAndReload,bindReadStatusShortcut,focusTimerControl,focusDisplayedTime,mountFeedback} from './ui.js';
 announceSelectChanges();
 const $=id=>document.getElementById(id),bridge=window.chrome?.webview,requests=new Map();
 const requestPrefix=crypto.randomUUID();
@@ -35,7 +35,7 @@ function render(next,keepTimeOnly=false){const previous=state;state=next;documen
   setText($('session-mode'),stopwatch?'T':'S');
   $('session-mode').title=stopwatch?'Switch to Timer (pauses stopwatch)':'Switch to Stopwatch (pauses timer)';
   $('session-mode').setAttribute('aria-label',$('session-mode').title);
-  $('read-time').setAttribute('aria-label',stopwatch?'Read elapsed time':'Read remaining time');
+  if(!$('read-time').dataset.timeFocus)$('read-time').setAttribute('aria-label',stopwatch?'Read elapsed time':'Read remaining time');
   $('read-time').title=stopwatch?'Read elapsed time':'Read remaining time';
   if(!previous&&state.durationDraft)sharedDuration(state.durationDraft);
   else if(!previous||(!dirty&&state.timer.durationSeconds!==previous.timer.durationSeconds))fill(state.timer.durationSeconds);
@@ -56,6 +56,7 @@ bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply
   else if(m.type==='timeRead')snapshot(m.clock,true);
   else if(m.type==='announcement')announce(m.message,{announce:m.announce});
   else if(m.type==='sessionStatus')setText($('session-status'),m.message);
+  else if(m.type==='focusTime')focusDisplayedTime(state?.clock);
   else if(m.type==='durationDraft')sharedDuration(m.parts);
   else if(m.type==='expandCompact')expand();
   else if(m.type==='shrinkCompact')shrink();
@@ -64,6 +65,7 @@ bridge?.addEventListener('message',event=>{const m=event.data;if(m.type==='reply
 });
 const restoreReloadView=bindResetAndReload({bridge,send,run,canReset:()=>Boolean(state)});
 bindReadStatusShortcut({send,run,canRead:()=>Boolean(state)});
+$('read-time').addEventListener('blur',()=>{delete $('read-time').dataset.timeFocus;$('read-time').setAttribute('aria-label',state?.timer.mode===1?'Read elapsed time':'Read remaining time');});
 ['hours','minutes','seconds'].forEach(id=>{
   const changed=()=>{const parts=['hours','minutes','seconds'].map(id=>$(id).value);sharedDuration(parts);run(()=>send('durationDraft',{parts}));$('reset').setAttribute('aria-disabled','false');};
   $(id).addEventListener('input',changed);normalizeEmptyDuration($(id),changed);

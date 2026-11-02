@@ -6,7 +6,7 @@ internal sealed record ResetWarning(SessionMode Mode, bool Running, bool HasDraf
 {
     internal static ResetWarning? For(AppState state)
     {
-        if(!state.ConfirmBeforeReset)return null;
+        if(!state.ConfirmBeforeReset||TimerEngine.IsPaused(state.Timer))return null;
         var hasDraft=state.Prompts.Any(p=>!string.IsNullOrWhiteSpace(p.Draft)||!string.IsNullOrWhiteSpace(p.EarlyEndReason)||p.Pauses.Any(pause=>!string.IsNullOrWhiteSpace(pause.Reason)));
         return state.Timer.IsRunning||hasDraft ? new(state.Timer.Mode,state.Timer.IsRunning,hasDraft) : null;
     }
@@ -20,14 +20,26 @@ internal sealed record ResetWarning(SessionMode Mode, bool Running, bool HasDraf
 
 internal sealed partial class PreviewApplication
 {
-    private bool resetInProgress;
+    private bool resetInProgress,resetShortcutQueued,resetTimeFocusPending;
+    private ResetConfirmationDialog? resetConfirmationDialog;
+    private long resetConfirmationShownAt=long.MaxValue;
+    internal bool ResetTimeFocusPending=>resetTimeFocusPending;
     private readonly Func<PreviewWindow,ResetWarning,Task<bool>> confirmReset;
-    private void ResetFromGlobalShortcut()
+    private void ResetFromGlobalShortcut(long requestedAt)
     {
         compactPresses.Reset();
-        if(closing||resetInProgress||MainForm is null||MainForm.IsDisposed)return;
+        if(closing||MainForm is null||MainForm.IsDisposed)return;
+        if(resetInProgress){
+            // A queued key from draft preparation is not a second decision
+            // made after the warning appeared. Only accept a displayed warning.
+            if(requestedAt>=resetConfirmationShownAt)resetConfirmationDialog?.ConfirmFromShortcut();
+            return;
+        }
+        if(resetShortcutQueued)return;
+        resetShortcutQueued=true;
         // Leave the registered-hotkey callback before any modal/browser work.
         MainForm.BeginInvoke(async()=>{
+            resetShortcutQueued=false;
             if(closing||resetInProgress)return;
             var owner=windows.FirstOrDefault(w=>!w.IsDisposed&&ReflectionTimer.Desktop.WindowActivation.IsForeground(w))
                 ??windows.FirstOrDefault(w=>!w.IsDisposed&&w.Visible&&w.View=="compact")??(PreviewWindow)MainForm;
@@ -41,12 +53,20 @@ internal sealed partial class PreviewApplication
             }
         });
     }
+    internal bool ShowResetConfirmationDialog(PreviewWindow owner,ResetWarning warning)
+    {
+        using var dialog=new ResetConfirmationDialog(warning,Session.Engine.SettingsSnapshot.Theme);
+        resetConfirmationDialog=dialog;resetConfirmationShownAt=long.MaxValue;
+        dialog.Shown+=(_,_)=>resetConfirmationShownAt=Session.Engine.ElapsedNow;
+        try{return dialog.ShowDialog(owner)==DialogResult.OK;}
+        finally{if(ReferenceEquals(resetConfirmationDialog,dialog)){resetConfirmationDialog=null;resetConfirmationShownAt=long.MaxValue;}}
+    }
     internal async Task<bool> WithResetConfirmationAsync(PreviewWindow owner,Func<Task> reset,bool requireReady=true)
     {
         // One decision across all windows; repeated buttons/shortcuts cannot
         // queue another reset behind the first confirmation.
         if(resetInProgress)return false;
-        resetInProgress=true;var completed=false;
+        resetInProgress=true;var completed=false;var accepted=false;var focusOrigin=(nint)0;
         try {
             await WithPromptLock(async()=>{
                 if(requireReady)owner.EnsureResetAvailable();
@@ -59,6 +79,8 @@ internal sealed partial class PreviewApplication
                     var before=Session.Engine.Snapshot.Timer;
                     if(ResetWarning.For(Session.Engine.Snapshot) is {} warning) {
                         if(!await confirmReset(owner,warning))return;
+                        accepted=true;focusOrigin=ReflectionTimer.Desktop.WindowActivation.Foreground;
+                        resetTimeFocusPending=true;
                         var current=Session.Engine.Snapshot.Timer;
                         if(current.SessionId!=before.SessionId||current.Mode!=before.Mode)
                             throw new InvalidOperationException("The active session changed while confirmation was open. Review it before resetting again.");
@@ -67,8 +89,27 @@ internal sealed partial class PreviewApplication
                     await reset();completed=true;
                 } finally {foreach(var editor in prepared)editor.ResumeEditing();}
             });
+            if(completed&&accepted)try{FocusResetTime(owner,focusOrigin);}
+                catch{Services.AnnounceFeedback("The timer was reset, but its time display could not be focused. Open a timer view to continue.");}
             return completed;
-        } finally {resetInProgress=false;}
+        } finally {resetTimeFocusPending=false;resetInProgress=false;}
+    }
+    private void FocusResetTime(PreviewWindow origin,nint focusOrigin)
+    {
+        if(closing||origin.IsDisposed||ReflectionTimer.Desktop.WindowActivation.Foreground!=focusOrigin)return;
+        var viewer=(origin.View is "main" or "compact")&&origin.Visible?origin:
+            windows.FirstOrDefault(w=>!w.IsDisposed&&w.View=="compact"&&w.Visible)
+            ??windows.FirstOrDefault(w=>!w.IsDisposed&&w.View=="main"&&w.Visible);
+        if(viewer is null&&Session.Engine.SettingsSnapshot.ShowFloatingTimer){
+            viewer=windows.FirstOrDefault(w=>!w.IsDisposed&&w.View=="compact")??Create("compact");
+        }
+        viewer??=(PreviewWindow)MainForm!;
+        if(viewer.View=="main")Open("main",timerPage:true);
+        else{
+            if(!Session.Engine.SettingsSnapshot.ShowFloatingTimer)Session.Engine.SetFloatingTimer(true);
+            viewer.Show();viewer.ApplyPosition();ReflectionTimer.Desktop.WindowActivation.Focus(viewer);
+        }
+        viewer.FocusTimeDisplay();
     }
 }
 
@@ -87,8 +128,7 @@ internal sealed partial class PreviewWindow
         BeginInvoke(()=>{
             try {
                 if(IsDisposed){decision.TrySetResult(false);return;}
-                using var dialog = new ResetConfirmationDialog(warning, app.Session.Engine.Snapshot.Theme);
-                decision.TrySetResult(dialog.ShowDialog(this)==DialogResult.OK);
+                decision.TrySetResult(app.ShowResetConfirmationDialog(this,warning));
             }
             catch(Exception error){decision.TrySetException(error);}
         });

@@ -292,11 +292,12 @@ internal sealed partial class PreviewWindow : Form, IReflectionPromptWindow, IRe
             }
             if(action=="interfaceReady") {
                 if(!recoveringInterface&&View!="reflection")browser.Visible=true;
-                if(View=="compact"&&IsTimeOnly)app.ReleaseFocus(this);
+                if(View=="compact"&&IsTimeOnly&&!app.ResetTimeFocusPending&&!focusTimeOnReady)app.ReleaseFocus(this);
                 interfaceReady.TrySetResult();
                 if(startupTimedOut&&!recoveringInterface)FinishInterfaceRecovery();
                 if(chooseFocusOnReady){chooseFocusOnReady=false;ChooseFocusTarget();}
                 if(outboxEntryOnReady is {} outboxId){outboxEntryOnReady=null;ShowOutboxEntry(outboxId);}
+                CompleteTimeDisplayFocus();
                 ScheduleAutoHide();Reply(requestId);return;
             }
             if (action == "flushed") { flush?.TrySetResult(); Reply(requestId); return; }

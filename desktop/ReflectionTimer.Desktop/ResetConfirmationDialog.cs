@@ -9,6 +9,11 @@ namespace ReflectionTimer.Accessible;
 internal sealed class ResetConfirmationDialog : Form
 {
     private readonly Button confirm;
+    internal bool ConfirmFromShortcut()
+    {
+        if(IsDisposed||Disposing||!Visible||DialogResult!=DialogResult.None||!confirm.Enabled)return false;
+        confirm.PerformClick();return DialogResult==DialogResult.OK;
+    }
 
     internal ResetConfirmationDialog(ResetWarning warning, AppColorTheme theme)
     {
