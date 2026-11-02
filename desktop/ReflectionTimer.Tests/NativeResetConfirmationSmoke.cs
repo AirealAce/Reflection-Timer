@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Microsoft.Web.WebView2.WinForms;
 using ReflectionTimer.Accessible;
@@ -8,7 +9,21 @@ using ReflectionTimer.Desktop;
 // Real WebView commands, draft flushing and reloads; synthetic data and decisions.
 static class NativeResetConfirmationSmoke
 {
-    internal static void Run()
+    internal static void RunInteractive(bool focusOnly=false)
+    {
+        Exception? failure=null;
+        var thread=new Thread(()=>{
+            Application.EnableVisualStyles();
+            using var launcher=new Form{Text="Synthetic reset clock focus checks",ClientSize=new(420,90),StartPosition=FormStartPosition.CenterScreen};
+            launcher.Shown+=(_,_)=>WindowActivation.Focus(launcher);
+            var run=new Button{Text="Run reset clock focus checks",Dock=DockStyle.Fill};
+            run.Click+=(_,_)=>{try{Run(focusOnly);}catch(Exception error){failure=error;}finally{launcher.Close();}};
+            launcher.Controls.Add(run);Application.Run(launcher);
+        });
+        thread.SetApartmentState(ApartmentState.STA);thread.Start();thread.Join();
+        if(failure is not null)throw new Exception("Interactive reset clock focus checks failed",failure);
+    }
+    internal static void Run(bool focusOnly=false)
     {
         Exception? failure=null;var passed=0;
         void Check(bool value,string message){if(!value)throw new Exception(message);passed++;Console.WriteLine("PASS "+message);}
@@ -38,7 +53,9 @@ static class NativeResetConfirmationSmoke
                         var windows=(List<PreviewWindow>)typeof(PreviewApplication).GetField("windows",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(app)!;
                         var main=windows.Single(w=>w.View=="main");var compact=windows.Single(w=>w.View=="compact");
                         await Ready(main);await Ready(compact);
+                        await Script(main,"window.resetFocusTrace=[];document.addEventListener('focusin',e=>resetFocusTrace.push({event:'focusin',id:e.target.id,focused:document.hasFocus()}));window.chrome.webview.addEventListener('message',e=>{if(e.data.type==='focusTime'||e.data.type==='focusTimer')resetFocusTrace.push({event:e.data.type,focused:document.hasFocus(),active:document.activeElement?.id,tab:document.body.dataset.tab,dialog:!!document.querySelector('dialog[open]')})});");
                         session.Engine.Start(900,false,0);WindowActivation.Focus(main);
+                        Console.WriteLine("FOCUSSETUP "+JsonSerializer.Serialize(new{MainForeground=WindowActivation.IsForeground(main),MainFocus=main.ContainsFocus,BrowserFocus=Browser(main).ContainsFocus}));
                         var resetCount=0;session.Engine.ActivityRecorded+=activity=>{if(activity.Event=="timer.reset")resetCount++;};
                         nativeDecision=true;var nativeAsked=asked;var originalSession=session.Engine.CurrentTimer.SessionId;
                         using(var confirmPoll=new System.Windows.Forms.Timer{Interval=25}){
@@ -58,8 +75,9 @@ static class NativeResetConfirmationSmoke
                         }
                         Check(asked==nativeAsked+1&&resetCount==1&&session.Engine.CurrentTimer.SessionId is null&&!session.Engine.CurrentTimer.IsRunning,
                             "A second Ctrl+Alt+R confirms the displayed native warning and resets exactly once; queued duplicates do not stack warnings");
-                        await Until(async()=>await Bool(main,"document.activeElement?.id==='visual-clock'&&document.body.dataset.tab==='timer'"));
+                        await ClockFocus(main,"visual-clock");
                         Check(Browser(main).ContainsFocus,"Accepted native confirmation returns keyboard focus to the App clock");
+                        if(focusOnly)return;
                         nativeDecision=false;
                         foreach(var mode in new[]{SessionMode.Timer,SessionMode.Stopwatch}) {
                             session.Engine.SwitchMode(mode);
@@ -87,7 +105,7 @@ static class NativeResetConfirmationSmoke
                                 Check(!session.Engine.Snapshot.Timer.IsRunning&&session.Engine.Snapshot.Timer.SessionId is null&&
                                     (mode==SessionMode.Stopwatch?session.Engine.Snapshot.Timer.ElapsedMilliseconds==0:session.Engine.Snapshot.Timer.RemainingSeconds==900),route+" confirmation performs the normal "+mode+" reset");
                                 Check(await Bool(target,"window.resetConfirmMarker"+(reload?"===undefined":"===true")),route+" reloads only when requested");
-                                await Until(async()=>await Bool(target,"document.activeElement?.id==='"+(target==main?"visual-clock":"read-time")+"'"));
+                                await ClockFocus(target,target==main?"visual-clock":"read-time");
                                 Check(Browser(target).ContainsFocus,route+" accepted confirmation focuses the "+mode+" time display after any requested reload");
                                 if(tiny)Check(compact.IsTimeOnly,"Confirmed reset retains Time-only view");
                             }
@@ -162,6 +180,21 @@ static class NativeResetConfirmationSmoke
     private static Task Ready(PreviewWindow window)=>((TaskCompletionSource)typeof(PreviewWindow).GetField("interfaceReady",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window)!).Task.WaitAsync(TimeSpan.FromSeconds(20));
     private static Task<string> Script(PreviewWindow window,string script)=>Browser(window).CoreWebView2.ExecuteScriptAsync(script);
     private static async Task<bool> Bool(PreviewWindow window,string script)=>JsonDocument.Parse(await Script(window,script)).RootElement.ValueKind==JsonValueKind.True;
+    private static async Task ClockFocus(PreviewWindow window,string id)
+    {
+        try{
+            using var limit=new CancellationTokenSource(TimeSpan.FromSeconds(5));
+            while(!await Bool(window,"document.activeElement?.id==='"+id+"'"))await Task.Delay(25,limit.Token);
+        }catch(OperationCanceledException error){
+            var dom=await Script(window,"JSON.stringify({focused:document.hasFocus(),active:document.activeElement?.id,tab:document.body.dataset.tab,inert:document.body.inert,dialog:!!document.querySelector('dialog[open]'),trace:window.resetFocusTrace??[]})");
+            var detail=JsonSerializer.Serialize(new{window.View,window.Visible,window.Enabled,window.WindowState,WindowHandle=window.Handle.ToInt64(),Foreground=GetForegroundWindow().ToInt64(),
+                NativeForeground=WindowActivation.IsForeground(window),WindowFocus=window.ContainsFocus,BrowserFocus=Browser(window).ContainsFocus,
+                Pending=typeof(PreviewWindow).GetField("focusTimeOnReady",BindingFlags.Instance|BindingFlags.NonPublic)!.GetValue(window),Dom=dom});
+            Console.WriteLine("CLOCKFOCUSDETAIL "+detail);
+            throw new InvalidOperationException("Clock focus did not arrive: "+detail,error);
+        }
+    }
+    [DllImport("user32.dll")]private static extern nint GetForegroundWindow();
     private static async Task Until(Func<Task<bool>> predicate){using var limit=new CancellationTokenSource(TimeSpan.FromSeconds(20));while(!await predicate())await Task.Delay(25,limit.Token);}
     private sealed class Registration:IHotKeyRegistration{public bool Register(nint window,int id,uint modifiers,uint key)=>true;public bool Unregister(nint window,int id)=>true;}
 }

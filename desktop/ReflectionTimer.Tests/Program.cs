@@ -64,6 +64,9 @@ if(args.Contains("--native-stopwatch")){NativeStopwatchSmoke.Run();return;}
 if(args.Contains("--native-stopwatch-focus")){NativeStopwatchSmoke.RunInteractive();return;}
 if(args.Contains("--native-settings-save")){NativeSettingsSaveSmoke.Run();return;}
 if(args.Contains("--native-reset-confirmation")){NativeResetConfirmationSmoke.Run();return;}
+if(args.Contains("--native-reset-confirmation-interactive")){NativeResetConfirmationSmoke.RunInteractive();return;}
+if(args.Contains("--native-reset-clock-focus")){NativeResetConfirmationSmoke.Run(focusOnly:true);return;}
+if(args.Contains("--native-reset-clock-focus-interactive")){NativeResetConfirmationSmoke.RunInteractive(focusOnly:true);return;}
 if(args.Contains("--native-reset-dialog")){NativeResetDialogSmoke.Run();return;}
 if(args.Contains("--native-reset-dialog-interactive")){NativeResetDialogSmoke.RunInteractive();return;}
 if(args.Contains("--upload-recovery")){
